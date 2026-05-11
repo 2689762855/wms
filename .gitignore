@@ -1,0 +1,41 @@
+# 依赖
+node_modules/
+.pnp.*
+.yarn/
+
+# 构建产物
+client/dist/
+client/android/app/build/
+client/android/.gradle/
+client/android/build/
+client/android/capacitor-cordova-android-plugins/
+dist/
+
+# 环境变量（含密钥，不可提交）
+.env
+.env.local
+.env.*.local
+*.bak
+
+# 数据库文件 (SQLite)
+*.db
+*.db-journal
+*.db-wal
+
+# 部署包（由 scripts/deploy.js 生成，含重复源码）
+WMS-Package/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*

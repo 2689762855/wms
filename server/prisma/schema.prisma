@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  role         String   @default("operator") // super_admin, warehouse_admin, operator
+  realName     String?
+  phone        String?
+  warehouseId  Int?
+  warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
+  createdById  Int?
+  createdBy    User?    @relation("CreatedUsers", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // relations
+  createdUsers       User[]            @relation("CreatedUsers")
+  managedWarehouses  Warehouse[]       @relation("WarehouseManager")
+  reviewedTransfers  TransferOrder[]   @relation("TransferReviewer")
+  inboundOrders      InboundOrder[]    @relation("InboundOperator")
+  outboundOrders     OutboundOrder[]   @relation("OutboundOperator")
+  transferOrders     TransferOrder[]   @relation("TransferOperator")
+  checkTasks         CheckTask[]       @relation("CheckOperator")
+}
+
+model Warehouse {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String?
+  managerId Int?
+  manager   User?    @relation("WarehouseManager", fields: [managerId], references: [id])
+  createdAt DateTime @default(now())
+
+  users           User[]
+  locations       Location[]
+  inventories     Inventory[]
+  inboundOrders   InboundOrder[]
+  outboundOrders  OutboundOrder[]
+  fromTransfers   TransferOrder[]   @relation("FromWarehouse")
+  toTransfers     TransferOrder[]   @relation("ToWarehouse")
+  checkTasks      CheckTask[]
+}
+
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+}
+
+model Product {
+  id         Int      @id @default(autoincrement())
+  sku        String   @unique
+  name       String
+  spec       String?  // 规格
+  unit       String   @default("pcs") // 单位
+  barcode    String?  @unique
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  safetyStock Int    @default(0) // 安全库存
+  costPrice  Float?  // 成本价
+  salePrice  Float?  // 售价
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  inventories    Inventory[]
+  inboundItems   InboundItem[]
+  outboundItems  OutboundItem[]
+  transferItems  TransferItem[]
+  stockLogs      StockLog[]
+  checkItems     CheckItem[]
+}
+
+model Inventory {
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id])
+  warehouseId Int
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  locationId  Int?
+  location    Location? @relation(fields: [locationId], references: [id])
+  quantity    Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([productId, warehouseId, locationId])
+}
+
+model InboundOrder {
+  id          Int      @id @default(autoincrement())
+  orderNo     String   @unique
+  warehouseId Int
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  supplier    String?
+  operatorId  Int?
+  operator    User?    @relation("InboundOperator", fields: [operatorId], references: [id])
+  status      String   @default("draft") // draft, confirmed
+  locationId  Int?
+  location    Location? @relation(fields: [locationId], references: [id])
+  note        String?
+  createdAt   DateTime @default(now())
+
+  items InboundItem[]
+}
+
+model InboundItem {
+  id         Int          @id @default(autoincrement())
+  inboundId  Int
+  inbound    InboundOrder @relation(fields: [inboundId], references: [id])
+  productId  Int
+  product    Product      @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitPrice  Float?
+  locationId Int?
+  location   Location?    @relation(fields: [locationId], references: [id])
+}
+
+model OutboundOrder {
+  id          Int      @id @default(autoincrement())
+  orderNo     String   @unique
+  warehouseId Int
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  receiver    String?  // 领用人/部门
+  operatorId  Int?
+  operator    User?    @relation("OutboundOperator", fields: [operatorId], references: [id])
+  status      String   @default("draft") // draft, confirmed
+  locationId  Int?
+  location    Location? @relation(fields: [locationId], references: [id])
+  note        String?
+  createdAt   DateTime @default(now())
+
+  items OutboundItem[]
+}
+
+model OutboundItem {
+  id         Int          @id @default(autoincrement())
+  outboundId Int
+  outbound   OutboundOrder @relation(fields: [outboundId], references: [id])
+  productId  Int
+  product    Product       @relation(fields: [productId], references: [id])
+  quantity   Int
+  locationId Int?
+  location   Location?    @relation(fields: [locationId], references: [id])
+}
+
+model TransferOrder {
+  id              Int      @id @default(autoincrement())
+  orderNo         String   @unique
+  fromWarehouseId Int
+  fromWarehouse   Warehouse @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouseId   Int
+  toWarehouse     Warehouse @relation("ToWarehouse", fields: [toWarehouseId], references: [id])
+  operatorId      Int?
+  operator        User?    @relation("TransferOperator", fields: [operatorId], references: [id])
+  status          String   @default("draft") // draft, pending, approved, rejected
+  note            String?
+  reviewedById    Int?
+  reviewedBy      User?    @relation("TransferReviewer", fields: [reviewedById], references: [id])
+  reviewNote      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  items TransferItem[]
+}
+
+model TransferItem {
+  id         Int           @id @default(autoincrement())
+  transferId Int
+  transfer   TransferOrder @relation(fields: [transferId], references: [id])
+  productId  Int
+  product    Product       @relation(fields: [productId], references: [id])
+  quantity   Int
+}
+
+model StockLog {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  warehouseId Int
+  changeQty   Int      // 变动数量（正=入库，负=出库）
+  beforeQty   Int
+  afterQty    Int
+  type        String   // inbound, outbound, transfer_in, transfer_out, check_adjust
+  refId       Int?     // 关联单据 ID
+  createdAt   DateTime @default(now())
+}
+
+model CheckTask {
+  id           Int        @id @default(autoincrement())
+  warehouseId  Int
+  warehouse    Warehouse  @relation(fields: [warehouseId], references: [id])
+  operatorId   Int?
+  operator     User?      @relation("CheckOperator", fields: [operatorId], references: [id])
+  status       String     @default("in_progress") // in_progress, completed, anomaly
+  locationId   Int?
+  location     Location?  @relation(fields: [locationId], references: [id])
+  parentTaskId Int?       // null=主任务, 有值=子任务
+  parentTask   CheckTask? @relation("SubTasks", fields: [parentTaskId], references: [id])
+  subTasks     CheckTask[] @relation("SubTasks")
+  note         String?
+  reviewNote   String?    // 异常确认时的备注
+  createdAt    DateTime   @default(now())
+
+  items CheckItem[]
+}
+
+model CheckItem {
+  id        Int       @id @default(autoincrement())
+  taskId    Int
+  task      CheckTask @relation(fields: [taskId], references: [id])
+  productId Int
+  product   Product   @relation(fields: [productId], references: [id])
+  systemQty Int
+  actualQty Int?
+  diffQty   Int?
+}
+
+model Location {
+  id          Int      @id @default(autoincrement())
+  warehouseId Int
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  name        String
+  code        String   @unique
+  createdAt   DateTime @default(now())
+
+  inventories     Inventory[]
+  inboundOrders   InboundOrder[]
+  inboundItems    InboundItem[]
+  outboundOrders  OutboundOrder[]
+  outboundItems   OutboundItem[]
+  checkTasks      CheckTask[]
+}
+
+model Customer {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  realName     String?
+  warehouseId  Int?     // null = 查看全部仓库
+  createdBy    Int?
+  createdAt    DateTime @default(now())
+}
+
+model Sequence {
+  name     String @id
+  nextVal  Int    @default(1)
+}

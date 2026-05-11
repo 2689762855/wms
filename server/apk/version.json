@@ -1,0 +1,8 @@
+{
+  "versionCode": 1,
+  "versionName": "1.0",
+  "downloadUrl": "/api/app/download/latest",
+  "changelog": "初始版本",
+  "forceUpdate": false,
+  "minVersionCode": 0
+}

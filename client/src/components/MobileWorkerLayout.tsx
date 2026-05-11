@@ -1,0 +1,111 @@
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Layout, Button, Dropdown, Space } from 'antd';
+import {
+  ImportOutlined,
+  ExportOutlined,
+  CheckSquareOutlined,
+  SwapOutlined,
+  SearchOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  InboxOutlined,
+} from '@ant-design/icons';
+import PWAInstallPrompt from './PWAInstallPrompt';
+import PullToRefresh from './PullToRefresh';
+import ServerConfigModal from './ServerConfigModal';
+import ErrorBoundary from './ErrorBoundary';
+import { useAuth } from '../stores/AuthContext';
+
+const { Header, Content } = Layout;
+
+const tabs = [
+  { key: 'inbound', label: '入库', icon: <ImportOutlined />, path: '/m/inbound' },
+  { key: 'outbound', label: '出库', icon: <ExportOutlined />, path: '/m/outbound' },
+  { key: 'check', label: '盘点', icon: <CheckSquareOutlined />, path: '/m/check' },
+  { key: 'transfer', label: '转移', icon: <SwapOutlined />, path: '/m/transfer' },
+  { key: 'inventory', label: '库存', icon: <SearchOutlined />, path: '/m/inventory' },
+];
+
+export default function MobileWorkerLayout() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') setKeyboardOpen(true);
+    };
+    const onFocusOut = () => setKeyboardOpen(false);
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
+
+  const activeTab = tabs.find(t => location.pathname.startsWith(t.path))?.key || 'inbound';
+
+  return (
+    <Layout style={{ minHeight: '100dvh', background: '#f5f5f5' }}>
+      <Header style={{
+        position: 'sticky', top: 0, zIndex: 100,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 16px', background: '#fff',
+        borderBottom: '1px solid #f0f0f0', height: 48,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <InboxOutlined style={{ fontSize: 22, color: '#1677ff' }} />
+          <span style={{ fontSize: 16, fontWeight: 600 }}>仓储操作</span>
+        </div>
+        <Space size={4}>
+          <ServerConfigModal />
+          <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
+            <Button type="text" icon={<UserOutlined />} size="small">
+              {user?.realName || user?.username}
+            </Button>
+          </Dropdown>
+        </Space>
+      </Header>
+
+      <Content style={{ padding: 8, paddingBottom: 64, overflow: 'auto' }}>
+        <PullToRefresh>
+          <div style={{ background: '#fff', borderRadius: 8, padding: 12, minHeight: 'calc(100dvh - 128px)' }}>
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
+          </div>
+        </PullToRefresh>
+      </Content>
+
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+        display: keyboardOpen ? 'none' : 'flex',
+        background: '#fff', borderTop: '1px solid #f0f0f0',
+        paddingBottom: 'env(safe-area-inset-bottom, 0)',
+        height: 56,
+      }}>
+        {tabs.map(item => (
+          <div
+            key={item.key}
+            onClick={() => navigate(item.path)}
+            style={{
+              flex: 1, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              color: activeTab === item.key ? '#1677ff' : '#8c8c8c',
+              transition: 'color 0.2s',
+            }}
+          >
+            <div style={{ fontSize: 22, lineHeight: 1 }}>{item.icon}</div>
+            <div style={{ fontSize: 11, marginTop: 2 }}>{item.label}</div>
+          </div>
+        ))}
+      </div>
+      <PWAInstallPrompt />
+    </Layout>
+  );
+}

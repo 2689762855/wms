@@ -1,0 +1,32 @@
+body {
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Capacitor 状态栏适配 */
+body.capacitor-platform {
+  padding-top: var(--status-bar-height, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 原生摄像头扫码时隐藏 UI，露出底层摄像头 */
+body.scanner-active,
+body.scanner-active * {
+  background: transparent !important;
+  --background: transparent !important;
+}
+body.scanner-active #root {
+  opacity: 0;
+}
+
+/* 扫码时也隐藏 portal 弹出的元素 */
+body.scanner-active .ant-modal-root,
+body.scanner-active .ant-dropdown,
+body.scanner-active .ant-message {
+  display: none !important;
+}
