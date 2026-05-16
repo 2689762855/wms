@@ -38,6 +38,10 @@ export function AuthProvider({ children }: { children: any }) {
   }, []); // 空依赖，只在挂载时执行一次
 
   const login = (newToken: string, newUser: User) => {
+    // 超管切换客户视角时，保存原 token 以便恢复
+    if (user?.role === 'super_admin' && newUser.role === 'tenant_admin') {
+      localStorage.setItem('admin_token', token!);
+    }
     localStorage.setItem('token', newToken);
     setToken(newToken);
     setUser(newUser);
@@ -45,6 +49,20 @@ export function AuthProvider({ children }: { children: any }) {
   };
 
   const logout = () => {
+    // 如果是客户视角，先尝试恢复超管身份
+    const adminToken = localStorage.getItem('admin_token');
+    if (adminToken) {
+      localStorage.removeItem('admin_token');
+      localStorage.setItem('token', adminToken);
+      setToken(adminToken);
+      // 重新获取超管信息
+      apiClient.get('/auth/me').then(res => setUser(res.data as User)).catch(() => {
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      });
+      return;
+    }
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);

@@ -29,6 +29,7 @@ import Alerts from './pages/Alerts';
 import ReportsInOut from './pages/ReportsInOut';
 import ReportsTurnover from './pages/ReportsTurnover';
 import Login from './pages/Login';
+import AdminDashboard from './pages/AdminDashboard';
 import WarehouseLocations from './pages/WarehouseLocations';
 import Users from './pages/Users';
 import Customers from './pages/Customers';
@@ -61,6 +62,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function HomeRedirect() {
+  const { user } = useAuth();
+  if (user?.role === 'super_admin') return <Navigate to="/admin" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -81,8 +88,11 @@ function AppRoutes() {
       </Route>
       <Route path="/transfer/:id" element={<ProtectedRoute><AppLayout><TransferDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/warehouses/:id/locations" element={<ProtectedRoute><AppLayout><WarehouseLocations /></AppLayout></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+        <Route index element={<AdminDashboard />} />
+      </Route>
       <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route index element={<HomeRedirect />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="warehouses" element={<Warehouses />} />
         <Route path="products/categories" element={<Categories />} />

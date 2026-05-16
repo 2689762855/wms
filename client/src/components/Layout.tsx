@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Layout as AntLayout, Menu, Button, theme, Dropdown, Grid } from 'antd';
+import { Layout as AntLayout, Menu, Button, theme, Dropdown, Grid, Alert } from 'antd';
 import {
   DashboardOutlined,
   BankOutlined,
@@ -17,6 +17,9 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  TeamOutlined,
+  InfoCircleOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../stores/AuthContext';
 
@@ -33,11 +36,18 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
   const isMobile = Object.keys(screens).length > 0 && !screens.lg;
   const isSuperAdmin = user?.role === 'super_admin';
   const isTenant = user?.role === 'tenant_admin';
+  const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
   const canManageUsers = isSuperAdmin || user?.role === 'warehouse_admin';
 
-  const fullMenuItems = [
-    { key: 'dashboard', label: '仪表盘', icon: <DashboardOutlined />, path: '/dashboard' },
-    ...(isTenant ? [] : [{ key: 'warehouses', label: '仓库管理', icon: <BankOutlined />, path: '/warehouses' }]),
+  // 超管菜单：平台管理 + 客户管理
+  const adminMenuItems = [
+    { key: 'admin-dashboard', label: '平台管理', icon: <DashboardOutlined />, path: '/admin' },
+    { key: 'settings-customers', label: '客户管理', icon: <TeamOutlined />, path: '/settings/customers' },
+    { key: 'settings-about', label: '关于我们', icon: <InfoCircleOutlined />, path: '/settings/about' },
+  ];
+
+  // 仓库操作菜单：超管以外的所有角色
+  const opsMenuItems = [
     {
       key: 'products-group',
       label: '商品管理',
@@ -83,8 +93,11 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     }] : []),
   ];
 
+  const menuItems = isSuperAdmin ? adminMenuItems : opsMenuItems;
+
   const getSelectedKeys = () => {
     const path = location.pathname;
+    if (path === '/admin') return ['admin-dashboard'];
     if (path.startsWith('/products/categories')) return ['products-categories'];
     if (path.startsWith('/products')) return ['products-list'];
     if (path.startsWith('/inventory/logs')) return ['inventory-logs'];
@@ -98,7 +111,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     return [path.replace('/', '')];
   };
 
-  const findPath = (items: typeof fullMenuItems, key: string): string | undefined => {
+  const findPath = (items: typeof menuItems, key: string): string | undefined => {
     for (const item of items) {
       if (item.key === key && 'path' in item) return item.path;
       if ('children' in item && item.children) {
@@ -110,7 +123,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
   };
 
   const onNavigate = (key: string) => {
-    const path = findPath(fullMenuItems, key) || `/${key}`;
+    const path = findPath(menuItems, key) || `/${key}`;
     navigate(path);
   };
 
@@ -132,17 +145,28 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
           theme="dark"
           mode="inline"
           selectedKeys={getSelectedKeys()}
-          items={fullMenuItems}
+          items={menuItems}
           onClick={({ key }) => onNavigate(key)}
         />
       </Sider>
       <AntLayout>
         <Header style={{ padding: '0 24px', background: themeToken.colorBgContainer, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f0f0f0' }}>
           <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} />
-          <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
-            <Button type="text" icon={<UserOutlined />}>{user?.realName || user?.username}</Button>
-          </Dropdown>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isInCustomerView && (
+              <Button size="small" icon={<RollbackOutlined />} onClick={logout} style={{ color: '#1677ff' }}>
+                返回平台管理
+              </Button>
+            )}
+            <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
+              <Button type="text" icon={<UserOutlined />}>{user?.realName || user?.username}</Button>
+            </Dropdown>
+          </div>
         </Header>
+        {isInCustomerView && (
+          <Alert message={`正在管理「${user?.realName || user?.username}」的数据，操作将影响该客户`} type="info" showIcon closable={false}
+            style={{ borderRadius: 0, borderLeft: 0, borderRight: 0 }} />
+        )}
         <Content style={{ margin: 16, padding: 24, background: themeToken.colorBgContainer, borderRadius: themeToken.borderRadiusLG }}>
           {contentNode}
         </Content>

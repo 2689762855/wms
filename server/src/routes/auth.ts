@@ -62,6 +62,34 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// 超管切换客户视角
+authRouter.post('/switch-customer', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.userRole !== 'super_admin') {
+      return res.status(403).json({ error: '仅超级管理员可操作' });
+    }
+    const { customerId } = req.body;
+    if (!customerId) return res.status(400).json({ error: '请指定客户' });
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { warehouses: { take: 1, orderBy: { id: 'asc' } } },
+    });
+    if (!customer) return res.status(404).json({ error: '客户不存在' });
+
+    const warehouseId = customer.warehouses[0]?.id ?? null;
+    const token = jwt.sign(
+      { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
+      JWT_ADMIN_SECRET,
+      { expiresIn: '8h' }
+    );
+    const { passwordHash: _, ...rest } = customer;
+    res.json({ token, user: { ...rest, role: 'tenant_admin', warehouseId } });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // 获取当前用户
 authRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {

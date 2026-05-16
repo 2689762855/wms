@@ -18,8 +18,12 @@ export default function Login() {
       const res = await apiClient.post('/auth/login', values);
       login(res.data.token, res.data.user);
       message.success('登录成功');
-      const isMobile = window.innerWidth < 992;
-      navigate(isMobile ? '/m/inbound' : '/dashboard', { replace: true });
+      if (res.data.user.role === 'super_admin') {
+        navigate('/admin', { replace: true });
+      } else {
+        const isMobile = window.innerWidth < 992;
+        navigate(isMobile ? '/m/inbound' : '/dashboard', { replace: true });
+      }
     } catch (err: any) {
       message.error(err.response?.data?.error || '登录失败');
     } finally {
