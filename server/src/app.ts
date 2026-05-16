@@ -62,6 +62,14 @@ app.use('/api', rateLimit({
   message: { error: '请求过于频繁，请稍后再试' },
 }));
 
+// 公开：下载商品导入模板（CSV 格式，无需 Office，记事本/WPS 都能打开）
+app.get('/api/products/template', (_req, res) => {
+  const csv = '﻿SKU(选填),商品名称(必填),规格,单位,条码,分类,安全库存,成本价,售价,库位名称(选填),初始数量(选填)\n,示例商品,大号,个,,示例分类,50,10,20,A区-01架,200\n';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=product-template.csv');
+  res.send(csv);
+});
+
 // API Routes
 app.use('/api/auth', authRouter);
 app.use('/api/warehouses', warehousesRouter);
