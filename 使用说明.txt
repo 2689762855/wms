@@ -29,8 +29,7 @@
     密码：随机生成，在启动窗口中以醒目方式显示。
           密码只显示一次！请务必在首次启动时记下。
 
-  如果忘记密码，在 server 目录下运行：
-    ..\nodejs\node.exe ..\nodejs\node_modules\npm\bin\npx-cli.js -y tsx src/resetPassword.ts
+  如果忘记密码，双击 reset-password.bat 重置管理员密码。
 
 四、访问方式
 

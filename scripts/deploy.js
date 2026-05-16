@@ -582,11 +582,76 @@ echo "  如需完全删除，请手动删除整个文件夹。"
 echo
 `;
 
-// 写入脚本文件（.bat 文件需要 GBK 编码才能在 Windows cmd 中正确显示中文）
-fs.writeFileSync(path.join(deployDir, 'start.bat'), startBat, 'utf-8');
-fs.writeFileSync(path.join(deployDir, 'start.sh'), startSh);
-fs.writeFileSync(path.join(deployDir, 'uninstall.bat'), uninstallBat, 'utf-8');
-fs.writeFileSync(path.join(deployDir, 'uninstall.sh'), uninstallSh);
+	// 创建 reset-password.bat
+	const resetBat = `@echo off
+	title 库存管理系统 - 重置管理员密码
+
+	echo.
+	echo  ============================================
+	echo      库存管理系统 (WMS)
+	echo      重置管理员密码
+	echo  ============================================
+	echo.
+
+	cd /d "%~dp0server"
+
+	:: 查找 Node.js
+	set "NODE_EXE="
+
+	:: 方法1：自带的便携版
+	if exist "%~dp0nodejs\\node.exe" (
+	    set "NODE_EXE=%~dp0nodejs\\node.exe"
+	    set "PATH=%~dp0nodejs;%PATH%"
+	)
+
+	:: 方法2：系统安装的 Node.js
+	if "%NODE_EXE%"=="" (
+	    node --version >nul 2>nul
+	    if %errorlevel% equ 0 set "NODE_EXE=node"
+	)
+
+	:: 方法3：常见安装路径
+	if "%NODE_EXE%"=="" if exist "C:\\Program Files\\nodejs\\node.exe" set "NODE_EXE=C:\\Program Files\\nodejs\\node.exe"
+	if "%NODE_EXE%"=="" if exist "C:\\Program Files (x86)\\nodejs\\node.exe" set "NODE_EXE=C:\\Program Files (x86)\\nodejs\\node.exe"
+
+	if "%NODE_EXE%"=="" (
+	    echo [错误] 未找到 Node.js
+	    echo 部署包自带 Node.js，请检查 nodejs 文件夹是否被误删。
+	    pause
+	    exit /b 1
+	)
+
+	:: 确保完整路径
+	if "%NODE_EXE%"=="node" (
+	    for /f "tokens=*" %%i in ('where node') do set "NODE_EXE=%%i"
+	)
+
+	:: 推导 npm/npx CLI 路径
+	for %%a in ("%NODE_EXE%") do set "NODE_HOME=%%~dpa"
+	set "NPX_CLI=%NODE_HOME%node_modules\\npm\\bin\\npx-cli.js"
+
+	echo [信息] 正在重置管理员密码...
+	echo.
+
+	"%NODE_EXE%" "%NPX_CLI%" -y tsx src/resetPassword.ts
+
+	echo.
+	echo  ============================================
+	echo      请记下上方显示的新密码！
+	echo  ============================================
+	echo.
+	echo  密码已重置，可使用新密码登录系统。
+	echo.
+
+	pause
+	`;
+
+	// 写入脚本文件（.bat 文件需要 GBK 编码才能在 Windows cmd 中正确显示中文）
+	fs.writeFileSync(path.join(deployDir, 'start.bat'), startBat, 'utf-8');
+	fs.writeFileSync(path.join(deployDir, 'start.sh'), startSh);
+	fs.writeFileSync(path.join(deployDir, 'uninstall.bat'), uninstallBat, 'utf-8');
+	fs.writeFileSync(path.join(deployDir, 'uninstall.sh'), uninstallSh);
+	fs.writeFileSync(path.join(deployDir, 'reset-password.bat'), resetBat, 'utf-8');
 
 // 复制使用说明书（先复制再转码）
 const readmeSrc = path.join(root, '使用说明.txt');
@@ -603,7 +668,7 @@ if (fs.existsSync(manualSrc)) {
 // 将 Windows 文本文件从 UTF-8 转换为 GBK 编码（中文 Windows cmd/记事本 兼容）
 try {
   const gbk = require('iconv-lite');
-  const textFiles = ['start.bat', 'uninstall.bat', '使用说明.txt'];
+  const textFiles = ['start.bat', 'uninstall.bat', 'reset-password.bat', '使用说明.txt'];
   for (const file of textFiles) {
     const filePath = path.join(deployDir, file);
     if (!fs.existsSync(filePath)) continue;
