@@ -72,8 +72,16 @@ export default function Login() {
           </Form.Item>
         </Form>
 
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <Typography.Link onClick={() => {
+            const a = document.createElement('a');
+            a.href = '/api/products/template';
+            a.download = 'product-template.csv';
+            a.click();
+          }}>下载商品导入模板（CSV）</Typography.Link>
+        </div>
         {import.meta.env.DEV && (
-          <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>
+          <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12, marginTop: 8 }}>
             超管: admin / admin123 | 客户: kehua / 123456
           </Typography.Text>
         )}
