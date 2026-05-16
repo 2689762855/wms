@@ -44,6 +44,14 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
   res.json({ data, total, page, pageSize });
 });
 
+// 下载导入模板（必须在 /:id 之前）
+productsRouter.get('/template', (_req: AuthRequest, res: Response) => {
+  const csv = 'SKU(选填),商品名称(必填),规格,单位,条码,分类,安全库存,成本价,售价,库位名称(选填),初始数量(选填)\n,示例商品,大号,个,,示例分类,50,10,20,A区-01架,200\n';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=product-template.csv');
+  res.send(csv);
+});
+
 // 批量导入商品（必须在 /:id 之前）
 productsRouter.post('/import', adminWrite, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
