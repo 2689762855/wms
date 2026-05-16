@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Table, Button, Modal, Form, Input, Card, Typography, Space, Upload, message, Popconfirm } from 'antd';
-import { PlusOutlined, QrcodeOutlined, PrinterOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Card, Typography, Space, message, Popconfirm } from 'antd';
+import { PlusOutlined, QrcodeOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
@@ -19,7 +19,7 @@ export default function WarehouseLocations() {
   const queryClient = useQueryClient();
   const printRef = useRef<HTMLDivElement>(null);
 
-  const { data: locations, isLoading, refetch } = useQuery({
+  const { data: locations, isLoading } = useQuery({
     queryKey: ['locations', warehouseId],
     queryFn: () => apiClient.get('/locations', { params: { warehouseId } }).then(r => r.data),
   });
@@ -72,27 +72,7 @@ export default function WarehouseLocations() {
 
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>库位管理 - 仓库 #{warehouseId}</Typography.Title>}
-      extra={!isOperator && (
-        <Space>
-          <Button icon={<DownloadOutlined />} size="small" onClick={() => apiClient.get('/locations/template', { responseType: 'blob' }).then(res => {
-            const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement('a'); a.href = url; a.download = 'location-template.xlsx'; a.click();
-            URL.revokeObjectURL(url);
-          })}>下载模板</Button>
-          <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={file => {
-            const form = new FormData();
-            form.append('file', file);
-            apiClient.post('/locations/import', form).then(res => {
-              message.success(`导入完成：${res.data.created} 个库位`);
-              refetch();
-            }).catch(err => message.error(err.response?.data?.error || '导入失败'));
-            return false;
-          }}>
-            <Button icon={<UploadOutlined />} size="small">批量导入</Button>
-          </Upload>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>新增库位</Button>
-        </Space>
-      )}
+      extra={!isOperator && <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>新增库位</Button>}
     >
       <Table rowKey="id" columns={columns} dataSource={locations} loading={isLoading} pagination={false} scroll={{ x: 500 }} />
 

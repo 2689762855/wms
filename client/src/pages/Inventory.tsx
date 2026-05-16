@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Table, Select, Input, Card, Typography, Space, Tag, Button, Upload, message } from 'antd';
-import { DownloadOutlined, UploadOutlined } from '@ant-design/icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Table, Select, Input, Card, Typography, Space, Tag } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryLevelName } from '../utils/categoryTree';
 import type { Warehouse, InventoryItem, Category } from '../types';
@@ -47,7 +46,6 @@ function LocationDetail({ productId, warehouseId }: { productId: number; warehou
 export default function Inventory() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [keyword, setKeyword] = useState('');
-  const queryClient = useQueryClient();
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories').then(r => r.data) });
@@ -103,28 +101,7 @@ export default function Inventory() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>库存查询</Typography.Title>}
-      extra={
-        <Space>
-          <Button icon={<DownloadOutlined />} size="small" onClick={() => apiClient.get('/inventory/template', { responseType: 'blob' }).then(res => {
-            const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement('a'); a.href = url; a.download = 'inventory-template.xlsx'; a.click();
-            URL.revokeObjectURL(url);
-          })}>下载模板</Button>
-          <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={file => {
-            const form = new FormData();
-            form.append('file', file);
-            apiClient.post('/inventory/import', form).then(res => {
-              message.success(`导入完成：${res.data.created} 条`);
-              if (res.data.errors?.length) message.warning(res.data.errors.join('; '));
-              queryClient.invalidateQueries({ queryKey: ['inventory'] });
-            }).catch(err => message.error(err.response?.data?.error || '导入失败'));
-            return false;
-          }}>
-            <Button icon={<UploadOutlined />} size="small">批量导入</Button>
-          </Upload>
-        </Space>
-      }>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>库存查询</Typography.Title>}>
       <Space wrap style={{ marginBottom: 16 }}>
         <Select placeholder="选择仓库" allowClear style={{ width: 160 }} onChange={setWarehouseId}>
           {warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}

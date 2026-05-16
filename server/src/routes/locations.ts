@@ -1,55 +1,9 @@
 import { Router, Response } from 'express';
-import multer from 'multer';
-import * as XLSX from 'xlsx';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticate, adminWrite, requireWarehouse } from '../middleware/auth';
 
 export const locationsRouter = Router();
 locationsRouter.use(authenticate);
-
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
-
-// 下载库位导入模板
-locationsRouter.get('/template', (_req: AuthRequest, res: Response) => {
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ['库位名称(必填)', '库位编码(选填，留空自动生成)'],
-    ['A区-03架', ''],
-    ['B区-05架', 'LOC-B05'],
-  ]), '库位导入模板');
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename=location-template.xlsx');
-  res.send(buf);
-});
-
-// 批量导入库位
-locationsRouter.post('/import', adminWrite, requireWarehouse, upload.single('file'), async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: '请上传 Excel 文件' });
-    const { warehouseId } = req.body;
-    const wid = req.userRole === 'super_admin' ? parseInt(warehouseId) : req.userWarehouseId;
-    if (!wid) return res.status(400).json({ error: '请指定仓库' });
-
-    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const rows: string[][] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-    if (rows.length < 2) return res.status(400).json({ error: '模板为空' });
-
-    let created = 0;
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row?.[0]?.toString().trim()) continue;
-      const name = row[0].toString().trim();
-      let code = row[1]?.toString().trim() || '';
-      if (!code) code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
-      await prisma.location.create({ data: { name, warehouseId: wid, code } });
-      created++;
-    }
-    res.json({ created });
-  } catch (err: any) {
-    res.status(500).json({ error: '导入失败：' + (err.message || '文件格式错误') });
-  }
-});
 
 // 按扫码 code 查询库位
 locationsRouter.get('/code/:code', async (req: AuthRequest, res: Response) => {
