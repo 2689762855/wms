@@ -13,6 +13,7 @@ const isCapacitor = typeof (window as any).Capacitor !== 'undefined';
 export default function BarcodeScanner({ onScan }: Props) {
   const [scanning, setScanning] = useState(false);
   const [manualValue, setManualValue] = useState('');
+  const [useNative, setUseNative] = useState(isCapacitor);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scanningRef = useRef(false);
   const onScanRef = useRef(onScan);
@@ -22,7 +23,7 @@ export default function BarcodeScanner({ onScan }: Props) {
   useEffect(() => {
     return () => {
       if (scanningRef.current) {
-        if (isCapacitor) {
+        if (isCapacitor && useNative) {
           NativeScanner.showBackground();
           NativeScanner.stopScan().catch(() => {});
         }
@@ -31,13 +32,12 @@ export default function BarcodeScanner({ onScan }: Props) {
         }
       }
     };
-  }, []);
+  }, [useNative]);
 
   const handleScanResult = useCallback((barcode: string) => {
     onScanRef.current(barcode);
     message.success('扫码成功');
-    // 扫到后立即停止，防止重复扫描
-    if (isCapacitor) {
+    if (useNative) {
       NativeScanner.showBackground();
       NativeScanner.stopScan().catch(() => {});
     } else {
@@ -45,7 +45,7 @@ export default function BarcodeScanner({ onScan }: Props) {
     }
     setScanning(false);
     scanningRef.current = false;
-  }, [onScan]);
+  }, [useNative]);
 
   const startNativeScan = async () => {
     try {
@@ -69,13 +69,16 @@ export default function BarcodeScanner({ onScan }: Props) {
         handleScanResult(result.content);
       }
     } catch (err: any) {
-      console.error('Scan error:', err);
+      console.warn('Native scan unavailable, falling back to web scanner:', err.message || err);
       NativeScanner.showBackground();
       NativeScanner.stopScan().catch(() => {});
       document.body.classList.remove('scanner-active');
       scanningRef.current = false;
       setScanning(false);
-      message.error('扫码失败');
+      setUseNative(false);
+      message.info('已切换为网页扫码模式');
+      // Auto-retry with web scanner
+      startWebScan();
     }
   };
 
@@ -109,7 +112,7 @@ export default function BarcodeScanner({ onScan }: Props) {
   };
 
   const handleScan = () => {
-    if (isCapacitor) {
+    if (useNative) {
       startNativeScan();
     } else {
       startWebScan();
@@ -117,7 +120,7 @@ export default function BarcodeScanner({ onScan }: Props) {
   };
 
   const handleStop = () => {
-    if (isCapacitor) {
+    if (useNative) {
       NativeScanner.showBackground();
       NativeScanner.stopScan().catch(() => {});
       document.body.classList.remove('scanner-active');
@@ -147,7 +150,7 @@ export default function BarcodeScanner({ onScan }: Props) {
           <Button icon={<StopOutlined />} onClick={handleStop}>停止扫码</Button>
         )}
       </div>
-      {!isCapacitor && <div id={containerId} style={{ width: '100%', maxWidth: 320 }} />}
+      {!useNative && <div id={containerId} style={{ width: '100%', maxWidth: 320 }} />}
     </Space>
   );
 }

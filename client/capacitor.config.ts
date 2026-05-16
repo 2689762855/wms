@@ -7,9 +7,14 @@ const config: CapacitorConfig = {
   server: {
     // 不设置 url，加载本地打包文件；用户在登录页设置服务器地址
     androidScheme: 'https',
+    iosScheme: 'capacitor',
   },
   android: {
     allowMixedContent: true,
+  },
+  ios: {
+    contentInset: 'automatic',
+    allowsLinkPreview: false,
   },
   plugins: {
     SplashScreen: {
