@@ -48,9 +48,9 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
 productsRouter.get('/template', (_req: AuthRequest, res: Response) => {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([[
-    'SKU(选填，留空自动生成)', '商品名称(必填)', '规格', '单位', '条码', '分类', '安全库存', '成本价', '售价'
+    'SKU(选填)', '商品名称(必填)', '规格', '单位', '条码', '分类', '安全库存', '成本价', '售价', '库位编码(选填)', '初始数量(选填)'
   ]]);
-  ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 15 }, { wch: 8 }, { wch: 18 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, ws, '商品导入模板');
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -69,47 +69,69 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
     if (rows.length < 2) return res.status(400).json({ error: '模板为空，请填写商品数据' });
 
     const customerId = req.customerId || null;
-    let created = 0;
-    let skipped = 0;
+    const warehouseId = req.body.warehouseId ? parseInt(req.body.warehouseId) : req.userWarehouseId;
+    let created = 0, stockAdded = 0;
     const errors: string[] = [];
+    const nameSkuMap = new Map<string, string>();
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      if (!row || !row[1]?.toString().trim()) continue;
+      if (!row?.[1]?.toString().trim()) continue;
 
       const name = row[1].toString().trim();
       if (name.length > 200) { errors.push(`第${i + 1}行: 名称过长`); continue; }
 
       let sku = row[0]?.toString().trim() || '';
-      if (sku) {
-        const exist = await prisma.product.findUnique({ where: { sku } });
-        if (exist) { skipped++; continue; }
-      } else {
-        sku = await nextOrderNo('SKU');
+      if (!sku) sku = nameSkuMap.get(name) || ''; // 同名商品复用 SKU
+
+      const productExists = sku ? !!(await prisma.product.findUnique({ where: { sku }, select: { id: true } })) : false;
+
+      if (!productExists) {
+        if (!sku) { sku = await nextOrderNo('SKU'); }
+        nameSkuMap.set(name, sku);
+        const spec = row[2]?.toString().trim() || undefined;
+        const unit = row[3]?.toString().trim() || 'pcs';
+        const barcode = row[4]?.toString().trim() || undefined;
+        const catName = row[5]?.toString().trim();
+        const safetyStock = parseInt(row[6] as string) || 0;
+        const costPrice = parseFloat(row[7] as string) || undefined;
+        const salePrice = parseFloat(row[8] as string) || undefined;
+
+        let categoryId: number | null = null;
+        if (catName) {
+          let cat = await prisma.category.findFirst({ where: { name: catName, customerId } });
+          if (!cat) cat = await prisma.category.create({ data: { name: catName, customerId } });
+          categoryId = cat.id;
+        }
+
+        await prisma.product.create({
+          data: { sku, name, spec, unit, barcode: barcode || null, categoryId, customerId, safetyStock, costPrice, salePrice },
+        });
+        created++;
       }
 
-      const spec = row[2]?.toString().trim() || undefined;
-      const unit = row[3]?.toString().trim() || 'pcs';
-      const barcode = row[4]?.toString().trim() || undefined;
-      const catName = row[5]?.toString().trim();
-      const safetyStock = parseInt(row[6] as string) || 0;
-      const costPrice = parseFloat(row[7] as string) || undefined;
-      const salePrice = parseFloat(row[8] as string) || undefined;
+      // 填了库位编码+数量 → 自动创建库存
+      const locCode = row[9]?.toString().trim();
+      const qty = parseInt(row[10] as string);
+      if (locCode && !isNaN(qty) && qty > 0 && warehouseId) {
+        const location = await prisma.location.findFirst({ where: { code: locCode, warehouseId } });
+        if (!location) { errors.push(`第${i + 1}行: 库位编码「${locCode}」不存在`); continue; }
+        const product = await prisma.product.findUnique({ where: { sku }, select: { id: true } });
+        if (!product) { errors.push(`第${i + 1}行: 商品创建失败`); continue; }
 
-      let categoryId: number | null = null;
-      if (catName) {
-        let cat = await prisma.category.findFirst({ where: { name: catName, customerId } });
-        if (!cat) cat = await prisma.category.create({ data: { name: catName, customerId } });
-        categoryId = cat.id;
+        const inv = await prisma.inventory.findUnique({
+          where: { productId_warehouseId_locationId: { productId: product.id, warehouseId, locationId: location.id } },
+        });
+        if (inv) {
+          await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity + qty } });
+        } else {
+          await prisma.inventory.create({ data: { productId: product.id, warehouseId, locationId: location.id, quantity: qty } });
+        }
+        stockAdded++;
       }
-
-      await prisma.product.create({
-        data: { sku, name, spec, unit, barcode: barcode || null, categoryId, customerId, safetyStock, costPrice, salePrice },
-      });
-      created++;
     }
 
-    res.json({ created, skipped, errors: errors.slice(0, 10) });
+    res.json({ created, stockAdded, errors: errors.slice(0, 10) });
   } catch (err: any) {
     console.error('Import error:', err);
     res.status(500).json({ error: '导入失败：' + (err.message || '文件格式错误') });
