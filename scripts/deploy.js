@@ -594,6 +594,12 @@ if (fs.existsSync(readmeSrc)) {
   fs.copyFileSync(readmeSrc, path.join(deployDir, '使用说明.txt'));
 }
 
+// 复制系统功能使用说明书
+const manualSrc = path.join(root, 'docs', '系统使用说明书.md');
+if (fs.existsSync(manualSrc)) {
+  fs.copyFileSync(manualSrc, path.join(deployDir, '系统使用说明书.md'));
+}
+
 // 将 Windows 文本文件从 UTF-8 转换为 GBK 编码（中文 Windows cmd/记事本 兼容）
 try {
   const gbk = require('iconv-lite');
