@@ -176,7 +176,7 @@ echo.
 cd /d "%~dp0server"
 
 :: 检查并清理占用 3001 端口的旧进程
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3001 ^| findstr LISTENING') do (
+for /f "tokens=5" %%a in ('%SystemRoot%\\System32\\netstat.exe -ano ^| findstr :3001 ^| findstr LISTENING') do (
     echo [信息] 发现旧进程 PID: %%a，正在清理...
     taskkill /F /PID %%a >nul 2>nul
 )
@@ -463,7 +463,7 @@ echo.
 echo [1/2] 停止服务...
 
 :: 按端口 3001 精准查找并终止进程（不会影响其他 Node.js 程序）
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3001 ^| findstr LISTENING') do (
+for /f "tokens=5" %%a in ('%SystemRoot%\\System32\\netstat.exe -ano ^| findstr :3001 ^| findstr LISTENING') do (
     echo   正在停止服务 PID: %%a...
     taskkill /F /PID %%a >nul 2>nul
 )
