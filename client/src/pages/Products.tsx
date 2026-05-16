@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, message, Popconfirm } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm } from 'antd';
+import { PlusOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
@@ -95,7 +95,30 @@ export default function Products() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>商品管理</Typography.Title>} extra={!isOperator && <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增商品</Button>}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>商品管理</Typography.Title>}
+      extra={!isOperator && (
+        <Space>
+          <Button icon={<DownloadOutlined />} onClick={() => apiClient.get('/products/template', { responseType: 'blob' }).then(res => {
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a'); a.href = url; a.download = 'product-template.xlsx'; a.click();
+            URL.revokeObjectURL(url);
+          })}>下载模板</Button>
+          <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={file => {
+            const form = new FormData();
+            form.append('file', file);
+            apiClient.post('/products/import', form).then(res => {
+              const { created, skipped, errors } = res.data;
+              message.success(`导入完成：新增 ${created} 个商品${skipped > 0 ? `，跳过 ${skipped} 个（SKU重复）` : ''}`);
+              if (errors?.length) message.warning(errors.join('; '));
+              queryClient.invalidateQueries({ queryKey: ['products'] });
+            }).catch(err => message.error(err.response?.data?.error || '导入失败'));
+            return false;
+          }}>
+            <Button icon={<UploadOutlined />}>批量导入</Button>
+          </Upload>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增商品</Button>
+        </Space>
+      )}>
       <Input.Search placeholder="搜索商品名称/SKU/条码" allowClear onSearch={setKeyword} style={{ marginBottom: 16, maxWidth: '100%', width: 300 }} />
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
         pagination={{ current: page, total: data?.total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 条` }}
