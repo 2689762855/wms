@@ -1,21 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-// 本地开发用密钥。生产环境必须设置 JWT_ADMIN_SECRET / JWT_CUSTOMER_SECRET 环境变量。
 const DEV_ADMIN_SECRET = 'dev-admin-secret-8a1b9c2d3e4f5a6b7c8d9e0f';
-const DEV_CUSTOMER_SECRET = 'dev-customer-secret-1a2b3c4d5e6f7a8b9c0d1e2f';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
 const JWT_ADMIN_SECRET = process.env.JWT_ADMIN_SECRET || (!isProduction ? DEV_ADMIN_SECRET : '');
-const JWT_CUSTOMER_SECRET = process.env.JWT_CUSTOMER_SECRET || (!isProduction ? DEV_CUSTOMER_SECRET : '');
 
-if (isProduction) {
-  if (!JWT_ADMIN_SECRET) throw new Error('FATAL: JWT_ADMIN_SECRET 环境变量未设置，拒绝启动');
-  if (!JWT_CUSTOMER_SECRET) throw new Error('FATAL: JWT_CUSTOMER_SECRET 环境变量未设置，拒绝启动');
+if (isProduction && !JWT_ADMIN_SECRET) {
+  throw new Error('FATAL: JWT_ADMIN_SECRET 环境变量未设置，拒绝启动');
 }
 
-export { JWT_ADMIN_SECRET, JWT_CUSTOMER_SECRET };
+export { JWT_ADMIN_SECRET };
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -74,22 +70,4 @@ export function requireWarehouse(req: AuthRequest, res: Response, next: NextFunc
   if (req.userRole === 'super_admin') return next();
   if (!req.userWarehouseId) return res.status(403).json({ error: '未分配到任何仓库' });
   next();
-}
-
-export function customerAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: '请先登录' });
-  }
-  try {
-    const token = header.split(' ')[1];
-    const payload = jwt.verify(token, JWT_CUSTOMER_SECRET) as { customerId: number; role: string };
-    if (payload.role !== 'customer' || !payload.customerId) {
-      return res.status(401).json({ error: '令牌无效' });
-    }
-    req.customerId = payload.customerId;
-    next();
-  } catch {
-    return res.status(401).json({ error: '令牌无效或已过期' });
-  }
 }

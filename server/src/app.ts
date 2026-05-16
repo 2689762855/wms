@@ -19,7 +19,6 @@ import { alertsRouter } from './routes/alerts';
 import { reportsRouter } from './routes/reports';
 import { usersRouter } from './routes/users';
 import { locationsRouter } from './routes/locations';
-import { publicRouter } from './routes/public';
 import { customersRouter } from './routes/customers';
 import { stockMoveRouter } from './routes/stockMove';
 import { appRouter } from './routes/app';
@@ -55,7 +54,6 @@ const loginLimiter = rateLimit({
   message: { error: '请求过于频繁，请15分钟后再试' },
 });
 app.use('/api/auth/login', loginLimiter);
-app.use('/api/public/login', loginLimiter);
 
 // 通用限速
 app.use('/api', rateLimit({
@@ -78,7 +76,6 @@ app.use('/api/alerts', alertsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/locations', locationsRouter);
-app.use('/api/public', publicRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/stock-move', stockMoveRouter);
 app.use('/api/app', appRouter);

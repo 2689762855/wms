@@ -82,9 +82,6 @@ export default function Login() {
             {tab === 'staff' ? '默认: admin / admin123' : '示例: kehua / 123456'}
           </Typography.Text>
         )}
-        <div style={{ textAlign: 'center', marginTop: 8 }}>
-          <Typography.Link onClick={() => navigate('/stock')}>查看库存</Typography.Link>
-        </div>
       </Card>
       <PWAInstallPrompt />
     </div>

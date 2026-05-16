@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { CustomerAuthProvider } from './stores/CustomerAuthContext';
 import { AuthProvider, useAuth } from './stores/AuthContext';
 import AppUpdateModal from './components/AppUpdateModal';
 import { checkForUpdate } from './utils/updateChecker';
@@ -30,7 +29,6 @@ import Alerts from './pages/Alerts';
 import ReportsInOut from './pages/ReportsInOut';
 import ReportsTurnover from './pages/ReportsTurnover';
 import Login from './pages/Login';
-import StockCheck from './pages/StockCheck';
 import WarehouseLocations from './pages/WarehouseLocations';
 import Users from './pages/Users';
 import Customers from './pages/Customers';
@@ -67,7 +65,6 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/stock" element={<CustomerAuthProvider><StockCheck /></CustomerAuthProvider>} />
       <Route path="/m" element={<ProtectedRoute><MobileWorkerLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/m/inbound" replace />} />
         <Route path="inbound" element={<MobileInboundList />} />
