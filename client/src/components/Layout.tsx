@@ -48,8 +48,9 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
 
   // 仓库操作菜单：超管以外的所有角色
   const opsMenuItems = [
+    { key: 'dashboard', label: '仪表盘', icon: <DashboardOutlined />, path: '/dashboard' },
+    { key: 'warehouses', label: '仓库与库位', icon: <BankOutlined />, path: '/warehouses' },
     {
-      key: 'products-group',
       label: '商品管理',
       icon: <AppstoreOutlined />,
       children: [

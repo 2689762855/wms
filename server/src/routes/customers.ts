@@ -74,6 +74,13 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // 自动生成默认库位
+    const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
+    for (const locName of locNames) {
+      const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
+      await prisma.location.create({ data: { name: locName, warehouseId: wh.id, code } });
+    }
+
     const { passwordHash: _, ...safe } = customer;
     res.status(201).json({ ...safe, warehouses: [wh] });
   } catch (err) {
