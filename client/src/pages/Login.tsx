@@ -58,7 +58,7 @@ export default function Login() {
           onChange={(key) => setTab(key as 'staff' | 'tenant')}
           centered
           items={[
-            { key: 'staff', label: <><UserOutlined /> 员工登录</> },
+            { key: 'staff', label: <><UserOutlined /> 管理员登录</> },
             { key: 'tenant', label: <><TeamOutlined /> 客户登录</> },
           ]}
         />
