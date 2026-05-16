@@ -8,7 +8,7 @@ const JWT_EXPIRES_IN = '24h';
 
 export const authRouter = Router();
 
-// 登录
+// 统一登录（自动识别 User 或 Customer）
 authRouter.post('/login', async (req: AuthRequest, res: Response) => {
   try {
     const { username, password } = req.body;
@@ -16,20 +16,48 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
 
+    // 先查 User 表
     const user = await prisma.user.findUnique({ where: { username } });
-    if (!user) {
-      return res.status(401).json({ error: '用户名或密码错误' });
+    if (user) {
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ error: '用户名或密码错误' });
+      }
+      const token = jwt.sign(
+        { userId: user.id, role: user.role, warehouseId: user.warehouseId },
+        JWT_ADMIN_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+      const { passwordHash: _, ...rest } = user;
+      return res.json({ token, user: rest });
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ error: '用户名或密码错误' });
+    // 再查 Customer 表
+    const customer = await prisma.customer.findUnique({
+      where: { username },
+      include: { warehouses: { take: 1, orderBy: { id: 'asc' } } },
+    });
+    if (customer) {
+      if (customer.status === 'suspended') {
+        return res.status(403).json({ error: '账号已被暂停，请联系管理员' });
+      }
+      const valid = await bcrypt.compare(password, customer.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ error: '用户名或密码错误' });
+      }
+      const warehouseId = customer.warehouses[0]?.id ?? null;
+      const token = jwt.sign(
+        { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
+        JWT_ADMIN_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+      const { passwordHash: _, ...rest } = customer;
+      return res.json({ token, user: { ...rest, role: 'tenant_admin', warehouseId } });
     }
 
-    const token = jwt.sign({ userId: user.id, role: user.role, warehouseId: user.warehouseId }, JWT_ADMIN_SECRET, { expiresIn: JWT_EXPIRES_IN });
-    const { passwordHash: _, ...userWithoutPassword } = user;
-    res.json({ token, user: userWithoutPassword });
+    return res.status(401).json({ error: '用户名或密码错误' });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });

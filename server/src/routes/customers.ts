@@ -51,6 +51,8 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
 
     const existing = await prisma.customer.findUnique({ where: { username } });
     if (existing) return res.status(400).json({ error: '用户名已存在' });
+    const userConflict = await prisma.user.findUnique({ where: { username } });
+    if (userConflict) return res.status(400).json({ error: '用户名已被员工账号使用' });
 
     const passwordHash = await bcrypt.hash(password, 10);
     const customer = await prisma.customer.create({

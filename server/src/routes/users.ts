@@ -50,6 +50,8 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
 
     const existing = await prisma.user.findUnique({ where: { username } });
     if (existing) return res.status(400).json({ error: '用户名已存在' });
+    const customerConflict = await prisma.customer.findUnique({ where: { username } });
+    if (customerConflict) return res.status(400).json({ error: '用户名已被客户账号使用' });
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
