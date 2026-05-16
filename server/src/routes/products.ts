@@ -48,7 +48,7 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
 productsRouter.get('/template', (_req: AuthRequest, res: Response) => {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([[
-    'SKU(选填)', '商品名称(必填)', '规格', '单位', '条码', '分类', '安全库存', '成本价', '售价', '库位编码(选填)', '初始数量(选填)'
+    'SKU(选填)', '商品名称(必填)', '规格', '单位', '条码', '分类', '安全库存', '成本价', '售价', '库位名称(选填)', '初始数量(选填)'
   ]]);
   ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, ws, '商品导入模板');
@@ -110,12 +110,16 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
         created++;
       }
 
-      // 填了库位编码+数量 → 自动创建库存
-      const locCode = row[9]?.toString().trim();
+      // 填了库位名称+数量 → 自动查找或创建库位并入库
+      const locName = row[9]?.toString().trim();
       const qty = parseInt(row[10] as string);
-      if (locCode && !isNaN(qty) && qty > 0 && warehouseId) {
-        const location = await prisma.location.findFirst({ where: { code: locCode, warehouseId } });
-        if (!location) { errors.push(`第${i + 1}行: 库位编码「${locCode}」不存在`); continue; }
+      if (locName && !isNaN(qty) && qty > 0 && warehouseId) {
+        // 按名称查找库位，不存在则自动创建
+        let location = await prisma.location.findFirst({ where: { name: locName, warehouseId } });
+        if (!location) {
+          const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
+          location = await prisma.location.create({ data: { name: locName, warehouseId, code } });
+        }
         const product = await prisma.product.findUnique({ where: { sku }, select: { id: true } });
         if (!product) { errors.push(`第${i + 1}行: 商品创建失败`); continue; }
 
