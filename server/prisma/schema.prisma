@@ -247,14 +247,15 @@ model Location {
 }
 
 model Customer {
-  id            Int      @id @default(autoincrement())
-  username      String   @unique
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
   passwordHash  String
   realName      String?
-  status        String   @default("active") // active | suspended
-  maxWarehouses Int      @default(1)
+  status        String    @default("active") // active | suspended
+  maxWarehouses Int       @default(1)
+  expiresAt     DateTime? // null=永久，到期自动暂停
   createdBy     Int?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   warehouses Warehouse[]
   categories Category[]

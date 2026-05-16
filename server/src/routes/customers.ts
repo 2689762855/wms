@@ -41,7 +41,7 @@ customersRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 // 创建客户（自动创建专属仓库）
 customersRouter.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { username, password, realName, maxWarehouses, warehouseName } = req.body;
+    const { username, password, realName, maxWarehouses, warehouseName, durationDays } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: '用户名和密码不能为空' });
     }
@@ -55,12 +55,20 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
     if (userConflict) return res.status(400).json({ error: '用户名已被员工账号使用' });
 
     const passwordHash = await bcrypt.hash(password, 10);
+
+    // 计算到期时间
+    let expiresAt: Date | null = null;
+    if (durationDays && durationDays > 0) {
+      expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+    }
+
     const customer = await prisma.customer.create({
       data: {
         username,
         passwordHash,
         realName: realName || username,
         maxWarehouses: maxWarehouses || 1,
+        expiresAt,
         createdBy: req.userId,
       },
     });

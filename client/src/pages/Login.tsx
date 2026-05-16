@@ -18,6 +18,9 @@ export default function Login() {
       const res = await apiClient.post('/auth/login', values);
       login(res.data.token, res.data.user);
       message.success('登录成功');
+      if (res.data.expiryWarning) {
+        message.warning(res.data.expiryWarning, 5);
+      }
       if (res.data.user.role === 'super_admin') {
         navigate('/admin', { replace: true });
       } else {

@@ -97,6 +97,15 @@ export default function AdminDashboard() {
           { title: '仓库上限', dataIndex: 'maxWarehouses', key: 'max', width: 80 },
           { title: '商品数', key: 'products', width: 70,
             render: (_: unknown, r: CustomerInfo) => r._count?.products ?? 0 },
+          { title: '有效期', key: 'expiry', width: 110,
+            render: (_: unknown, r: any) => {
+              if (!r.expiresAt) return <Tag color="purple">永久</Tag>;
+              const days = Math.ceil((new Date(r.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+              if (days < 0) return <Tag color="red">已过期</Tag>;
+              if (days <= 7) return <Tag color="orange">{days}天后到期</Tag>;
+              if (days <= 30) return <Tag color="blue">{days}天</Tag>;
+              return `${days}天`;
+            }},
           { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 140,
             render: (v: string) => new Date(v).toLocaleDateString('zh-CN') },
           {

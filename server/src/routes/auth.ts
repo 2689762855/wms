@@ -38,6 +38,11 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
       include: { warehouses: { take: 1, orderBy: { id: 'asc' } } },
     });
     if (customer) {
+      // 检查是否过期
+      if (customer.expiresAt && new Date() > customer.expiresAt) {
+        await prisma.customer.update({ where: { id: customer.id }, data: { status: 'suspended' } });
+        return res.status(403).json({ error: '账号已过期，请联系管理员续费' });
+      }
       if (customer.status === 'suspended') {
         return res.status(403).json({ error: '账号已被暂停，请联系管理员' });
       }
@@ -45,6 +50,16 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
       if (!valid) {
         return res.status(401).json({ error: '用户名或密码错误' });
       }
+
+      // 7天内到期提醒
+      let expiryWarning: string | undefined;
+      if (customer.expiresAt) {
+        const daysLeft = Math.ceil((customer.expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        if (daysLeft <= 7 && daysLeft > 0) {
+          expiryWarning = `账号将在 ${daysLeft} 天后到期，请及时续费`;
+        }
+      }
+
       const warehouseId = customer.warehouses[0]?.id ?? null;
       const token = jwt.sign(
         { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
@@ -52,7 +67,7 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
         { expiresIn: JWT_EXPIRES_IN }
       );
       const { passwordHash: _, ...rest } = customer;
-      return res.json({ token, user: { ...rest, role: 'tenant_admin', warehouseId } });
+      return res.json({ token, user: { ...rest, role: 'tenant_admin', warehouseId, expiresAt: customer.expiresAt }, expiryWarning });
     }
 
     return res.status(401).json({ error: '用户名或密码错误' });
