@@ -465,7 +465,7 @@ echo [1/2] 停止服务...
 :: 按端口 3001 精准查找并终止进程（不会影响其他 Node.js 程序）
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3001 ^| findstr LISTENING') do (
     echo   正在停止服务 PID: %%a...
-    taskkill /F /PID %%a >/dev/null 2>/dev/null
+    taskkill /F /PID %%a >nul 2>nul
 )
 echo   服务已停止。
 
@@ -474,14 +474,14 @@ echo [2/2] 删除数据...
 cd /d "%~dp0server"
 
 :: 删除数据库
-if exist "prismadev.db" (
-    del /f /q "prismadev.db"
+if exist "prisma\\dev.db" (
+    del /f /q "prisma\\dev.db"
     echo   数据库已删除。
 ) else (
     echo   数据库文件不存在。
 )
-if exist "prismadev.db-journal" (
-    del /f /q "prismadev.db-journal"
+if exist "prisma\\dev.db-journal" (
+    del /f /q "prisma\\dev.db-journal"
 )
 
 :: 删除配置
