@@ -100,7 +100,7 @@ export default function Products() {
         <Space>
           <Button icon={<DownloadOutlined />} onClick={() => apiClient.get('/products/template', { responseType: 'blob' }).then(res => {
             const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement('a'); a.href = url; a.download = 'product-template.csv'; a.click();
+            const a = document.createElement('a'); a.href = url; a.download = 'product-template.xlsx'; a.click();
             URL.revokeObjectURL(url);
           })}>下载模板</Button>
           <Upload accept=".xlsx,.xls,.csv" showUploadList={false} beforeUpload={file => {
