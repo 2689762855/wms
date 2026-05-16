@@ -32,12 +32,14 @@ model User {
 }
 
 model Warehouse {
-  id        Int      @id @default(autoincrement())
-  name      String
-  address   String?
-  managerId Int?
-  manager   User?    @relation("WarehouseManager", fields: [managerId], references: [id])
-  createdAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  name       String
+  address    String?
+  managerId  Int?
+  manager    User?     @relation("WarehouseManager", fields: [managerId], references: [id])
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  createdAt  DateTime  @default(now())
 
   users           User[]
   locations       Location[]
@@ -50,26 +52,30 @@ model Warehouse {
 }
 
 model Category {
-  id       Int        @id @default(autoincrement())
-  name     String
-  parentId Int?
-  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryTree")
-  products Product[]
+  id         Int        @id @default(autoincrement())
+  name       String
+  parentId   Int?
+  parent     Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryTree")
+  customerId Int?
+  customer   Customer?  @relation(fields: [customerId], references: [id])
+  products   Product[]
 }
 
 model Product {
   id         Int      @id @default(autoincrement())
   sku        String   @unique
   name       String
-  spec       String?  // 规格
-  unit       String   @default("pcs") // 单位
-  barcode    String?  @unique
+  spec       String?
+  unit       String   @default("pcs")
+  barcode    String?
   categoryId Int?
   category   Category? @relation(fields: [categoryId], references: [id])
-  safetyStock Int    @default(0) // 安全库存
-  costPrice  Float?  // 成本价
-  salePrice  Float?  // 售价
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  safetyStock Int    @default(0)
+  costPrice  Float?
+  salePrice  Float?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -241,13 +247,18 @@ model Location {
 }
 
 model Customer {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  passwordHash String
-  realName     String?
-  warehouseId  Int?     // null = 查看全部仓库
-  createdBy    Int?
-  createdAt    DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  username      String   @unique
+  passwordHash  String
+  realName      String?
+  status        String   @default("active") // active | suspended
+  maxWarehouses Int      @default(1)
+  createdBy     Int?
+  createdAt     DateTime @default(now())
+
+  warehouses Warehouse[]
+  categories Category[]
+  products   Product[]
 }
 
 model Sequence {

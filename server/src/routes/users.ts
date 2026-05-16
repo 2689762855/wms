@@ -6,12 +6,16 @@ import { AuthRequest, authenticate, authorize } from '../middleware/auth';
 export const usersRouter = Router();
 
 // 用户列表
-usersRouter.get('/', authenticate, authorize('super_admin', 'warehouse_admin'), async (req: AuthRequest, res: Response) => {
+usersRouter.get('/', authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
     const where: Record<string, unknown> = {};
     if (req.userRole === 'warehouse_admin') {
       where.role = 'operator';
       where.createdById = req.userId;
+    }
+    if (req.userRole === 'tenant_admin') {
+      where.role = 'operator';
+      where.warehouseId = req.userWarehouseId;
     }
     const users = await prisma.user.findMany({
       where,
@@ -28,7 +32,7 @@ usersRouter.get('/', authenticate, authorize('super_admin', 'warehouse_admin'), 
 });
 
 // 创建用户
-usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin'), async (req: AuthRequest, res: Response) => {
+usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
     const { username, password, role, realName, phone, warehouseId } = req.body;
     if (!username || !password) return res.status(400).json({ error: '用户名和密码必填' });
@@ -39,7 +43,7 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin'),
     // 仓管只能创建操作员，且仓库自动继承
     let finalRole = role || 'operator';
     let finalWarehouseId = warehouseId || null;
-    if (req.userRole === 'warehouse_admin') {
+    if (req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
       finalRole = 'operator';
       finalWarehouseId = req.userWarehouseId;
     }
@@ -61,13 +65,13 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin'),
 });
 
 // 编辑用户
-usersRouter.put('/:id', authenticate, authorize('super_admin', 'warehouse_admin'), async (req: AuthRequest, res: Response) => {
+usersRouter.put('/:id', authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string);
     const target = await prisma.user.findUnique({ where: { id } });
     if (!target) return res.status(404).json({ error: '用户不存在' });
 
-    if (req.userRole === 'warehouse_admin') {
+    if (req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
       if (target.role !== 'operator' || target.createdById !== req.userId) {
         return res.status(403).json({ error: '只能编辑自己创建的操作员' });
       }
@@ -101,13 +105,13 @@ usersRouter.put('/:id', authenticate, authorize('super_admin', 'warehouse_admin'
 });
 
 // 删除用户
-usersRouter.delete('/:id', authenticate, authorize('super_admin', 'warehouse_admin'), async (req: AuthRequest, res: Response) => {
+usersRouter.delete('/:id', authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string);
     if (id === req.userId) return res.status(400).json({ error: '不能删除自己' });
     const target = await prisma.user.findUnique({ where: { id } });
     if (!target) return res.status(404).json({ error: '用户不存在' });
-    if (req.userRole === 'warehouse_admin') {
+    if (req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
       if (target.role !== 'operator' || target.createdById !== req.userId) {
         return res.status(403).json({ error: '只能删除自己创建的操作员' });
       }

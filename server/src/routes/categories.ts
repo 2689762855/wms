@@ -7,8 +7,12 @@ categoriesRouter.use(authenticate);
 categoriesRouter.use(adminWrite);
 
 // 获取所有分类（平铺列表，前端构建树）
-categoriesRouter.get('/', async (_req: AuthRequest, res: Response) => {
-  const list = await prisma.category.findMany({ orderBy: { name: 'asc' } });
+categoriesRouter.get('/', async (req: AuthRequest, res: Response) => {
+  const where: Record<string, unknown> = {};
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    where.customerId = req.customerId;
+  }
+  const list = await prisma.category.findMany({ where, orderBy: { name: 'asc' } });
   res.json(list);
 });
 
@@ -16,16 +20,23 @@ categoriesRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { name, parentId } = req.body;
   if (!name) return res.status(400).json({ error: '分类名称必填' });
   if (name.length > 100) return res.status(400).json({ error: '分类名称不能超过 100 字符' });
-  const category = await prisma.category.create({ data: { name, parentId: parentId || null } });
+  const category = await prisma.category.create({
+    data: { name, parentId: parentId || null, customerId: req.customerId || null },
+  });
   res.status(201).json(category);
 });
 
 categoriesRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
+  const existing = await prisma.category.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ error: '分类不存在' });
+  if (req.userRole === 'tenant_admin' && existing.customerId !== req.customerId) {
+    return res.status(403).json({ error: '无权操作此分类' });
+  }
+
   const { name, parentId } = req.body;
   if (name && name.length > 100) return res.status(400).json({ error: '分类名称不能超过 100 字符' });
 
-  // 检测循环引用：新父级不能是自己或自己的后代
   if (parentId) {
     if (parentId === id) return res.status(400).json({ error: '不能将分类设为自己的子分类' });
     let current = parentId;
@@ -43,6 +54,11 @@ categoriesRouter.put('/:id', async (req: AuthRequest, res: Response) => {
 
 categoriesRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
+  const existing = await prisma.category.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ error: '分类不存在' });
+  if (req.userRole === 'tenant_admin' && existing.customerId !== req.customerId) {
+    return res.status(403).json({ error: '无权操作此分类' });
+  }
   const children = await prisma.category.count({ where: { parentId: id } });
   if (children > 0) return res.status(400).json({ error: '请先删除子分类' });
   await prisma.category.delete({ where: { id } });

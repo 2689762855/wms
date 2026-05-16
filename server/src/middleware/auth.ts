@@ -32,13 +32,19 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
 
   try {
     const token = header.split(' ')[1];
-    const payload = jwt.verify(token, JWT_ADMIN_SECRET) as { userId: number; role: string; warehouseId?: number | null };
+    const payload = jwt.verify(token, JWT_ADMIN_SECRET) as {
+      userId: number;
+      role: string;
+      warehouseId?: number | null;
+      customerId?: number | null;
+    };
     if (!payload.userId) {
       return res.status(401).json({ error: '令牌无效' });
     }
     req.userId = payload.userId;
     req.userRole = payload.role;
     req.userWarehouseId = payload.warehouseId;
+    req.customerId = payload.customerId;
     next();
   } catch {
     return res.status(401).json({ error: '令牌无效或已过期' });
@@ -55,8 +61,13 @@ export function authorize(...roles: string[]) {
 }
 
 export function adminWrite(req: AuthRequest, res: Response, next: NextFunction) {
-  if (req.userRole === 'super_admin' || req.userRole === 'warehouse_admin') return next();
-  return res.status(403).json({ error: '操作员无权进行此操作' });
+  if (req.userRole === 'super_admin' || req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') return next();
+  return res.status(403).json({ error: '无权进行此操作' });
+}
+
+export function superAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+  if (req.userRole === 'super_admin') return next();
+  return res.status(403).json({ error: '仅超级管理员可操作' });
 }
 
 export function requireWarehouse(req: AuthRequest, res: Response, next: NextFunction) {

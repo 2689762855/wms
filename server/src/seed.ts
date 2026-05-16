@@ -6,30 +6,8 @@ const ADMIN_PASSWORD = 'admin123';
 async function seed() {
   console.log('=== 初始化系统数据 ===\n');
 
-  // 1. 管理员（始终确保可登录）
-  console.log('[1/6] 确保管理员可用...');
-  const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-  const admin = await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: { passwordHash: hash },
-    create: {
-      username: 'admin',
-      passwordHash: hash,
-      role: 'super_admin',
-      realName: '系统管理员',
-    },
-  });
-  // 验证密码
-  const valid = await bcrypt.compare(ADMIN_PASSWORD, admin.passwordHash);
-  if (!valid) {
-    // 强制修复
-    await prisma.user.update({ where: { id: admin.id }, data: { passwordHash: hash } });
-    console.log('  [修复] 管理员密码已重置');
-  }
-  console.log('  admin / admin123 (超级管理员) ✓');
-
-  // 清空业务数据（保留管理员）
-  console.log('[2/6] 清空业务数据...');
+  // 1. 清空业务数据
+  console.log('[1/8] 清空业务数据...');
   await prisma.stockLog.deleteMany();
   await prisma.checkItem.deleteMany();
   await prisma.checkTask.deleteMany();
@@ -42,18 +20,46 @@ async function seed() {
   await prisma.inventory.deleteMany();
   await prisma.location.deleteMany();
   await prisma.customer.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.product.deleteMany();
   await prisma.category.deleteMany();
   await prisma.warehouse.deleteMany();
 
+  // 2. 管理员
+  console.log('[2/8] 创建管理员...');
+  const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+  const admin = await prisma.user.create({
+    data: {
+      username: 'admin',
+      passwordHash: hash,
+      role: 'super_admin',
+      realName: '系统管理员',
+    },
+  });
+  console.log('  admin / admin123 (超级管理员) ✓');
+
+  // 2.5 创建示例客户
+  console.log('[3/8] 创建示例客户...');
+  const customerHash = await bcrypt.hash('123456', 10);
+  const c1 = await prisma.customer.create({
+    data: { username: 'kehua', passwordHash: customerHash, realName: '科华公司', maxWarehouses: 2 },
+  });
+  const c2 = await prisma.customer.create({
+    data: { username: 'hongda', passwordHash: customerHash, realName: '宏大五金', maxWarehouses: 1 },
+  });
+  console.log(`  客户: ${c1.realName} (kehua/123456), ${c2.realName} (hongda/123456)`);
+
   // 3. 仓库
-  console.log('[3/6] 创建仓库...');
+  console.log('[4/8] 创建仓库...');
   const wh1 = await prisma.warehouse.create({ data: { name: '原料仓', address: 'A栋1楼' } });
   const wh2 = await prisma.warehouse.create({ data: { name: '成品仓', address: 'B栋2楼' } });
-  console.log(`  ${wh1.name}, ${wh2.name}`);
+  const whC1 = await prisma.warehouse.create({ data: { name: '科华主仓库', address: 'C栋1楼', customerId: c1.id } });
+  const whC2 = await prisma.warehouse.create({ data: { name: '宏大主仓库', address: 'D栋1楼', customerId: c2.id } });
+  console.log(`  超管仓库: ${wh1.name}, ${wh2.name}`);
+  console.log(`  客户仓库: ${whC1.name}(${c1.realName}), ${whC2.name}(${c2.realName})`);
 
   // 4. 库位
-  console.log('[4/6] 创建库位...');
+  console.log('[5/8] 创建库位...');
   const locs = await Promise.all([
     prisma.location.create({ data: { warehouseId: wh1.id, name: 'A区-01架', code: 'LOC-A01' } }),
     prisma.location.create({ data: { warehouseId: wh1.id, name: 'A区-02架', code: 'LOC-A02' } }),
@@ -64,7 +70,7 @@ async function seed() {
   console.log(`  ${locs.length} 个库位`);
 
   // 5. 分类和商品
-  console.log('[5/6] 创建分类和商品...');
+  console.log('[6/8] 创建分类和商品...');
   const cat1 = await prisma.category.create({ data: { name: '铝型材' } });
   const cat1a = await prisma.category.create({ data: { name: '国标铝型材', parentId: cat1.id } });
   const cat1b = await prisma.category.create({ data: { name: '欧标铝型材', parentId: cat1.id } });
@@ -83,7 +89,7 @@ async function seed() {
   console.log(`  ${products.length} 个商品`);
 
   // 6. 初始库存
-  console.log('[6/6] 创建初始库存...');
+  console.log('[7/8] 创建初始库存...');
   await Promise.all([
     prisma.inventory.create({ data: { productId: products[0].id, warehouseId: wh1.id, locationId: locs[0].id, quantity: 500 } }),
     prisma.inventory.create({ data: { productId: products[0].id, warehouseId: wh2.id, locationId: locs[3].id, quantity: 50 } }),
@@ -100,8 +106,33 @@ async function seed() {
   ]);
   console.log('  12 条库存记录');
 
+  // 7. 客户专属分类和商品
+  console.log('[8/8] 创建客户专属商品...');
+  const catC1 = await prisma.category.create({ data: { name: '日化用品', customerId: c1.id } });
+  const catC2 = await prisma.category.create({ data: { name: '五金标准件', customerId: c2.id } });
+  await Promise.all([
+    prisma.product.create({ data: { sku: 'KH-YG', name: '牙膏', unit: '支', categoryId: catC1.id, customerId: c1.id, safetyStock: 50 } }),
+    prisma.product.create({ data: { sku: 'KH-YS', name: '牙刷', unit: '支', categoryId: catC1.id, customerId: c1.id, safetyStock: 100 } }),
+    prisma.product.create({ data: { sku: 'HD-LS', name: 'M8螺丝', spec: 'M8×30', unit: '个', categoryId: catC2.id, customerId: c2.id, safetyStock: 500 } }),
+    prisma.product.create({ data: { sku: 'HD-LM', name: 'M8螺母', spec: 'M8', unit: '个', categoryId: catC2.id, customerId: c2.id, safetyStock: 500 } }),
+  ]);
+  console.log(`  科华: ${catC1.name} / 宏大: ${catC2.name}`);
+
+  // 8. 客户专属操作员
+  console.log('[9/9] 创建客户操作员...');
+  await prisma.user.create({
+    data: { username: 'kehua_op', passwordHash: customerHash, role: 'operator', realName: '科华操作员', warehouseId: whC1.id },
+  });
+  await prisma.user.create({
+    data: { username: 'hongda_op', passwordHash: customerHash, role: 'operator', realName: '宏大操作员', warehouseId: whC2.id },
+  });
+  console.log('  kehua_op / 123456 (科华操作员)');
+  console.log('  hongda_op / 123456 (宏大操作员)');
+
   console.log('\n=== 初始化完成 ===');
-  console.log('管理员: admin / admin123 ✓');
+  console.log('超管: admin / admin123');
+  console.log('客户: kehua / 123456 (科华公司)');
+  console.log('客户: hongda / 123456 (宏大五金)');
 }
 
 seed()
