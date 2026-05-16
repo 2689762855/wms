@@ -31,11 +31,13 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth();
   const { token: themeToken } = theme.useToken();
   const isMobile = Object.keys(screens).length > 0 && !screens.lg;
-  const canManageUsers = user?.role === 'super_admin' || user?.role === 'warehouse_admin';
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isTenant = user?.role === 'tenant_admin';
+  const canManageUsers = isSuperAdmin || user?.role === 'warehouse_admin';
 
   const fullMenuItems = [
     { key: 'dashboard', label: '仪表盘', icon: <DashboardOutlined />, path: '/dashboard' },
-    { key: 'warehouses', label: '仓库管理', icon: <BankOutlined />, path: '/warehouses' },
+    ...(isTenant ? [] : [{ key: 'warehouses', label: '仓库管理', icon: <BankOutlined />, path: '/warehouses' }]),
     {
       key: 'products-group',
       label: '商品管理',
@@ -68,13 +70,14 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
         { key: 'reports-turnover', label: '周转率报表', path: '/reports/turnover' },
       ],
     },
-    ...(canManageUsers ? [{
+    ...(canManageUsers || isTenant ? [{
       key: 'settings-group',
       label: '系统设置',
       icon: <SettingOutlined />,
       children: [
-        { key: 'settings-users', label: '用户管理', path: '/settings/users' },
-        { key: 'settings-customers', label: '客户管理', path: '/settings/customers' },
+        ...(canManageUsers ? [{ key: 'settings-users', label: '用户管理', path: '/settings/users' }] : []),
+        ...(isTenant ? [{ key: 'settings-users', label: '我的操作员', path: '/settings/users' }] : []),
+        ...(isSuperAdmin ? [{ key: 'settings-customers', label: '客户管理', path: '/settings/customers' }] : []),
         { key: 'settings-about', label: '关于我们', path: '/settings/about' },
       ],
     }] : []),

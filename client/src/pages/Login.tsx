@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Card, Typography, message } from 'antd';
-import { UserOutlined, LockOutlined, InboxOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Card, Typography, Tabs, message } from 'antd';
+import { UserOutlined, LockOutlined, InboxOutlined, TeamOutlined } from '@ant-design/icons';
 import apiClient from '../api/client';
 import { useAuth } from '../stores/AuthContext';
 import PWAInstallPrompt from '../components/PWAInstallPrompt';
@@ -9,13 +9,15 @@ import ServerConfigModal from '../components/ServerConfigModal';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<'staff' | 'tenant'>('staff');
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
-      const res = await apiClient.post('/auth/login', values);
+      const endpoint = tab === 'tenant' ? '/auth/tenant/login' : '/auth/login';
+      const res = await apiClient.post(endpoint, values);
       login(res.data.token, res.data.user);
       message.success('登录成功');
       const isMobile = window.innerWidth < 992;
@@ -42,15 +44,26 @@ export default function Login() {
         borderRadius: 12,
         boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: 24, position: 'relative' }}>
+        <div style={{ textAlign: 'center', marginBottom: 16, position: 'relative' }}>
           <div style={{ position: 'absolute', top: 0, right: 0 }}>
             <ServerConfigModal />
           </div>
-          <InboxOutlined style={{ fontSize: 56, color: '#1677ff' }} />
-          <Typography.Title level={3} style={{ marginTop: 12, marginBottom: 0 }}>库存管理系统</Typography.Title>
+          <InboxOutlined style={{ fontSize: 48, color: '#1677ff' }} />
+          <Typography.Title level={3} style={{ marginTop: 8, marginBottom: 0 }}>库存管理系统</Typography.Title>
           <Typography.Text type="secondary">仓库管理 · 移动端</Typography.Text>
         </div>
-        <Form onFinish={onFinish} size="large">
+
+        <Tabs
+          activeKey={tab}
+          onChange={(key) => setTab(key as 'staff' | 'tenant')}
+          centered
+          items={[
+            { key: 'staff', label: <><UserOutlined /> 员工登录</> },
+            { key: 'tenant', label: <><TeamOutlined /> 客户登录</> },
+          ]}
+        />
+
+        <Form onFinish={onFinish} size="large" key={tab}>
           <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
             <Input prefix={<UserOutlined />} placeholder="用户名" autoComplete="username" />
           </Form.Item>
@@ -63,9 +76,10 @@ export default function Login() {
             </Button>
           </Form.Item>
         </Form>
+
         {import.meta.env.DEV && (
           <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>
-            默认账号: admin / admin123
+            {tab === 'staff' ? '默认: admin / admin123' : '示例: kehua / 123456'}
           </Typography.Text>
         )}
         <div style={{ textAlign: 'center', marginTop: 8 }}>

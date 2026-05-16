@@ -1,13 +1,28 @@
 export interface User {
   id: number;
   username: string;
-  role: 'super_admin' | 'warehouse_admin' | 'operator';
+  role: 'super_admin' | 'warehouse_admin' | 'operator' | 'tenant_admin';
   realName?: string;
   phone?: string;
   warehouseId?: number | null;
   warehouse?: { id: number; name: string } | null;
+  customerId?: number | null;
+  status?: string;
+  maxWarehouses?: number;
+  warehouses?: { id: number; name: string }[];
   createdAt: string;
   createdBy?: { id: number; realName?: string | null; username: string } | null;
+}
+
+export interface CustomerInfo {
+  id: number;
+  username: string;
+  realName?: string;
+  status: string;
+  maxWarehouses: number;
+  warehouses: { id: number; name: string; createdAt: string }[];
+  _count?: { products: number };
+  createdAt: string;
 }
 
 export interface Warehouse {
