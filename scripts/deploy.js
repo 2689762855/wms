@@ -260,15 +260,24 @@ if "%NODE_EXE%"=="" (
 for /f "tokens=*" %%i in ('%NODE_EXE% -v') do set NODE_VERSION=%%i
 echo [信息] Node.js 版本: %NODE_VERSION%
 
-:: 如果通过全路径找到的 node，将所在目录临时加入 PATH
-if not "%NODE_EXE%"=="node" (
-    for %%a in ("%NODE_EXE%") do set "PATH=%%~dpa;%PATH%"
+:: 确保 NODE_EXE 是完整路径（用于定位 npm-cli.js）
+if "%NODE_EXE%"=="node" (
+    for /f "tokens=*" %%i in ('where node') do set "NODE_EXE=%%i"
 )
+
+:: 从 node.exe 位置推导 npm/npx CLI 脚本路径
+:: 绕过 npm.cmd/npx.cmd 直接用 node 调 CLI，避免 CALL 创建子 shell 触发 DOSKEY 报错
+for %%a in ("%NODE_EXE%") do set "NODE_HOME=%%~dpa"
+set "NPM_CLI=%NODE_HOME%node_modules\\npm\\bin\\npm-cli.js"
+set "NPX_CLI=%NODE_HOME%node_modules\\npm\\bin\\npx-cli.js"
+
+:: 将 node 所在目录加入 PATH（子进程需要）
+set "PATH=%NODE_HOME%;%PATH%"
 
 :: 安装依赖（首次运行）
 if not exist "node_modules" (
     echo [信息] 首次运行，正在安装依赖...
-    call npm install --omit=dev
+    "%NODE_EXE%" "%NPM_CLI%" install --omit=dev
     if %errorlevel% neq 0 (
         echo [错误] 依赖安装失败
         echo.
@@ -301,7 +310,7 @@ echo [信息] 初始化数据库...
 set "FIRST_RUN="
 if not exist "prisma\\dev.db" set "FIRST_RUN=1"
 
-call npx -y prisma generate
+"%NODE_EXE%" "%NPX_CLI%" -y prisma generate
 if %errorlevel% neq 0 (
     echo [错误] Prisma 生成失败
     echo.
@@ -309,7 +318,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-call npx -y prisma migrate deploy
+"%NODE_EXE%" "%NPX_CLI%" -y prisma migrate deploy
 if %errorlevel% neq 0 (
     echo [错误] 数据库迁移失败
     echo.
@@ -320,7 +329,7 @@ if %errorlevel% neq 0 (
 :: 首次运行：初始化管理员账号
 if defined FIRST_RUN (
     echo [信息] 首次运行，初始化管理员账号...
-    call npx -y tsx src/initProd.ts
+    "%NODE_EXE%" "%NPX_CLI%" -y tsx src/initProd.ts
     if %errorlevel% neq 0 (
         echo [警告] 初始化失败，可手动运行: npx -y tsx src/initProd.ts
     )
@@ -338,7 +347,7 @@ echo.
 echo  按 Ctrl+C 停止服务
 echo.
 
-npx -y tsx src/app.ts
+"%NODE_EXE%" "%NPX_CLI%" -y tsx src/app.ts
 
 echo.
 echo  服务已停止
@@ -438,10 +447,9 @@ echo  警告：此操作将删除以下内容：
 echo.
 echo    - 数据库文件（所有业务数据）
 echo    - 配置文件（.env）
-echo    - 依赖包（node_modules）
-echo    - 日志文件
 echo.
-echo  注意：程序文件本身不会被删除，如需完全删除请手动操作。
+echo  程序文件和预装依赖不会被删除。
+echo  如需完全删除，请手动删除整个文件夹。
 echo.
 
 set /p confirm=确定要卸载吗？(Y/N):
@@ -452,52 +460,36 @@ if /i not "%confirm%"=="Y" (
 )
 
 echo.
-echo [1/4] 停止服务...
+echo [1/2] 停止服务...
 
-:: 查找并终止 Node.js 进程
-tasklist /FI "IMAGENAME eq node.exe" 2>nul | find /I "node.exe" >nul
-if %errorlevel% equ 0 (
-    echo   正在停止 Node.js 进程...
-    taskkill /F /IM node.exe >nul 2>&1
-    ping -n 3 127.0.0.1 >nul
-    echo   服务已停止。
-) else (
-    echo   服务未在运行。
+:: 按端口 3001 精准查找并终止进程（不会影响其他 Node.js 程序）
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3001 ^| findstr LISTENING') do (
+    echo   正在停止服务 PID: %%a...
+    taskkill /F /PID %%a >/dev/null 2>/dev/null
 )
+echo   服务已停止。
 
-echo [2/4] 删除数据库文件...
+echo [2/2] 删除数据...
+
 cd /d "%~dp0server"
-if exist "prisma\\dev.db" (
-    del /f /q "prisma\\dev.db"
+
+:: 删除数据库
+if exist "prismadev.db" (
+    del /f /q "prismadev.db"
     echo   数据库已删除。
 ) else (
     echo   数据库文件不存在。
 )
-
-:: 删除数据库备份
-if exist "prisma\\dev.db-journal" (
-    del /f /q "prisma\\dev.db-journal"
+if exist "prismadev.db-journal" (
+    del /f /q "prismadev.db-journal"
 )
 
-echo [3/4] 删除配置文件...
+:: 删除配置
 if exist ".env" (
     del /f /q ".env"
     echo   配置文件已删除。
 ) else (
     echo   配置文件不存在。
-)
-
-echo [4/4] 删除依赖包...
-if exist "node_modules" (
-    rmdir /s /q "node_modules"
-    echo   依赖包已删除。
-) else (
-    echo   依赖包目录不存在。
-)
-
-:: 删除 Prisma 生成文件
-if exist "node_modules\\.prisma" (
-    rmdir /s /q "node_modules\\.prisma"
 )
 
 echo.
@@ -508,16 +500,14 @@ echo.
 echo  已删除内容：
 echo    ✓ 数据库文件
 echo    ✓ 配置文件
-echo    ✓ 依赖包
 echo.
-echo  如需重新安装，双击 start.bat 即可。
+echo  预装依赖已保留，如需重新使用双击 start.bat 即可。
 echo  如需完全删除，请手动删除整个文件夹。
 echo.
 
 pause
 `;
 
-// 创建 uninstall.sh
 const uninstallSh = `#!/bin/bash
 set -e
 
@@ -533,10 +523,9 @@ echo "  警告：此操作将删除以下内容："
 echo
 echo "    - 数据库文件（所有业务数据）"
 echo "    - 配置文件（.env）"
-echo "    - 依赖包（node_modules）"
-echo "    - 日志文件"
 echo
-echo "  注意：程序文件本身不会被删除，如需完全删除请手动操作。"
+echo "  程序文件和预装依赖不会被删除。"
+echo "  如需完全删除，请手动删除整个文件夹。"
 echo
 
 read -p "确定要卸载吗？(y/N): " confirm
@@ -546,54 +535,37 @@ if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
 fi
 
 echo
-echo "[1/4] 停止服务..."
+echo "[1/2] 停止服务..."
 
-# 停止 systemd 服务（如果存在）
-if command -v systemctl &>/dev/null && systemctl is-active --quiet wms 2>/dev/null; then
-    echo "  正在停止 wms 服务..."
-    sudo systemctl stop wms 2>/dev/null || true
-    sudo systemctl disable wms 2>/dev/null || true
-    echo "  服务已停止。"
-fi
-
-# 终止相关进程
-pids=$(pgrep -f "tsx src/app.ts" 2>/dev/null || true)
-if [ -n "$pids" ]; then
+# 按端口 3001 终止进程（不会影响其他 Node.js 程序）
+if lsof -ti :3001 >/dev/null 2>&1; then
     echo "  正在终止进程..."
-    kill $pids 2>/dev/null || true
+    kill $(lsof -ti :3001) 2>/dev/null || true
     sleep 2
-    echo "  进程已终止。"
+    echo "  服务已停止。"
 else
     echo "  服务未在运行。"
 fi
 
 cd "$(dirname "$0")/server"
 
-echo "[2/4] 删除数据库文件..."
+echo "[2/2] 删除数据..."
+
+# 删除数据库
 if [ -f "prisma/dev.db" ]; then
     rm -f "prisma/dev.db"
     echo "  数据库已删除。"
 else
     echo "  数据库文件不存在。"
 fi
-
-# 删除数据库日志
 rm -f "prisma/dev.db-journal" 2>/dev/null || true
 
-echo "[3/4] 删除配置文件..."
+# 删除配置
 if [ -f ".env" ]; then
     rm -f ".env"
     echo "  配置文件已删除。"
 else
     echo "  配置文件不存在。"
-fi
-
-echo "[4/4] 删除依赖包..."
-if [ -d "node_modules" ]; then
-    rm -rf "node_modules"
-    echo "  依赖包已删除。"
-else
-    echo "  依赖包目录不存在。"
 fi
 
 echo
@@ -604,9 +576,8 @@ echo
 echo "  已删除内容："
 echo "    ✓ 数据库文件"
 echo "    ✓ 配置文件"
-echo "    ✓ 依赖包"
 echo
-echo "  如需重新安装，运行 ./start.sh 即可。"
+echo "  预装依赖已保留，如需重新使用运行 ./start.sh 即可。"
 echo "  如需完全删除，请手动删除整个文件夹。"
 echo
 `;
