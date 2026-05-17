@@ -46,18 +46,9 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
 
 // 下载导入模板（必须在 /:id 之前）
 productsRouter.get('/template', (_req: AuthRequest, res: Response) => {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([[
-    'SKU(选填)', '商品名称(必填)', '规格', '单位', '条码', '分类', '安全库存', '成本价', '售价', '库位名称(选填)', '初始数量(选填)'
-  ], [
-    '', '示例商品', '大号', '个', '', '示例分类', 50, 10, 20, 'A区-01架', 200,
-  ]]);
-  ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 }];
-  XLSX.utils.book_append_sheet(wb, ws, '商品导入模板');
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename=product-template.xlsx');
-  res.send(buf);
+  res.sendFile('product-template.xlsx', { root: 'src/assets' });
 });
 
 // 批量导入商品（必须在 /:id 之前）
