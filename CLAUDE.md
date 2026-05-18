@@ -95,3 +95,15 @@ APK 使用 `server.url` 加载 Vite 开发服务器实现热更新。原生扫�
 - 前端开发服务器使用 HTTP（APK `getUserMedia` 限制）
 - Vite 代理仅转发 `localhost:3001`
 - 生产部署需设置环境变量 `JWT_ADMIN_SECRET`、`JWT_CUSTOMER_SECRET`
+
+## Wiki 知识库
+
+修改代码前，先检索 Wiki（`E:\claude\my-wiki\wiki\`）中相关的踩坑记录和决策日志，避免重复排查已记录的问题。重点关注：
+- `wiki/synthesis/库存管理系统开发总结.md` — 踩坑记录
+- `wiki/synthesis/技术选型决策日志.md` — 技术决策 + 可复用模式
+- `wiki/Changelog.md` — 历次操作记录
+
+**知识复利闭环**：每次解决新的 WMS 问题或做出技术决策后，同步更新 Wiki：
+- 新踩坑 → 追加到 `库存管理系统开发总结.md` 的踩坑记录
+- 新技术取舍 → 追加到 `技术选型决策日志.md` 的决策记录
+- 所有操作 → 追加到 `Changelog.md`

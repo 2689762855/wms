@@ -8,13 +8,24 @@ alertsRouter.use(authenticate);
 // 库存预警：按商品+仓库维度，各仓库库存严格低于安全库存时预警
 alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
   let warehouseId = req.query.warehouseId ? parseInt(req.query.warehouseId as string) : undefined;
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  let tenantWhIds: number[] | undefined;
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    tenantWhIds = whs.map(w => w.id);
+    if (warehouseId && !tenantWhIds.includes(warehouseId)) {
+      return res.status(403).json({ error: '无权查看此仓库的预警' });
+    }
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
     warehouseId = req.userWarehouseId;
   }
 
-  // 查出所有设了安全库存的商品
+  // 查出设了安全库存的商品（按客户隔离）
+  const productWhere: Record<string, unknown> = { safetyStock: { gt: 0 } };
+  if (req.customerId) {
+    productWhere.customerId = req.customerId;
+  }
   const products = await prisma.product.findMany({
-    where: { safetyStock: { gt: 0 } },
+    where: productWhere,
     include: { category: true },
   });
   if (!products.length) return res.json([]);
@@ -57,11 +68,12 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
   }
 
   // 加载所有仓库（确保零库存商品也能按仓库生成预警）
+  const whCustomerMap = new Map<number, number | null>();
   if (warehouseId) {
     allWarehouseIds.add(warehouseId);
   } else {
-    const allWh = await prisma.warehouse.findMany({ select: { id: true, name: true } });
-    for (const wh of allWh) allWarehouseIds.add(wh.id);
+    const allWh = await prisma.warehouse.findMany({ select: { id: true, name: true, customerId: true } });
+    for (const wh of allWh) { allWarehouseIds.add(wh.id); whCustomerMap.set(wh.id, wh.customerId); }
   }
 
   // 仓库名称缓存
@@ -72,12 +84,12 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     }
   }
   if (warehouseId && !whCache.has(warehouseId)) {
-    const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true, name: true } });
-    if (wh) whCache.set(wh.id, wh.name);
+    const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true, name: true, customerId: true } });
+    if (wh) { whCache.set(wh.id, wh.name); whCustomerMap.set(wh.id, wh.customerId); }
   }
   if (!warehouseId) {
-    const allWh = await prisma.warehouse.findMany({ select: { id: true, name: true } });
-    for (const wh of allWh) whCache.set(wh.id, wh.name);
+    const allWh = await prisma.warehouse.findMany({ select: { id: true, name: true, customerId: true } });
+    for (const wh of allWh) { whCache.set(wh.id, wh.name); whCustomerMap.set(wh.id, wh.customerId); }
   }
 
   // 按商品×仓库生成预警
@@ -93,6 +105,10 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
 
   for (const product of products) {
     for (const whId of allWarehouseIds) {
+      // 跳过产品与仓库客户不匹配的组合（产品无客户的匹配所有仓库）
+      const whCustomer = whCustomerMap.get(whId);
+      if (product.customerId != null && whCustomer != null && product.customerId !== whCustomer) continue;
+
       const key = `${product.id}-${whId}`;
       const stock = stockMap.get(key);
       const currentQty = stock?.qty || 0;

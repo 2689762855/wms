@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Typography, Descriptions, Table, Tag, Button, Space, message, Modal, Input, Select } from 'antd';
+import { Card, Typography, Descriptions, Table, Tag, Button, Space, message, Modal, Input, Select, Popconfirm } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
@@ -20,27 +20,33 @@ export default function TransferDetail() {
     queryFn: () => apiClient.get(`/transfer/${id}`).then(res => res.data),
   });
 
-  const submitMutation = useMutation({
-    mutationFn: () => apiClient.put(`/transfer/${id}/submit`),
-    onSuccess: () => { message.success('已提交审批'); queryClient.invalidateQueries({ queryKey: ['transfer', id] }); },
-    onError: (err: any) => message.error(err.response?.data?.error || '提交失败'),
+  const confirmMutation = useMutation({
+    mutationFn: () => apiClient.put(`/transfer/${id}/confirm`, { targetLocationId }),
+    onSuccess: (data: any) => { message.success('调拨已完成，库存已转移'); queryClient.setQueryData(['transfer', id], data); queryClient.invalidateQueries({ queryKey: ['transfer'] }); queryClient.invalidateQueries({ queryKey: ['inventory'] }); },
+    onError: (err: any) => message.error(err.response?.data?.error || '确认失败'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiClient.delete(`/transfer/${id}`),
+    onSuccess: () => { message.success('已删除'); queryClient.invalidateQueries({ queryKey: ['transfer'] }); navigate('/transfer'); },
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
   });
 
   const { data: targetLocations } = useQuery({
     queryKey: ['locations', order?.toWarehouseId],
     queryFn: () => apiClient.get('/locations', { params: { warehouseId: order.toWarehouseId } }).then(r => r.data as Location[]),
-    enabled: !!order?.toWarehouseId && order?.status === 'pending',
+    enabled: !!order?.toWarehouseId && (order?.status === 'pending' || order?.status === 'draft'),
   });
 
   const approveMutation = useMutation({
     mutationFn: () => apiClient.put(`/transfer/${id}/approve`, { targetLocationId }),
-    onSuccess: () => { message.success('已通过，库存已转移'); queryClient.invalidateQueries({ queryKey: ['transfer', id] }); queryClient.invalidateQueries({ queryKey: ['inventory'] }); },
+    onSuccess: (data: any) => { message.success('已通过，库存已转移'); queryClient.setQueryData(['transfer', id], data); queryClient.invalidateQueries({ queryKey: ['transfer'] }); queryClient.invalidateQueries({ queryKey: ['inventory'] }); },
     onError: (err: any) => message.error(err.response?.data?.error || '审批失败'),
   });
 
   const rejectMutation = useMutation({
     mutationFn: (reason: string) => apiClient.put(`/transfer/${id}/reject`, { reason }),
-    onSuccess: () => { message.success('已拒绝'); queryClient.invalidateQueries({ queryKey: ['transfer', id] }); setRejectModal({ open: false, reason: '' }); },
+    onSuccess: (data: any) => { message.success('已拒绝'); queryClient.setQueryData(['transfer', id], data); queryClient.invalidateQueries({ queryKey: ['transfer'] }); setRejectModal({ open: false, reason: '' }); },
     onError: (err: any) => message.error(err.response?.data?.error || '操作失败'),
   });
 
@@ -68,22 +74,39 @@ export default function TransferDetail() {
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>调拨单详情</Typography.Title>}
       extra={
         <Space>
-          {order?.status === 'draft' && (
-            <Button type="primary" onClick={() => submitMutation.mutate()} loading={submitMutation.isPending}>提交审批</Button>
-          )}
-          {order?.status === 'pending' && order?.toWarehouseId === me?.warehouseId && (
+          {me?.role === 'tenant_admin' && (order?.status === 'draft' || order?.status === 'pending') && (
             <>
-              <Select placeholder="目标库位（可选）" allowClear style={{ width: 180 }} onChange={setTargetLocationId} value={targetLocationId}
+              <Select placeholder="请选择目标库位" style={{ width: 180 }} onChange={setTargetLocationId} value={targetLocationId}
+                options={targetLocations?.map((l: any) => ({ label: l.name, value: l.id }))} />
+              <Button type="primary" disabled={!targetLocationId} onClick={() => confirmMutation.mutate()} loading={confirmMutation.isPending}>确认调拨（直接转移库存）</Button>
+              <Popconfirm title="确定删除此调拨单？" onConfirm={() => deleteMutation.mutate()}>
+                <Button danger loading={deleteMutation.isPending}>删除</Button>
+              </Popconfirm>
+            </>
+          )}
+          {me?.role !== 'tenant_admin' && (order?.status === 'draft' || order?.status === 'pending') && (
+            <>
+              <Select placeholder="请选择目标库位" style={{ width: 180 }} onChange={setTargetLocationId} value={targetLocationId}
+                options={targetLocations?.map((l: any) => ({ label: l.name, value: l.id }))} />
+              <Button type="primary" disabled={!targetLocationId} onClick={() => confirmMutation.mutate()} loading={confirmMutation.isPending}>确认调拨</Button>
+              <Popconfirm title="确定删除此调拨单？" onConfirm={() => deleteMutation.mutate()}>
+                <Button danger loading={deleteMutation.isPending}>删除</Button>
+              </Popconfirm>
+            </>
+          )}
+          {order?.status === 'pending' && order?.toWarehouseId !== me?.warehouseId && me?.role === 'super_admin' && (
+            <>
+              <Select placeholder="请选择目标库位" style={{ width: 180 }} onChange={setTargetLocationId} value={targetLocationId}
                 options={targetLocations?.map((l: Location) => ({ label: l.name, value: l.id }))} />
-              <Button type="primary" onClick={() => approveMutation.mutate()} loading={approveMutation.isPending}>通过</Button>
+              <Button type="primary" disabled={!targetLocationId} onClick={() => approveMutation.mutate()} loading={approveMutation.isPending}>通过（超管）</Button>
               <Button danger onClick={() => setRejectModal({ open: true, reason: '' })}>拒绝</Button>
             </>
           )}
-          {order?.status === 'pending' && me?.role === 'super_admin' && (
+          {order?.status === 'pending' && order?.toWarehouseId === me?.warehouseId && me?.role !== 'super_admin' && me?.role !== 'tenant_admin' && (
             <>
-              <Select placeholder="目标库位（可选）" allowClear style={{ width: 180 }} onChange={setTargetLocationId} value={targetLocationId}
+              <Select placeholder="请选择目标库位" style={{ width: 180 }} onChange={setTargetLocationId} value={targetLocationId}
                 options={targetLocations?.map((l: Location) => ({ label: l.name, value: l.id }))} />
-              <Button type="primary" onClick={() => approveMutation.mutate()} loading={approveMutation.isPending}>通过（超管）</Button>
+              <Button type="primary" disabled={!targetLocationId} onClick={() => approveMutation.mutate()} loading={approveMutation.isPending}>通过</Button>
               <Button danger onClick={() => setRejectModal({ open: true, reason: '' })}>拒绝</Button>
             </>
           )}

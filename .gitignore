@@ -24,6 +24,14 @@ dist/
 
 # 部署包（由 scripts/deploy.js 生成，含重复源码）
 WMS-Package/
+WMS-Package.zip
+
+# APK 构建产物（二进制大文件，不提交）
+server/apk/app-v*.apk
+server/apk/app-latest.apk
+
+# 构建缓存
+scripts/.cache/
 
 # IDE
 .idea/

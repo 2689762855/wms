@@ -58,14 +58,16 @@ export default function TransferList() {
     { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 160, render: (t: string) => dayjs(t).format('MM-DD HH:mm') },
     { title: '操作', key: 'actions', width: 200, render: (_: unknown, r: TransferOrder) => (
       <Space>
-        {r.status === 'draft' && <Button size="small" type="primary" onClick={() => submitMutation.mutate(r.id)} loading={submitMutation.isPending}>提交</Button>}
-        {r.status === 'pending' && r.toWarehouseId === me?.warehouseId && (
+        {r.status === 'draft' && me?.role !== 'tenant_admin' && <Button size="small" type="primary" onClick={() => submitMutation.mutate(r.id)} loading={submitMutation.isPending}>提交</Button>}
+        {r.status === 'draft' && me?.role === 'tenant_admin' && <Button size="small" onClick={() => navigate(`/transfer/${r.id}`)}>确认调拨</Button>}
+        {r.status === 'pending' && me?.role === 'tenant_admin' && <Button size="small" type="primary" onClick={() => navigate(`/transfer/${r.id}`)}>确认调拨</Button>}
+        {r.status === 'pending' && r.toWarehouseId === me?.warehouseId && me?.role !== 'super_admin' && me?.role !== 'tenant_admin' && (
           <>
             <Button size="small" type="primary" onClick={() => approveMutation.mutate(r.id)} loading={approveMutation.isPending}>通过</Button>
             <Button size="small" danger onClick={() => setRejectModal({ open: true, id: r.id, reason: '' })}>拒绝</Button>
           </>
         )}
-        {r.status === 'pending' && r.toWarehouseId !== me?.warehouseId && me?.role !== 'super_admin' && <Tag color="processing">等待目标仓审批</Tag>}
+        {r.status === 'pending' && r.toWarehouseId !== me?.warehouseId && me?.role !== 'super_admin' && me?.role !== 'tenant_admin' && <Tag color="processing">等待目标仓审批</Tag>}
         {r.status === 'approved' && <Tag color="green">已完成</Tag>}
         {r.status === 'rejected' && <span title={r.reviewNote}>已拒绝: {r.reviewNote?.slice(0, 15)}{(r.reviewNote?.length || 0) > 15 ? '...' : ''}</span>}
       </Space>

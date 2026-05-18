@@ -12,13 +12,29 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
   const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
   const keyword = (req.query.keyword as string) || '';
 
-  // 非超管强制只能看自己仓库的数据
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  // 非超管只能看自己仓库/客户的数据
+  let tenantWhIds: number[] | undefined;
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    tenantWhIds = whs.map(w => w.id);
+  }
+  if (req.userRole === 'tenant_admin') {
+    if (warehouseId) {
+      // 指定了仓库，校验归属
+      if (!tenantWhIds || !tenantWhIds.includes(warehouseId)) {
+        return res.status(403).json({ error: '无权查看此仓库' });
+      }
+    }
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
     warehouseId = req.userWarehouseId;
   }
 
   const where: Record<string, unknown> = { quantity: { gt: 0 } };
-  if (warehouseId) where.warehouseId = warehouseId;
+  if (warehouseId) {
+    where.warehouseId = warehouseId;
+  } else if (tenantWhIds) {
+    where.warehouseId = { in: tenantWhIds };
+  }
   if (locationId) where.locationId = locationId;
   if (productId) where.productId = productId;
   if (keyword) {
@@ -41,7 +57,10 @@ inventoryRouter.get('/logs', async (req: AuthRequest, res: Response) => {
 
   const where: Record<string, unknown> = {};
   if (productId) where.productId = productId;
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    where.warehouseId = { in: whs.map(w => w.id) };
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
     where.warehouseId = req.userWarehouseId;
   }
 

@@ -7,8 +7,17 @@ reportsRouter.use(authenticate);
 
 // 库存汇总: 每个仓库的库存金额和数量
 reportsRouter.get('/stock-summary', async (req: AuthRequest, res: Response) => {
+  let warehouseIds: number[] | undefined;
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    warehouseIds = whs.map(w => w.id);
+  }
   const where: Record<string, unknown> = {};
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  if (req.userRole === 'super_admin') {
+    // no filter
+  } else if (warehouseIds) {
+    where.id = { in: warehouseIds };
+  } else if (req.userWarehouseId) {
     where.id = req.userWarehouseId;
   }
   const warehouses = await prisma.warehouse.findMany({
@@ -20,14 +29,19 @@ reportsRouter.get('/stock-summary', async (req: AuthRequest, res: Response) => {
     },
   });
 
-  const summary = warehouses.map(w => ({
-    warehouse: w.name,
-    totalItems: w.inventories.length,
-    totalQuantity: w.inventories.reduce((sum, inv) => sum + inv.quantity, 0),
-    totalValue: w.inventories.reduce((sum, inv) => sum + inv.quantity * (inv.product.costPrice || 0), 0),
-  }));
+  const globalProductIds = new Set<number>();
+  const summary = warehouses.map(w => {
+    const uniqueProductIds = new Set(w.inventories.map(inv => inv.productId));
+    uniqueProductIds.forEach(id => globalProductIds.add(id));
+    return {
+      warehouse: w.name,
+      totalItems: uniqueProductIds.size,
+      totalQuantity: w.inventories.reduce((sum, inv) => sum + inv.quantity, 0),
+      totalValue: w.inventories.reduce((sum, inv) => sum + inv.quantity * (inv.product.costPrice || 0), 0),
+    };
+  });
 
-  res.json(summary);
+  res.json({ summary, totalItems: globalProductIds.size });
 });
 
 // 出入库汇总: 按时间段统计
@@ -37,18 +51,21 @@ reportsRouter.get('/in-out-summary', async (req: AuthRequest, res: Response) => 
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const whWhere: Record<string, unknown> = {};
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
-    whWhere.warehouseId = req.userWarehouseId;
+  let whFilter: { warehouseId?: number | { in: number[] } } = {};
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    whFilter.warehouseId = { in: whs.map(w => w.id) };
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+    whFilter.warehouseId = req.userWarehouseId;
   }
 
   const [inbounds, outbounds] = await Promise.all([
     prisma.inboundOrder.findMany({
-      where: { status: 'confirmed', createdAt: { gte: since }, ...whWhere },
+      where: { status: 'confirmed', createdAt: { gte: since }, ...whFilter },
       include: { items: { include: { product: true } } },
     }),
     prisma.outboundOrder.findMany({
-      where: { status: 'confirmed', createdAt: { gte: since }, ...whWhere },
+      where: { status: 'confirmed', createdAt: { gte: since }, ...whFilter },
       include: { items: { include: { product: true } } },
     }),
   ]);
@@ -89,29 +106,32 @@ reportsRouter.get('/warehouse-comparison', async (req: AuthRequest, res: Respons
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const whWhere2: Record<string, unknown> = {};
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
-    whWhere2.warehouseId = req.userWarehouseId;
+  let whFilter2: { warehouseId?: number | { in: number[] } } = {};
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs2 = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    whFilter2.warehouseId = { in: whs2.map(w => w.id) };
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+    whFilter2.warehouseId = req.userWarehouseId;
   }
 
-  const [inbounds, outbounds] = await Promise.all([
+  const [inbounds2, outbounds2] = await Promise.all([
     prisma.inboundOrder.findMany({
-      where: { status: 'confirmed', createdAt: { gte: since }, ...whWhere2 },
+      where: { status: 'confirmed', createdAt: { gte: since }, ...whFilter2 },
       include: { items: true, warehouse: true },
     }),
     prisma.outboundOrder.findMany({
-      where: { status: 'confirmed', createdAt: { gte: since }, ...whWhere2 },
+      where: { status: 'confirmed', createdAt: { gte: since }, ...whFilter2 },
       include: { items: true, warehouse: true },
     }),
   ]);
 
   const map: Record<string, { warehouse: string; inbound: number; outbound: number }> = {};
-  for (const o of inbounds) {
+  for (const o of inbounds2) {
     const name = o.warehouse.name;
     if (!map[name]) map[name] = { warehouse: name, inbound: 0, outbound: 0 };
     map[name].inbound += o.items.reduce((s, i) => s + i.quantity, 0);
   }
-  for (const o of outbounds) {
+  for (const o of outbounds2) {
     const name = o.warehouse.name;
     if (!map[name]) map[name] = { warehouse: name, inbound: 0, outbound: 0 };
     map[name].outbound += o.items.reduce((s, i) => s + i.quantity, 0);

@@ -1,9 +1,19 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Popconfirm, Tag, Descriptions } from 'antd';
-import { PlusOutlined, TeamOutlined, EditOutlined, StopOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Popconfirm, Tag } from 'antd';
+import { PlusOutlined, TeamOutlined, EditOutlined, StopOutlined, PlayCircleOutlined, DollarOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import type { CustomerInfo } from '../types';
+import dayjs from 'dayjs';
+
+function ExpiryTag({ expiresAt, status }: { expiresAt: string | null; status: string }) {
+  if (!expiresAt) return <Tag color="blue">永久</Tag>;
+  const days = dayjs(expiresAt).diff(dayjs(), 'day');
+  if (days < 0) return <Tag color="red">已过期 {Math.abs(days)} 天</Tag>;
+  if (days <= 7) return <Tag color="orange">剩 {days} 天</Tag>;
+  if (days <= 30) return <Tag color="gold">剩 {days} 天</Tag>;
+  return <Tag color="green">{dayjs(expiresAt).format('YYYY-MM-DD')}</Tag>;
+}
 
 export default function Customers() {
   const [open, setOpen] = useState(false);
@@ -22,7 +32,7 @@ export default function Customers() {
       apiClient.post('/customers', values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
-      message.success('客户已创建，自动分配专属仓库');
+      message.success('客户已创建，自动分配专属仓库 + 90 天免费试用');
       setOpen(false);
       form.resetFields();
     },
@@ -39,6 +49,15 @@ export default function Customers() {
       editForm.resetFields();
     },
     onError: (err: any) => message.error(err.response?.data?.error || '操作失败'),
+  });
+
+  const renewMutation = useMutation({
+    mutationFn: (id: number) => apiClient.put(`/customers/${id}/renew`, { days: 365 }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      message.success(data.message || '已续费');
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '续费失败'),
   });
 
   const deleteMutation = useMutation({
@@ -58,27 +77,43 @@ export default function Customers() {
   const columns: any[] = [
     { title: '客户名称', dataIndex: 'realName', key: 'realName', width: 120,
       render: (v: string, r: CustomerInfo) => <><strong>{v || r.username}</strong><br /><Typography.Text type="secondary" style={{ fontSize: 12 }}>{r.username}</Typography.Text></> },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 80,
-      render: (v: string) => v === 'active' ? <Tag color="green">正常</Tag> : <Tag color="red">已暂停</Tag> },
-    { title: '仓库', dataIndex: 'warehouses', key: 'warehouses', width: 200,
+    { title: '状态', dataIndex: 'status', key: 'status', width: 70,
+      render: (v: string) => {
+        if (v === 'active') return <Tag color="green">正常</Tag>;
+        if (v === 'pending') return <Tag color="gold">待审批</Tag>;
+        return <Tag color="red">已暂停</Tag>;
+      }},
+    { title: '到期', key: 'expiry', width: 130,
+      render: (_: unknown, r: CustomerInfo) => <ExpiryTag expiresAt={r.expiresAt} status={r.status} /> },
+    { title: '仓库', dataIndex: 'warehouses', key: 'warehouses', width: 160,
       render: (v: CustomerInfo['warehouses']) => v?.map(w => <Tag key={w.id}>{w.name}</Tag>) },
-    { title: '商品数', dataIndex: '_count', key: 'products', width: 70,
-      render: (v: { products: number } | undefined) => v?.products ?? 0 },
-    { title: '仓库上限', dataIndex: 'maxWarehouses', key: 'maxWarehouses', width: 80 },
-    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 160,
-      render: (v: string) => new Date(v).toLocaleString('zh-CN') },
+    { title: '上限', dataIndex: 'maxWarehouses', key: 'maxWarehouses', width: 60 },
+    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 120,
+      render: (v: string) => dayjs(v).format('MM-DD HH:mm') },
     {
-      title: '操作', key: 'actions', width: 160,
+      title: '操作', key: 'actions', width: 220,
       render: (_: unknown, r: CustomerInfo) => (
         <Space>
+          {r.status === 'pending' && (
+            <Button size="small" type="primary" icon={<PlayCircleOutlined />}
+              onClick={() => updateMutation.mutate({ id: r.id, status: 'active' })}
+              loading={updateMutation.isPending}>审批通过</Button>
+          )}
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>管理</Button>
-          <Popconfirm
-            title={r.status === 'active' ? '确认暂停此客户?' : '确认恢复此客户?'}
-            onConfirm={() => updateMutation.mutate({ id: r.id, status: r.status === 'active' ? 'suspended' : 'active' })}
-          >
-            <Button size="small" icon={r.status === 'active' ? <StopOutlined /> : <PlayCircleOutlined />}
-              danger={r.status === 'active'}>{r.status === 'active' ? '暂停' : '恢复'}</Button>
-          </Popconfirm>
+          {r.status !== 'pending' && (
+            <Button size="small" icon={<DollarOutlined />} type="primary"
+              onClick={() => { if (confirm(`确认为「${r.realName || r.username}」续费一年？`)) renewMutation.mutate(r.id); }}
+              loading={renewMutation.isPending}>续费</Button>
+          )}
+          {r.status !== 'pending' && (
+            <Popconfirm
+              title={r.status === 'active' ? '确认暂停此客户?' : '确认恢复此客户?'}
+              onConfirm={() => updateMutation.mutate({ id: r.id, status: r.status === 'active' ? 'suspended' : 'active' })}
+            >
+              <Button size="small" icon={r.status === 'active' ? <StopOutlined /> : <PlayCircleOutlined />}
+                danger={r.status === 'active'}>{r.status === 'active' ? '暂停' : '恢复'}</Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -90,17 +125,17 @@ export default function Customers() {
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space>
           <TeamOutlined />
-          <Typography.Text type="secondary">管理系统客户 — 创建客户时自动分配专属仓库，客户登录后可独立管理自己的仓库</Typography.Text>
+          <Typography.Text type="secondary">新客户自动获得 90 天免费试用 · 续费按年收费 · 到期前 7 天提醒 · 到期后自动暂停</Typography.Text>
         </Space>
       </Card>
       <Card extra={<Button type="primary" icon={<PlusOutlined />}
         onClick={() => { form.resetFields(); setOpen(true); }}>新增客户</Button>}>
         <Table rowKey="id" columns={columns} dataSource={customers} loading={isLoading}
-          pagination={false} scroll={{ x: 870 }} />
+          pagination={false} scroll={{ x: 900 }} />
       </Card>
 
       {/* 新增客户 */}
-      <Modal title="新增客户" open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()}
+      <Modal title="新增客户（自动赠送 90 天免费试用）" open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()}
         confirmLoading={createMutation.isPending} style={{ maxWidth: 420 }}
       >
         <Form form={form} layout="vertical" onFinish={(v) => createMutation.mutate(v)}>
@@ -126,6 +161,17 @@ export default function Customers() {
       <Modal title="管理客户" open={!!editId} onCancel={() => { setEditId(null); editForm.resetFields(); }}
         onOk={() => editForm.submit()} confirmLoading={updateMutation.isPending} style={{ maxWidth: 480 }}
       >
+        {editId && customers && (() => {
+          const c = customers.find(x => x.id === editId);
+          return c ? (
+            <Typography.Paragraph style={{ marginBottom: 12 }}>
+              {!c.expiresAt ? '🎫 永久有效' :
+                dayjs(c.expiresAt).isBefore(dayjs()) ? <span style={{ color: '#ff4d4f' }}>🔴 已过期 {Math.abs(dayjs(c.expiresAt).diff(dayjs(), 'day'))} 天</span> :
+                <span>⏱ 到期：{dayjs(c.expiresAt).format('YYYY-MM-DD')}（剩 {dayjs(c.expiresAt).diff(dayjs(), 'day')} 天）</span>
+              }
+            </Typography.Paragraph>
+          ) : null;
+        })()}
         <Form form={editForm} layout="vertical" onFinish={(v) => updateMutation.mutate({ id: editId!, ...v })}>
           <Form.Item name="realName" label="客户名称">
             <Input />
@@ -142,12 +188,14 @@ export default function Customers() {
           <Form.Item name="addWarehouseName" label="追加仓库">
             <Input placeholder="如：科华原料仓" />
           </Form.Item>
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space>
+            <Button icon={<DollarOutlined />} type="primary" loading={renewMutation.isPending}
+              onClick={() => { if (confirm('确认续费一年？')) renewMutation.mutate(editId!); }}>续费一年</Button>
             <Popconfirm title="确认永久删除此客户及其所有数据?" onConfirm={() => {
               deleteMutation.mutate(editId!);
               setEditId(null);
             }}>
-              <Button danger block>删除客户及其所有数据</Button>
+              <Button danger>删除客户及其所有数据</Button>
             </Popconfirm>
           </Space>
         </Form>

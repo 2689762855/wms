@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import apiClient from '../api/client';
 import type { User } from '../types';
 
@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: any }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const aborted = useRef(false);
 
   // 仅在应用启动时验证 token（从 localStorage 恢复登录状态）
   useEffect(() => {
@@ -29,15 +30,20 @@ export function AuthProvider({ children }: { children: any }) {
     if (savedToken) {
       setToken(savedToken);
       apiClient.get('/auth/me')
-        .then((res) => setUser(res.data as User))
-        .catch(() => { localStorage.removeItem('token'); setToken(null); })
-        .finally(() => setLoading(false));
+        .then((res) => {
+          if (!aborted.current) setUser(res.data as User);
+        })
+        .catch(() => { if (!aborted.current) { localStorage.removeItem('token'); setToken(null); } })
+        .finally(() => { if (!aborted.current) setLoading(false); });
     } else {
       setLoading(false);
     }
-  }, []); // 空依赖，只在挂载时执行一次
+    return () => { aborted.current = true; };
+  }, []);
 
   const login = (newToken: string, newUser: User) => {
+    // 标记旧的 /auth/me 请求无效，防止覆盖新的身份
+    aborted.current = true;
     // 超管切换客户视角时，保存原 token 以便恢复
     if (user?.role === 'super_admin' && newUser.role === 'tenant_admin') {
       localStorage.setItem('admin_token', token!);
@@ -55,7 +61,7 @@ export function AuthProvider({ children }: { children: any }) {
       localStorage.removeItem('admin_token');
       localStorage.setItem('token', adminToken);
       setToken(adminToken);
-      // 重新获取超管信息
+      // 清除客户视角标记，让新的 /auth/me 不被拦截
       apiClient.get('/auth/me').then(res => setUser(res.data as User)).catch(() => {
         localStorage.removeItem('token');
         setToken(null);
@@ -63,6 +69,8 @@ export function AuthProvider({ children }: { children: any }) {
       });
       return;
     }
+    // 退出前清理可能残留的 admin_token
+    localStorage.removeItem('admin_token');
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);

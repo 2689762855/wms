@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仓库管家 - 简单好用的库存管理系统</title>
+<meta name="description" content="仓库管家 WMS - 中小仓库专用的库存管理系统，支持扫码出入库、多仓库调拨、库位管理、库存预警。免费自部署，云托管前3月免费。">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    color: #1a1a2e; background: #fff; line-height: 1.6;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 0; border-bottom: 1px solid #f0f0f0;
+  }
+  .logo { font-size: 22px; font-weight: 700; color: #1677ff; }
+  .logo span { color: #52c41a; }
+  .nav a { margin-left: 32px; text-decoration: none; color: #555; font-size: 15px; }
+  .nav a:hover { color: #1677ff; }
+  .nav .btn-nav { background: #1677ff; color: #fff; padding: 8px 20px; border-radius: 6px; }
+  .nav .btn-nav:hover { background: #4096ff; color: #fff; }
+
+  .hero { text-align: center; padding: 80px 0 60px; }
+  .hero h1 { font-size: 44px; font-weight: 800; line-height: 1.3; }
+  .hero h1 .green { color: #52c41a; }
+  .hero p { font-size: 18px; color: #666; max-width: 600px; margin: 20px auto 36px; }
+  .hero .btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn { padding: 14px 36px; border-radius: 8px; font-size: 16px; font-weight: 600; text-decoration: none; cursor: pointer; display: inline-block; border: none; transition: all .2s; }
+  .btn-primary { background: #1677ff; color: #fff; }
+  .btn-primary:hover { background: #4096ff; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(22,119,255,0.3); }
+  .btn-success { background: #52c41a; color: #fff; }
+  .btn-success:hover { background: #73d13d; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(82,196,26,0.3); }
+  .btn-outline { border: 2px solid #d9d9d9; color: #333; background: #fff; }
+  .btn-outline:hover { border-color: #1677ff; color: #1677ff; }
+
+  .features { padding: 80px 0; background: #fafafa; }
+  .section-title { text-align: center; font-size: 32px; font-weight: 700; margin-bottom: 12px; }
+  .section-sub { text-align: center; color: #888; font-size: 16px; margin-bottom: 48px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+  .card { background: #fff; border-radius: 12px; padding: 32px 28px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); transition: transform .2s, box-shadow .2s; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+  .card .icon { font-size: 36px; margin-bottom: 16px; }
+  .card h3 { font-size: 18px; margin-bottom: 8px; }
+  .card p { color: #777; font-size: 14px; }
+
+  .demo { padding: 80px 0; text-align: center; }
+  .demo-box { display: inline-block; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 12px; padding: 32px 48px; max-width: 500px; }
+  .demo-box code { font-size: 28px; font-weight: 700; color: #d48806; letter-spacing: 2px; }
+
+  .pricing { padding: 80px 0; background: #fafafa; }
+  .pricing-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; max-width: 800px; margin: 0 auto; }
+  .price-card { background: #fff; border-radius: 12px; padding: 36px 32px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border: 2px solid transparent; }
+  .price-card.featured { border-color: #1677ff; }
+  .price-card.featured .badge { display: inline-block; background: #1677ff; color: #fff; font-size: 12px; padding: 2px 12px; border-radius: 10px; margin-bottom: 8px; }
+  .price-card h3 { font-size: 22px; margin-bottom: 8px; }
+  .price-card .price { font-size: 36px; font-weight: 800; color: #1677ff; margin: 16px 0; }
+  .price-card .price small { font-size: 16px; color: #888; }
+  .price-card ul { list-style: none; text-align: left; margin: 24px 0; }
+  .price-card ul li { padding: 6px 0; color: #555; font-size: 14px; }
+  .price-card ul li::before { content: '✓ '; color: #52c41a; font-weight: 700; }
+
+  .cta { text-align: center; padding: 80px 0; }
+  .cta h2 { font-size: 32px; font-weight: 700; margin-bottom: 12px; }
+  .cta p { color: #666; font-size: 17px; margin-bottom: 32px; }
+
+  footer { text-align: center; padding: 32px 0; border-top: 1px solid #f0f0f0; color: #999; font-size: 13px; }
+
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 30px; }
+    .nav a { margin-left: 16px; font-size: 13px; }
+    .demo-box { padding: 24px; }
+    .demo-box code { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">仓库<span>管家</span></div>
+    <nav class="nav">
+      <a href="#features">功能</a>
+      <a href="#pricing">价格</a>
+      <a href="/login" class="btn-nav">登录</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h1>库存管理，<span class="green">从未如此简单</span></h1>
+    <p>专为中小仓库打造的库存管理系统。扫码出入库、多仓库管理、库存预警、手机盘点 —— 打开浏览器就能用。</p>
+    <div class="btns">
+      <button class="btn btn-success" onclick="document.getElementById('regModal').style.display='flex'" style="cursor:pointer">免费注册（试用90天）</button>
+      <a href="/login" class="btn btn-primary">登录</a>
+      <a href="#demo" class="btn btn-outline">查看演示</a>
+    </div>
+  </section>
+</div>
+
+<section class="features" id="features">
+  <div class="container">
+    <h2 class="section-title">核心功能</h2>
+    <p class="section-sub">覆盖仓库日常管理的全部环节</p>
+    <div class="grid">
+      <div class="card">
+        <div class="icon">📦</div>
+        <h3>入库 / 出库</h3>
+        <p>创建单据 → 确认 → 自动更新库存。支持扫码快速录入，手机端直接操作。</p>
+      </div>
+      <div class="card">
+        <div class="icon">🔄</div>
+        <h3>多仓库调拨</h3>
+        <p>仓库间调拨，按库位转移商品。来源库位和目标库位精确控制，库存实时变动。</p>
+      </div>
+      <div class="card">
+        <div class="icon">📍</div>
+        <h3>库位 + 二维码</h3>
+        <p>每个仓库创建库位，自动生成二维码。打印贴到货架，扫码即刻定位库存。</p>
+      </div>
+      <div class="card">
+        <div class="icon">📋</div>
+        <h3>盘点</h3>
+        <p>自动按库位拆分子任务，逐项核实。差异自动调账，盘点结果可追溯。</p>
+      </div>
+      <div class="card">
+        <div class="icon">⚠️</div>
+        <h3>库存预警</h3>
+        <p>设定安全库存线，低于阈值自动标红报警。一眼看出哪些商品该补货了。</p>
+      </div>
+      <div class="card">
+        <div class="icon">📊</div>
+        <h3>统计报表</h3>
+        <p>出入库对比柱状图、库存占比饼图、TOP 5 商品排行、30 天趋势一目了然。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="demo" id="demo">
+  <div class="container">
+    <h2 class="section-title">在线演示</h2>
+    <p class="section-sub">用演示账号登录，无需注册即可体验全部功能</p>
+    <div class="demo-box">
+      <p style="color:#888;margin-bottom:8px;">演示账号</p>
+      <code>fjmfjm</code>
+      <p style="margin-top:8px;color:#888;">密码</p>
+      <code>fjmfjm123</code>
+      <p style="margin-top:16px;color:#999;font-size:13px;">可自由体验所有功能，包含真实数据</p>
+      <a href="/login" class="btn btn-success" style="margin-top:16px;">进入演示</a>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <div class="container">
+    <h2 class="section-title">价格方案</h2>
+    <p class="section-sub">前 3 个月免费试用，满意再付费</p>
+    <div class="pricing-cards" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+      <div class="price-card">
+        <h3>🖥️ 自部署</h3>
+        <div class="price">免费</div>
+        <ul>
+          <li>全部功能无限制</li>
+          <li>多仓库 / 多用户</li>
+          <li>Win/Mac/Linux 均可</li>
+          <li>自行安装部署</li>
+          <li>社区支持</li>
+        </ul>
+        <a href="https://gitee.com/fjm_grkj_kyzz/wms" class="btn btn-outline" style="width:100%">查看源码</a>
+      </div>
+      <div class="price-card featured">
+        <span class="badge">推荐</span>
+        <h3>☁️ 标准版</h3>
+        <div class="price">¥599<small>/年</small></div>
+        <ul>
+          <li>1 个仓库</li>
+          <li>全部功能开放</li>
+          <li>手机扫码操作</li>
+          <li>不限用户数</li>
+          <li>基础技术支持</li>
+        </ul>
+        <a href="/login" class="btn btn-primary" style="width:100%">免费试用</a>
+      </div>
+      <div class="price-card">
+        <h3>☁️ 专业版</h3>
+        <div class="price">¥999<small>/年</small></div>
+        <ul>
+          <li>3 个仓库</li>
+          <li>全部功能开放</li>
+          <li>多仓库调拨联动</li>
+          <li>不限用户数</li>
+          <li>专属技术支持</li>
+        </ul>
+        <a href="/login" class="btn btn-outline" style="width:100%">免费试用</a>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:24px;background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:16px 24px;max-width:600px;margin-left:auto;margin-right:auto;">
+      <span style="font-size:18px;">🎁</span> <strong style="color:#389e0d;">免费商品录入服务</strong>
+      <p style="color:#666;margin:4px 0 0;">开通云托管版即可获得 —— 把商品清单发给我们，免费帮您录入系统，开箱即用。</p>
+    </div>
+    <p style="text-align:center;margin-top:12px;color:#999;font-size:13px;">所有方案均享前 3 个月免费试用，到期前续费即可</p>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <h2>让仓库管理告别 Excel</h2>
+    <p>90 天免费试用，满意后 ¥599 起 / 年</p>
+    <a href="/login" class="btn btn-success">免费试用</a>
+    <p style="margin-top:16px;color:#999;font-size:14px;">也支持私有部署，<a href="https://gitee.com/fjm_grkj_kyzz/wms" style="color:#1677ff;">查看开源代码</a></p>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>仓库管家 WMS · 适用于中小仓库、小工厂、批发商的库存管理系统</p>
+    <p style="margin-top:4px;">© 2026 仓库管家 | 开源 Gitee · 免费自部署 · 云服务前 3 月免费</p>
+  </div>
+</footer>
+
+<!-- 注册弹窗 -->
+<div id="regModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:36px;max-width:400px;width:90%;position:relative;">
+    <span onclick="document.getElementById('regModal').style.display='none'" style="position:absolute;top:12px;right:16px;font-size:24px;cursor:pointer;color:#999;">&times;</span>
+    <h3 style="margin-bottom:4px;font-size:22px;">免费注册</h3>
+    <p style="color:#888;margin-bottom:20px;font-size:14px;">90天免费试用 · 无需绑定 · 即时开通</p>
+    <form id="regForm" onsubmit="return handleRegister(event)">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">用户名</label>
+      <input name="username" required minlength="3" maxlength="50" placeholder="3-50个字符" style="width:100%;padding:10px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:15px;margin-bottom:14px;box-sizing:border-box;">
+
+      <label style="display:block;margin-bottom:4px;font-weight:500;">密码</label>
+      <input name="password" type="password" required minlength="6" maxlength="128" placeholder="至少6位" style="width:100%;padding:10px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:15px;margin-bottom:14px;box-sizing:border-box;">
+
+      <label style="display:block;margin-bottom:4px;font-weight:500;">公司/仓库名称</label>
+      <input name="realName" placeholder="如：科华贸易公司" style="width:100%;padding:10px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:15px;margin-bottom:14px;box-sizing:border-box;">
+
+      <label style="display:block;margin-bottom:4px;font-weight:500;">手机号</label>
+      <input name="phone" placeholder="方便后续联系续费" style="width:100%;padding:10px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:15px;margin-bottom:14px;box-sizing:border-box;">
+
+      <label style="display:block;margin-bottom:4px;font-weight:500;">人机验证</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <span id="captchaQuestion" style="font-size:15px;white-space:nowrap;"></span>
+        <input id="captchaAnswer" type="number" placeholder="?" required style="width:80px;padding:10px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:15px;box-sizing:border-box;">
+      </div>
+
+      <button type="submit" id="regBtn" class="btn btn-success" style="width:100%;">立即注册</button>
+      <p id="regMsg" style="margin-top:12px;text-align:center;font-size:14px;"></p>
+    </form>
+    <p style="text-align:center;margin-top:16px;font-size:13px;color:#999;">已有账号？<a href="/login" style="color:#1677ff;">去登录</a></p>
+  </div>
+</div>
+
+<script>
+// 人机验证：随机数学题
+let captchaAnswer = 0;
+function refreshCaptcha() {
+  const a = Math.floor(Math.random() * 9) + 2;
+  const b = Math.floor(Math.random() * 9) + 1;
+  captchaAnswer = a + b;
+  document.getElementById('captchaQuestion').textContent = a + ' + ' + b + ' = ';
+  document.getElementById('captchaAnswer').value = '';
+}
+refreshCaptcha();
+
+async function handleRegister(e) {
+  e.preventDefault();
+  const btn = document.getElementById('regBtn');
+  const msg = document.getElementById('regMsg');
+  const form = e.target;
+
+  // 验证数学题
+  const userAnswer = parseInt(document.getElementById('captchaAnswer').value);
+  if (isNaN(userAnswer) || userAnswer !== captchaAnswer) {
+    msg.style.color = '#ff4d4f';
+    msg.textContent = '验证答案错误，请重试';
+    refreshCaptcha();
+    return false;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '注册中...';
+  msg.style.color = '#999';
+  msg.textContent = '';
+
+  const data = {
+    username: form.username.value.trim(),
+    password: form.password.value,
+    realName: form.realName.value.trim() || undefined,
+    phone: form.phone.value.trim() || undefined,
+  };
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (res.ok) {
+      msg.style.color = '#52c41a';
+      msg.textContent = '注册成功！请等待管理员审批通过后即可登录使用。';
+      btn.textContent = '已提交';
+      btn.style.opacity = '0.6';
+    } else {
+      msg.style.color = '#ff4d4f';
+      msg.textContent = result.error || '注册失败';
+      btn.disabled = false;
+      btn.textContent = '立即注册';
+      refreshCaptcha();
+    }
+  } catch (err) {
+    msg.style.color = '#ff4d4f';
+    msg.textContent = '网络错误，请稍后再试';
+    btn.disabled = false;
+    btn.textContent = '立即注册';
+    refreshCaptcha();
+  }
+  return false;
+}
+</script>
+
+</body>
+</html>

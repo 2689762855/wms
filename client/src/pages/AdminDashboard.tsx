@@ -90,6 +90,8 @@ export default function AdminDashboard() {
               </div>
             ),
           },
+          { title: '开通人', key: 'creator', width: 80,
+            render: (_: unknown, r: CustomerInfo) => r.createdByUser?.realName || r.createdByUser?.username || '-' },
           { title: '状态', dataIndex: 'status', key: 'status', width: 80,
             render: (v: string) => v === 'active' ? <Tag color="green">正常</Tag> : <Tag color="red">已暂停</Tag> },
           { title: '仓库', dataIndex: 'warehouses', key: 'warehouses', width: 200,

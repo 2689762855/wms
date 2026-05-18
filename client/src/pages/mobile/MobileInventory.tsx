@@ -12,7 +12,6 @@ export default function MobileInventory() {
     queryKey: ['inventory-search', keyword],
     queryFn: () => apiClient.get('/inventory', { params: { keyword: keyword || undefined, pageSize: 200 } })
       .then(r => r.data as InventoryItem[]),
-    enabled: keyword.length > 0,
   });
 
   // 按商品分组
@@ -43,17 +42,12 @@ export default function MobileInventory() {
         style={{ marginBottom: 12 }}
       />
 
-      {!keyword && (
-        <Empty description="输入商品名称或扫码搜索" image={Empty.PRESENTED_IMAGE_SIMPLE}
-          style={{ padding: 40 }} />
-      )}
-
       {isLoading && <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>}
 
       {isError && <Empty description="加载失败" style={{ padding: 20 }} />}
 
-      {keyword && !isLoading && grouped.size === 0 && (
-        <Empty description={`未找到包含"${keyword}"的商品`} style={{ padding: 20 }} />
+      {!isLoading && grouped.size === 0 && (
+        <Empty description="暂无库存数据" style={{ padding: 20 }} />
       )}
 
       <Space direction="vertical" style={{ width: '100%' }} size={8}>

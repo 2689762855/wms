@@ -26,7 +26,7 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
     ];
   }
   if (categoryId) where.categoryId = categoryId;
-  if (req.userRole === 'tenant_admin' && req.customerId) {
+  if (req.customerId) {
     where.customerId = req.customerId;
   }
 
@@ -62,7 +62,14 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
     if (rows.length < 2) return res.status(400).json({ error: '模板为空，请填写商品数据' });
 
     const customerId = req.customerId || null;
-    const warehouseId = req.body.warehouseId ? parseInt(req.body.warehouseId) : req.userWarehouseId;
+    let warehouseId = req.body.warehouseId ? parseInt(req.body.warehouseId) : req.userWarehouseId;
+    // 校验仓库归属
+    if (warehouseId && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) {
+        return res.status(403).json({ error: '无权操作此仓库' });
+      }
+    }
     let created = 0, stockAdded = 0;
     const errors: string[] = [];
     const nameSkuMap = new Map<string, string>();
@@ -177,7 +184,7 @@ productsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) =
   const id = parseInt(req.params.id as string);
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: '商品不存在' });
-  if (req.userRole === 'tenant_admin' && existing.customerId !== req.customerId) {
+  if (req.customerId && existing.customerId !== req.customerId) {
     return res.status(403).json({ error: '无权操作此商品' });
   }
 
@@ -201,7 +208,7 @@ productsRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Response
   const id = parseInt(req.params.id as string);
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: '商品不存在' });
-  if (req.userRole === 'tenant_admin' && existing.customerId !== req.customerId) {
+  if (req.customerId && existing.customerId !== req.customerId) {
     return res.status(403).json({ error: '无权操作此商品' });
   }
   await prisma.product.delete({ where: { id } });

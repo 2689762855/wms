@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Layout, Button, Dropdown, Space } from 'antd';
+import { Button, Dropdown, Space, Alert } from 'antd';
 import {
   ImportOutlined,
   ExportOutlined,
@@ -10,14 +10,13 @@ import {
   UserOutlined,
   LogoutOutlined,
   InboxOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import PWAInstallPrompt from './PWAInstallPrompt';
 import PullToRefresh from './PullToRefresh';
 import ServerConfigModal from './ServerConfigModal';
 import ErrorBoundary from './ErrorBoundary';
 import { useAuth } from '../stores/AuthContext';
-
-const { Header, Content } = Layout;
 
 const tabs = [
   { key: 'inbound', label: '入库', icon: <ImportOutlined />, path: '/m/inbound' },
@@ -31,6 +30,7 @@ export default function MobileWorkerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const isInCustomerView = user?.role === 'tenant_admin' && !!localStorage.getItem('admin_token');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
@@ -50,8 +50,8 @@ export default function MobileWorkerLayout() {
   const activeTab = tabs.find(t => location.pathname.startsWith(t.path))?.key || 'inbound';
 
   return (
-    <Layout style={{ minHeight: '100dvh', background: '#f5f5f5' }}>
-      <Header style={{
+    <div style={{ minHeight: '100vh', background: '#f5f5f5', maxWidth: '100vw', overflow: 'hidden' }}>
+      <div style={{
         position: 'sticky', top: 0, zIndex: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 16px', background: '#fff',
@@ -62,6 +62,11 @@ export default function MobileWorkerLayout() {
           <span style={{ fontSize: 16, fontWeight: 600 }}>仓储操作</span>
         </div>
         <Space size={4}>
+          {isInCustomerView && (
+            <Button size="small" icon={<RollbackOutlined />} onClick={() => { logout(); navigate('/m/admin'); }} style={{ color: '#1677ff' }}>
+              返回平台
+            </Button>
+          )}
           <ServerConfigModal />
           <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
             <Button type="text" icon={<UserOutlined />} size="small">
@@ -69,23 +74,31 @@ export default function MobileWorkerLayout() {
             </Button>
           </Dropdown>
         </Space>
-      </Header>
+      </div>
 
-      <Content style={{ padding: 8, paddingBottom: 64, overflow: 'auto' }}>
+      {isInCustomerView && (
+        <Alert
+          message={`正在管理「${user?.realName || user?.username}」的数据`}
+          type="info" showIcon closable={false}
+          style={{ borderRadius: 0, borderLeft: 0, borderRight: 0 }}
+        />
+      )}
+
+      <div style={{ padding: 8, paddingBottom: 64, overflow: 'auto' }}>
         <PullToRefresh>
-          <div style={{ background: '#fff', borderRadius: 8, padding: 12, minHeight: 'calc(100dvh - 128px)' }}>
+          <div style={{ background: '#fff', borderRadius: 8, padding: 12, minHeight: 'calc(100vh - 128px)' }}>
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>
           </div>
         </PullToRefresh>
-      </Content>
+      </div>
 
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
         display: keyboardOpen ? 'none' : 'flex',
         background: '#fff', borderTop: '1px solid #f0f0f0',
-        paddingBottom: 'env(safe-area-inset-bottom, 0)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0px)',
         height: 56,
       }}>
         {tabs.map(item => (
@@ -95,7 +108,7 @@ export default function MobileWorkerLayout() {
             style={{
               flex: 1, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
+              cursor: 'pointer', overflow: 'hidden',
               color: activeTab === item.key ? '#1677ff' : '#8c8c8c',
               transition: 'color 0.2s',
             }}
@@ -106,6 +119,6 @@ export default function MobileWorkerLayout() {
         ))}
       </div>
       <PWAInstallPrompt />
-    </Layout>
+    </div>
   );
 }

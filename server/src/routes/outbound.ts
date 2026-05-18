@@ -10,8 +10,18 @@ outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
   const page = parseInt((req.query.page as string) || '1');
   const pageSize = Math.min(parseInt((req.query.pageSize as string) || '20'), 100);
   const where: Record<string, unknown> = {};
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
-    where.warehouseId = req.userWarehouseId;
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin') {
+      const queryWid = parseInt(req.query.warehouseId as string);
+      if (queryWid) {
+        where.warehouseId = queryWid;
+      } else if (req.customerId) {
+        const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+        where.warehouseId = { in: whs.map(w => w.id) };
+      }
+    } else if (req.userWarehouseId) {
+      where.warehouseId = req.userWarehouseId;
+    }
   }
   const [data, total] = await Promise.all([
     prisma.outboundOrder.findMany({
@@ -32,8 +42,13 @@ outboundRouter.get('/:id', async (req: AuthRequest, res: Response) => {
     include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
   });
   if (!order) return res.status(404).json({ error: '不存在' });
-  if (req.userRole !== 'super_admin' && req.userWarehouseId && order.warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权查看此仓库的单据' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: order.warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权查看此仓库的单据' });
+    } else if (req.userWarehouseId && order.warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权查看此仓库的单据' });
+    }
   }
   res.json(order);
 });
@@ -46,8 +61,13 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
   if (items.some((i: { productId: number; quantity: number }) => !i.productId || i.quantity <= 0)) {
     return res.status(400).json({ error: '商品明细数量必须大于 0' });
   }
-  if (req.userRole !== 'super_admin' && req.userWarehouseId && warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权操作此仓库' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+    } else if (req.userWarehouseId && warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
   }
 
   // 生成单号（原子序号，防并发重复）
@@ -59,7 +79,7 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       warehouseId,
       receiver,
       note,
-      operatorId: req.userId,
+      ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
       locationId: locationId || null,
       items: {
         create: items.map((i: { productId: number; quantity: number; locationId?: number | null }) => ({
@@ -79,8 +99,13 @@ outboundRouter.put('/:id/confirm', async (req: AuthRequest, res: Response) => {
   const order = await prisma.outboundOrder.findUnique({ where: { id }, include: { items: true } });
   if (!order) return res.status(404).json({ error: '不存在' });
   if (order.status === 'confirmed') return res.status(400).json({ error: '已确认' });
-  if (req.userRole !== 'super_admin' && req.userWarehouseId && order.warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权操作此仓库的单据' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: order.warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库的单据' });
+    } else if (req.userWarehouseId && order.warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权操作此仓库的单据' });
+    }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -131,8 +156,13 @@ outboundRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Response
   const order = await prisma.outboundOrder.findUnique({ where: { id } });
   if (!order) return res.status(404).json({ error: '不存在' });
   if (order.status !== 'draft') return res.status(400).json({ error: '已确认的单据不可删除' });
-  if (req.userRole !== 'super_admin' && req.userWarehouseId && order.warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权删除此仓库的单据' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: order.warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权删除此仓库的单据' });
+    } else if (req.userWarehouseId && order.warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权删除此仓库的单据' });
+    }
   }
   await prisma.$transaction(async (tx) => {
     await tx.outboundItem.deleteMany({ where: { outboundId: id } });

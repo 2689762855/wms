@@ -16,9 +16,17 @@ customersRouter.get('/', async (_req: AuthRequest, res: Response) => {
     },
     orderBy: { createdAt: 'desc' },
   });
+
+  const creatorIds = [...new Set(customers.map(c => c.createdBy).filter(Boolean))] as number[];
+  const creators = creatorIds.length > 0
+    ? await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, realName: true, username: true } })
+    : [];
+  const creatorMap = new Map(creators.map(u => [u.id, u]));
+
   const result = customers.map(c => {
     const { passwordHash: _, ...rest } = c;
-    return rest;
+    const creator = c.createdBy ? creatorMap.get(c.createdBy) : null;
+    return { ...rest, createdByUser: creator || null };
   });
   res.json(result);
 });
@@ -56,10 +64,13 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 计算到期时间
+    // 计算到期时间：默认 90 天试用，指定 0 表示永不过期
     let expiresAt: Date | null = null;
-    if (durationDays && durationDays > 0) {
-      expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+    if (durationDays === 0) {
+      expiresAt = null; // 永不过期
+    } else {
+      const days = durationDays && durationDays > 0 ? durationDays : 90;
+      expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     }
 
     const customer = await prisma.customer.create({
@@ -183,4 +194,24 @@ customersRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
     console.error('Delete customer error:', err);
     res.status(500).json({ error: '删除失败' });
   }
+});
+
+// 续费：从当前到期日或今天起延长
+customersRouter.put('/:id/renew', async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  const { days } = req.body; // 默认 365 天（一年）
+  const extendDays = days && days > 0 ? days : 365;
+
+  const customer = await prisma.customer.findUnique({ where: { id } });
+  if (!customer) return res.status(404).json({ error: '客户不存在' });
+
+  const base = customer.expiresAt && customer.expiresAt > new Date() ? customer.expiresAt : new Date();
+  const newExpiresAt = new Date(base.getTime() + extendDays * 24 * 60 * 60 * 1000);
+
+  await prisma.customer.update({
+    where: { id },
+    data: { expiresAt: newExpiresAt, status: 'active' },
+  });
+
+  res.json({ message: `已续费 ${extendDays} 天`, expiresAt: newExpiresAt });
 });

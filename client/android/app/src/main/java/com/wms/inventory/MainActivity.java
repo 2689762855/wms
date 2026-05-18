@@ -20,9 +20,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
         registerPlugin(AppUpdatePlugin.class);
+        super.onCreate(savedInstanceState);
 
         // Check and request camera permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)

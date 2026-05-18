@@ -20,8 +20,10 @@ export interface CustomerInfo {
   realName?: string;
   status: string;
   maxWarehouses: number;
+  expiresAt: string | null;
   warehouses: { id: number; name: string; createdAt: string }[];
   _count?: { products: number };
+  createdByUser?: { id: number; realName?: string | null; username: string } | null;
   createdAt: string;
 }
 

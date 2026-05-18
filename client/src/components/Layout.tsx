@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Layout as AntLayout, Menu, Button, theme, Dropdown, Grid, Alert } from 'antd';
+import { Layout as AntLayout, Menu, Button, theme, Dropdown, Alert } from 'antd';
 import {
   DashboardOutlined,
   BankOutlined,
@@ -24,25 +24,31 @@ import {
 import { useAuth } from '../stores/AuthContext';
 
 const { Header, Sider, Content } = AntLayout;
-const { useBreakpoint } = Grid;
 
 export default function AppLayout({ children }: { children?: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const screens = useBreakpoint();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
   const { token: themeToken } = theme.useToken();
-  const isMobile = Object.keys(screens).length > 0 && !screens.lg;
+  // matchMedia 比 useBreakpoint 更快，无初始空对象导致的桌面布局闪烁
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 991px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 991px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
   const isSuperAdmin = user?.role === 'super_admin';
   const isTenant = user?.role === 'tenant_admin';
   const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
   const canManageUsers = isSuperAdmin || user?.role === 'warehouse_admin';
 
-  // 超管菜单：平台管理 + 客户管理
+  // 超管菜单：平台管理 + 客户管理 + 用户管理
   const adminMenuItems = [
     { key: 'admin-dashboard', label: '平台管理', icon: <DashboardOutlined />, path: '/admin' },
     { key: 'settings-customers', label: '客户管理', icon: <TeamOutlined />, path: '/settings/customers' },
+    { key: 'settings-users', label: '用户管理', icon: <UserOutlined />, path: '/settings/users' },
     { key: 'settings-about', label: '关于我们', icon: <InfoCircleOutlined />, path: '/settings/about' },
   ];
 
@@ -130,8 +136,8 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
 
   const contentNode = children || <Outlet />;
 
-  // ── Mobile → redirect to worker UI ──
-  if (isMobile) {
+  // ── Mobile → redirect to worker UI (super admin 有自己的移动端) ──
+  if (isMobile && user?.role !== 'super_admin') {
     return <Navigate to="/m/inbound" replace />;
   }
 
@@ -155,7 +161,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
           <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {isInCustomerView && (
-              <Button size="small" icon={<RollbackOutlined />} onClick={logout} style={{ color: '#1677ff' }}>
+              <Button size="small" icon={<RollbackOutlined />} onClick={() => { logout(); navigate('/admin'); }} style={{ color: '#1677ff' }}>
                 返回平台管理
               </Button>
             )}

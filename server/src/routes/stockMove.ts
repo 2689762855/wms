@@ -128,4 +128,46 @@ stockMoveRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
   }
 });
 
+// 给无库位库存分配库位
+stockMoveRouter.post('/assign-location', adminWrite, async (req: AuthRequest, res: Response) => {
+  const { inventoryId, toLocationId } = req.body;
+  if (!inventoryId || !toLocationId) {
+    return res.status(400).json({ error: '请指定库存记录和目标库位' });
+  }
+
+  const inv = await prisma.inventory.findUnique({
+    where: { id: inventoryId },
+    include: { product: true },
+  });
+  if (!inv) return res.status(404).json({ error: '库存记录不存在' });
+  if (inv.locationId !== null) return res.status(400).json({ error: '该库存已有库位' });
+
+  const toLoc = await prisma.location.findUnique({ where: { id: toLocationId } });
+  if (!toLoc || toLoc.warehouseId !== inv.warehouseId) {
+    return res.status(400).json({ error: '目标库位不属于同一仓库' });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // 目标库位已有同商品库存则合并
+      const existing = await tx.inventory.findFirst({
+        where: { productId: inv.productId, warehouseId: inv.warehouseId, locationId: toLocationId },
+      });
+      if (existing) {
+        await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: inv.quantity } } });
+        await tx.inventory.delete({ where: { id: inv.id } });
+        await tx.stockLog.create({
+          data: { productId: inv.productId, warehouseId: inv.warehouseId, changeQty: inv.quantity, beforeQty: existing.quantity, afterQty: existing.quantity + inv.quantity, type: 'assign_location', refId: inv.id },
+        });
+      } else {
+        await tx.inventory.update({ where: { id: inv.id }, data: { locationId: toLocationId } });
+      }
+    });
+    res.json({ message: '已分配库位' });
+  } catch (err: any) {
+    console.error('Assign location error:', err);
+    res.status(500).json({ error: '分配失败' });
+  }
+});
+
 export default stockMoveRouter;

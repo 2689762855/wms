@@ -15,7 +15,12 @@ usersRouter.get('/', authenticate, authorize('super_admin', 'warehouse_admin', '
     }
     if (req.userRole === 'tenant_admin') {
       where.role = 'operator';
-      where.warehouseId = req.userWarehouseId;
+      // 如果指定了仓库则按仓库过滤，否则显示客户下所有仓库的操作员
+      if (req.query.warehouseId) {
+        where.warehouseId = parseInt(req.query.warehouseId as string);
+      } else if (req.userWarehouseId) {
+        where.warehouseId = req.userWarehouseId;
+      }
     }
     const users = await prisma.user.findMany({
       where,
@@ -43,9 +48,19 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
     // 仓管只能创建操作员，且仓库自动继承
     let finalRole = role || 'operator';
     let finalWarehouseId = warehouseId || null;
-    if (req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
+    if (req.userRole === 'warehouse_admin') {
       finalRole = 'operator';
       finalWarehouseId = req.userWarehouseId;
+    } else if (req.userRole === 'tenant_admin') {
+      finalRole = 'operator';
+      finalWarehouseId = warehouseId || req.userWarehouseId;
+      // 校验仓库属于当前客户
+      if (finalWarehouseId && req.customerId) {
+        const wh = await prisma.warehouse.findUnique({ where: { id: finalWarehouseId }, select: { customerId: true } });
+        if (!wh || wh.customerId !== req.customerId) {
+          return res.status(403).json({ error: '无权操作此仓库' });
+        }
+      }
     }
 
     const existing = await prisma.user.findUnique({ where: { username } });
@@ -91,6 +106,12 @@ usersRouter.put('/:id', authenticate, authorize('super_admin', 'warehouse_admin'
     if (req.userRole === 'super_admin') {
       if (role) data.role = role;
       if (warehouseId !== undefined) data.warehouseId = warehouseId;
+    } else if (req.userRole === 'tenant_admin' && warehouseId !== undefined) {
+      if (req.customerId) {
+        const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+        if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+      }
+      data.warehouseId = warehouseId;
     }
 
     const user = await prisma.user.update({

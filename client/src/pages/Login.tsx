@@ -16,15 +16,24 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await apiClient.post('/auth/login', values);
+
+      // 多服务器路由：客户在另一台服务器，自动跳转
+      if (res.data.serverRedirect) {
+        message.info('正在跳转到您的专属服务器...');
+        window.location.href = `${res.data.serverRedirect}/claim?token=${encodeURIComponent(res.data.transferToken)}`;
+        return;
+      }
+
       login(res.data.token, res.data.user);
       message.success('登录成功');
       if (res.data.expiryWarning) {
         message.warning(res.data.expiryWarning, 5);
       }
       if (res.data.user.role === 'super_admin') {
-        navigate('/admin', { replace: true });
+        const isMobile = window.matchMedia('(max-width: 991px)').matches;
+        navigate(isMobile ? '/m/admin' : '/admin', { replace: true });
       } else {
-        const isMobile = window.innerWidth < 992;
+        const isMobile = window.matchMedia('(max-width: 991px)').matches;
         navigate(isMobile ? '/m/inbound' : '/dashboard', { replace: true });
       }
     } catch (err: any) {
@@ -39,7 +48,7 @@ export default function Login() {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      minHeight: '100dvh',
+      minHeight: '100vh',
       padding: '16px',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     }}>

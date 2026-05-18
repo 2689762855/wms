@@ -18,7 +18,7 @@ export default function CheckTaskDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'warehouse_admin';
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'warehouse_admin' || user?.role === 'tenant_admin';
   const [actualQtys, setActualQtys] = useState<Record<number, number>>({});
   const [reviewNote, setReviewNote] = useState('');
   const [selectedSub, setSelectedSub] = useState<number | null>(null);

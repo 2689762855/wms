@@ -1,17 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import prisma from '../utils/prisma';
 
 const DEV_ADMIN_SECRET = 'dev-admin-secret-8a1b9c2d3e4f5a6b7c8d9e0f';
+const DEV_INTER_SERVER_SECRET = 'dev-inter-server-shared-key';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
 const JWT_ADMIN_SECRET = process.env.JWT_ADMIN_SECRET || (!isProduction ? DEV_ADMIN_SECRET : '');
+const INTER_SERVER_SECRET = process.env.INTER_SERVER_SECRET || (!isProduction ? DEV_INTER_SERVER_SECRET : '');
 
 if (isProduction && !JWT_ADMIN_SECRET) {
   throw new Error('FATAL: JWT_ADMIN_SECRET 环境变量未设置，拒绝启动');
 }
 
-export { JWT_ADMIN_SECRET };
+// 当前服务器公网域名（用于判断客户归属）
+const THIS_HOST = process.env.PUBLIC_HOST || 'localhost:3001';
+
+export { JWT_ADMIN_SECRET, INTER_SERVER_SECRET, THIS_HOST };
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -56,8 +62,16 @@ export function authorize(...roles: string[]) {
   };
 }
 
-export function adminWrite(req: AuthRequest, res: Response, next: NextFunction) {
-  if (req.userRole === 'super_admin' || req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') return next();
+export async function adminWrite(req: AuthRequest, res: Response, next: NextFunction) {
+  if (req.userRole === 'super_admin' || req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const customer = await prisma.customer.findUnique({ where: { id: req.customerId }, select: { status: true } });
+      if (customer?.status === 'pending') {
+        return res.status(403).json({ error: '账号审核中，仅可查看，无法操作' });
+      }
+    }
+    return next();
+  }
   return res.status(403).json({ error: '无权进行此操作' });
 }
 
@@ -67,7 +81,7 @@ export function superAdmin(req: AuthRequest, res: Response, next: NextFunction) 
 }
 
 export function requireWarehouse(req: AuthRequest, res: Response, next: NextFunction) {
-  if (req.userRole === 'super_admin') return next();
+  if (req.userRole === 'super_admin' || req.userRole === 'tenant_admin') return next();
   if (!req.userWarehouseId) return res.status(403).json({ error: '未分配到任何仓库' });
   next();
 }

@@ -1,8 +1,8 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0",
+  "versionCode": 13,
+  "versionName": "2.1",
   "downloadUrl": "/api/app/download/latest",
-  "changelog": "初始版本",
+  "changelog": "- 优化：移动端库存查询默认显示全部商品，搜索仅用于快速定位",
   "forceUpdate": false,
   "minVersionCode": 0
 }

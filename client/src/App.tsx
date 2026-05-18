@@ -5,7 +5,7 @@ import zhCN from 'antd/locale/zh_CN';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './stores/AuthContext';
 import AppUpdateModal from './components/AppUpdateModal';
-import { checkForUpdate } from './utils/updateChecker';
+import { checkForUpdate, markVersionAsCurrent } from './utils/updateChecker';
 import type { AppVersion } from './types';
 import AppLayout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -29,6 +29,7 @@ import Alerts from './pages/Alerts';
 import ReportsInOut from './pages/ReportsInOut';
 import ReportsTurnover from './pages/ReportsTurnover';
 import Login from './pages/Login';
+import Claim from './pages/Claim';
 import AdminDashboard from './pages/AdminDashboard';
 import WarehouseLocations from './pages/WarehouseLocations';
 import Users from './pages/Users';
@@ -45,6 +46,7 @@ import MobileTransfer from './pages/mobile/MobileTransfer';
 import MobileInboundDetail from './pages/mobile/MobileInboundDetail';
 import MobileOutboundDetail from './pages/mobile/MobileOutboundDetail';
 import MobileInventory from './pages/mobile/MobileInventory';
+import MobileCustomers from './pages/mobile/MobileCustomers';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,7 +66,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function HomeRedirect() {
   const { user } = useAuth();
-  if (user?.role === 'super_admin') return <Navigate to="/admin" replace />;
+  // matchMedia 比 window.innerWidth 更可靠，不受 viewport 缩放影响
+  const isMobile = window.matchMedia('(max-width: 991px)').matches;
+  if (user?.role === 'super_admin') {
+    return <Navigate to={isMobile ? '/m/admin' : '/admin'} replace />;
+  }
+  if (isMobile) return <Navigate to="/m/inbound" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -72,6 +79,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/claim" element={<Claim />} />
+      <Route path="/m/admin" element={<ProtectedRoute><MobileCustomers /></ProtectedRoute>} />
       <Route path="/m" element={<ProtectedRoute><MobileWorkerLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/m/inbound" replace />} />
         <Route path="inbound" element={<MobileInboundList />} />
@@ -145,7 +154,7 @@ function AppContent() {
           open={updateOpen}
           serverVersion={updateVersion}
           forceUpdate={updateForce}
-          onDismiss={() => setUpdateOpen(false)}
+          onDismiss={() => { setUpdateOpen(false); if (updateVersion) markVersionAsCurrent(updateVersion.versionCode); }}
         />
       )}
       <BrowserRouter>

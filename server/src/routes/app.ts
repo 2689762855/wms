@@ -37,7 +37,17 @@ appRouter.get('/download/latest', (_req: Request, res: Response) => {
       res.status(404).json({ error: '暂无 APK 文件' });
       return;
     }
-    const files = fs.readdirSync(apkDir).filter((f) => f.endsWith('.apk'));
+    const files = fs.readdirSync(apkDir)
+      .filter((f) => f.endsWith('.apk'))
+      .sort((a, b) => {
+        const getVer = (name: string) => {
+          const m = name.match(/v([\d.]+)/);
+          if (!m) return 0;
+          const parts = m[1].split('.').map(Number);
+          return parts[0] * 1000 + (parts[1] || 0);
+        };
+        return getVer(b) - getVer(a);
+      });
     if (files.length === 0) {
       res.status(404).json({ error: '暂无 APK 文件' });
       return;

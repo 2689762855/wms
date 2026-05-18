@@ -185,6 +185,8 @@ model TransferItem {
   productId  Int
   product    Product       @relation(fields: [productId], references: [id])
   quantity   Int
+  locationId Int?
+  location   Location?     @relation(fields: [locationId], references: [id])
 }
 
 model StockLog {
@@ -243,6 +245,7 @@ model Location {
   inboundItems    InboundItem[]
   outboundOrders  OutboundOrder[]
   outboundItems   OutboundItem[]
+  transferItems   TransferItem[]
   checkTasks      CheckTask[]
 }
 
@@ -251,9 +254,11 @@ model Customer {
   username      String    @unique
   passwordHash  String
   realName      String?
+  phone         String?
   status        String    @default("active") // active | suspended
   maxWarehouses Int       @default(1)
   expiresAt     DateTime? // null=永久，到期自动暂停
+  serverHost    String?   // null=本机, s2.cgklxt.top=其他服务器
   createdBy     Int?
   createdAt     DateTime  @default(now())
 

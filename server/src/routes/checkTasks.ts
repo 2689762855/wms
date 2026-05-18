@@ -8,8 +8,13 @@ checkTasksRouter.use(authenticate);
 // 盘点任务列表（只返回主任务，子任务通过详情查看）
 checkTasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   const where: Record<string, unknown> = { parentTaskId: null };
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
-    where.warehouseId = req.userWarehouseId;
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+      where.warehouseId = { in: whs.map(w => w.id) };
+    } else if (req.userWarehouseId) {
+      where.warehouseId = req.userWarehouseId;
+    }
   }
   const list = await prisma.checkTask.findMany({
     where,
@@ -31,8 +36,13 @@ checkTasksRouter.get('/sub', async (req: AuthRequest, res: Response) => {
     parentTask: { status: { not: 'completed' } },
   };
   if (parentId) where.parentTaskId = parentId;
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
-    where.warehouseId = req.userWarehouseId;
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+      where.warehouseId = { in: whs.map(w => w.id) };
+    } else if (req.userWarehouseId) {
+      where.warehouseId = req.userWarehouseId;
+    }
   }
   const list = await prisma.checkTask.findMany({
     where,
@@ -87,8 +97,13 @@ checkTasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { warehouseId, note } = req.body;
   if (!warehouseId) return res.status(400).json({ error: '仓库必选' });
   if (note && note.length > 1000) return res.status(400).json({ error: '备注不能超过 1000 字符' });
-  if (req.userRole !== 'super_admin' && req.userWarehouseId && warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权操作此仓库' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+    } else if (req.userWarehouseId && warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
   }
 
   const inventories = await prisma.inventory.findMany({
@@ -109,7 +124,7 @@ checkTasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   const task = await prisma.$transaction(async (tx) => {
     // 创建主任务
     const master = await tx.checkTask.create({
-      data: { warehouseId, note, operatorId: req.userId, status: 'in_progress' },
+      data: { warehouseId, note, ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}), status: 'in_progress' },
     });
 
     // 为每个库位创建子任务
@@ -120,7 +135,7 @@ checkTasksRouter.post('/', async (req: AuthRequest, res: Response) => {
           warehouseId,
           locationId,
           parentTaskId: master.id,
-          operatorId: req.userId,
+          ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
           items: {
             create: items.map(inv => ({ productId: inv.productId, systemQty: inv.quantity })),
           },
@@ -203,8 +218,13 @@ checkTasksRouter.put('/:id/resolve', adminWrite, async (req: AuthRequest, res: R
   const task = await prisma.checkTask.findUnique({ where: { id }, include: { items: true } });
   if (!task) return res.status(404).json({ error: '不存在' });
   if (task.status !== 'anomaly') return res.status(400).json({ error: '只能处理异常状态的盘点任务' });
-  if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权处理此仓库的异常' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: task.warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权处理此仓库的异常' });
+    } else if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权处理此仓库的异常' });
+    }
   }
 
   if (action === 'reject') {
@@ -270,8 +290,13 @@ checkTasksRouter.put('/:id/reopen', adminWrite, async (req: AuthRequest, res: Re
     const parent = await prisma.checkTask.findUnique({ where: { id: task.parentTaskId } });
     if (parent?.status === 'completed') return res.status(400).json({ error: '主任务已最终确定，无法重开' });
   }
-  if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权操作此仓库' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: task.warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+    } else if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -310,8 +335,13 @@ checkTasksRouter.put('/:id/finalize', adminWrite, async (req: AuthRequest, res: 
   if (!task) return res.status(404).json({ error: '不存在' });
   if (task.parentTaskId) return res.status(400).json({ error: '只能最终确定主任务' });
   if (task.status === 'completed') return res.status(400).json({ error: '已最终确定' });
-  if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
-    return res.status(403).json({ error: '无权操作此仓库' });
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: task.warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+    } else if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
   }
 
   const allDone = task.subTasks.every(s => s.status === 'completed');
@@ -331,10 +361,12 @@ checkTasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
   if (task.status !== 'in_progress') return res.status(400).json({ error: '只能取消进行中的盘点任务' });
 
   if (req.userRole !== 'super_admin') {
-    if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: task.warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+    } else if (req.userRole === 'warehouse_admin' && req.userWarehouseId && task.warehouseId !== req.userWarehouseId) {
       return res.status(403).json({ error: '无权操作此仓库' });
-    }
-    if (req.userRole === 'operator' && task.operatorId !== req.userId) {
+    } else if (req.userRole === 'operator' && task.operatorId !== req.userId) {
       return res.status(403).json({ error: '只能取消自己创建的盘点任务' });
     }
   }

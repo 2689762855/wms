@@ -1,14 +1,36 @@
 import { useState, useMemo } from 'react';
-import { Table, Select, Input, Card, Typography, Space, Tag } from 'antd';
-import { useQuery } from '@tanstack/react-query';
+import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, message } from 'antd';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryLevelName } from '../utils/categoryTree';
-import type { Warehouse, InventoryItem, Category } from '../types';
+import type { Warehouse, InventoryItem, Category, Location } from '../types';
 
 function LocationDetail({ productId, warehouseId }: { productId: number; warehouseId?: number }) {
+  const queryClient = useQueryClient();
+  const [assignModal, setAssignModal] = useState<{ open: boolean; invId: number; invQty: number }>({ open: false, invId: 0, invQty: 0 });
+  const [targetLocationId, setTargetLocationId] = useState<number | undefined>();
+
   const { data, isLoading } = useQuery({
     queryKey: ['inventory', { productId, warehouseId }],
     queryFn: () => apiClient.get('/inventory', { params: { productId, warehouseId } }).then(r => r.data as InventoryItem[]),
+  });
+
+  // 加载该仓库的库位列表
+  const { data: locations } = useQuery({
+    queryKey: ['locations', warehouseId],
+    queryFn: () => apiClient.get('/locations', { params: { warehouseId } }).then(r => r.data as Location[]),
+    enabled: !!warehouseId,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: () => apiClient.post('/stock-move/assign-location', { inventoryId: assignModal.invId, toLocationId: targetLocationId }),
+    onSuccess: () => {
+      message.success('已分配库位');
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      setAssignModal({ open: false, invId: 0, invQty: 0 });
+      setTargetLocationId(undefined);
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '分配失败'),
   });
 
   const sorted = useMemo(() => {
@@ -27,18 +49,39 @@ function LocationDetail({ productId, warehouseId }: { productId: number; warehou
         dataSource={sorted}
         pagination={false}
         columns={[
-          { title: '库位名称', dataIndex: ['location', 'name'], key: 'loc', render: (v: string | undefined) => v || <span style={{ color: '#999' }}>无库位</span> },
+          { title: '库位名称', dataIndex: ['location', 'name'], key: 'loc', render: (v: string | undefined) => v || <span style={{ color: '#ff7a00' }}>⚠ 无库位</span> },
           { title: '库位编码', dataIndex: ['location', 'code'], key: 'code', render: (v: string | undefined) => v || '-' },
           { title: '数量', dataIndex: 'quantity', key: 'qty', render: (v: number) => <strong>{v}</strong> },
+          { title: '', key: 'action', width: 100, render: (_: unknown, r: InventoryItem) =>
+            !r.location && (
+              <Button size="small" type="primary" onClick={() => { setAssignModal({ open: true, invId: r.id, invQty: r.quantity }); setTargetLocationId(undefined); }}>
+                分配库位
+              </Button>
+            )
+          },
         ]}
         summary={() => (
           <Table.Summary.Row>
             <Table.Summary.Cell index={0}><strong>合计</strong></Table.Summary.Cell>
             <Table.Summary.Cell index={1} />
             <Table.Summary.Cell index={2}><strong>{total}</strong></Table.Summary.Cell>
+            <Table.Summary.Cell index={3} />
           </Table.Summary.Row>
         )}
       />
+      <Modal
+        title="分配库位"
+        open={assignModal.open}
+        onCancel={() => setAssignModal({ open: false, invId: 0, invQty: 0 })}
+        onOk={() => assignMutation.mutate()}
+        confirmLoading={assignMutation.isPending}
+        okButtonProps={{ disabled: !targetLocationId }}
+      >
+        <Typography.Paragraph>将 <strong>{assignModal.invQty}</strong> 件商品分配到指定库位</Typography.Paragraph>
+        <Select placeholder="选择目标库位" style={{ width: '100%' }} onChange={setTargetLocationId} value={targetLocationId}>
+          {locations?.map((l: Location) => <Select.Option key={l.id} value={l.id}>{l.name}</Select.Option>)}
+        </Select>
+      </Modal>
     </div>
   );
 }

@@ -33,7 +33,7 @@ export default function Dashboard() {
     return map;
   }, [categories]);
 
-  const pieData = stockSummary?.map((s: { warehouse: string; totalQuantity: number }) => ({
+  const pieData = stockSummary?.summary?.map((s: { warehouse: string; totalQuantity: number }) => ({
     name: s.warehouse,
     value: s.totalQuantity,
   })).filter((d: { value: number }) => d.value > 0) || [];
@@ -68,7 +68,7 @@ export default function Dashboard() {
         </Col>
         <Col xs={12} sm={8} md={4}>
           <Card hoverable onClick={() => navigate('/products')} size="small">
-            <Statistic title="库存品类" value={stockSummary?.reduce((s: number, r: { totalItems: number }) => s + r.totalItems, 0) || 0} prefix={<InboxOutlined />} />
+            <Statistic title="库存品类" value={stockSummary?.totalItems || 0} prefix={<InboxOutlined />} />
           </Card>
         </Col>
         <Col xs={12} sm={8} md={4}>
@@ -83,7 +83,7 @@ export default function Dashboard() {
         </Col>
         <Col xs={12} sm={8} md={4}>
           <Card hoverable onClick={() => navigate('/inventory')} size="small">
-            <Statistic title="库存总计" value={stockSummary?.reduce((s: number, r: { totalQuantity: number }) => s + r.totalQuantity, 0) || 0} suffix="件" />
+            <Statistic title="库存总计" value={stockSummary?.summary?.reduce((s: number, r: { totalQuantity: number }) => s + r.totalQuantity, 0) || 0} suffix="件" />
           </Card>
         </Col>
         <Col xs={12} sm={8} md={4}>

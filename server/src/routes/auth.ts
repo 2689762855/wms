@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, JWT_ADMIN_SECRET } from '../middleware/auth';
+import { AuthRequest, authenticate, JWT_ADMIN_SECRET, INTER_SERVER_SECRET, THIS_HOST } from '../middleware/auth';
 
 const JWT_EXPIRES_IN = '24h';
 
@@ -23,8 +23,13 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
       if (!valid) {
         return res.status(401).json({ error: '用户名或密码错误' });
       }
+      let customerId = null;
+      if (user.warehouseId) {
+        const wh = await prisma.warehouse.findUnique({ where: { id: user.warehouseId }, select: { customerId: true } });
+        customerId = wh?.customerId ?? null;
+      }
       const token = jwt.sign(
-        { userId: user.id, role: user.role, warehouseId: user.warehouseId },
+        { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId },
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
@@ -59,14 +64,28 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
           expiryWarning = `账号将在 ${daysLeft} 天后到期，请及时续费`;
         }
       }
+      if (customer.status === 'pending') {
+        expiryWarning = '账号审核中，当前仅可查看，无法操作';
+      }
 
       const warehouseId = customer.warehouses[0]?.id ?? null;
+      const { passwordHash: _, serverHost, ...rest } = customer;
+
+      // 多服务器路由
+      if (serverHost && serverHost !== THIS_HOST) {
+        const transferToken = jwt.sign(
+          { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
+          INTER_SERVER_SECRET,
+          { expiresIn: '5m' }
+        );
+        return res.json({ serverRedirect: `https://${serverHost}`, transferToken, expiryWarning });
+      }
+
       const token = jwt.sign(
         { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
-      const { passwordHash: _, ...rest } = customer;
       return res.json({ token, user: { ...rest, role: 'tenant_admin', warehouseId, expiresAt: customer.expiresAt }, expiryWarning });
     }
 
@@ -154,15 +173,109 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
     }
 
     const warehouseId = customer.warehouses[0]?.id ?? null;
+    const { passwordHash: _, serverHost, status: custStatus, ...customerWithoutPassword } = customer;
+
+    // 多服务器路由
+    if (serverHost && serverHost !== THIS_HOST) {
+      const transferToken = jwt.sign(
+        { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
+        INTER_SERVER_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ serverRedirect: `https://${serverHost}`, transferToken });
+    }
+
     const token = jwt.sign(
       { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
       JWT_ADMIN_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
-    const { passwordHash: _, ...customerWithoutPassword } = customer;
     res.json({ token, user: { ...customerWithoutPassword, role: 'tenant_admin', warehouseId } });
   } catch (err) {
     console.error('Tenant login error:', err);
     res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 跨服务器中转登录：worker 服务器验证中转 token 并返回本地 token
+authRouter.post('/claim', async (req: AuthRequest, res: Response) => {
+  try {
+    const { transferToken } = req.body;
+    if (!transferToken) return res.status(400).json({ error: '缺少中转 token' });
+
+    const payload = jwt.verify(transferToken, INTER_SERVER_SECRET) as {
+      userId: number;
+      role: string;
+      warehouseId?: number | null;
+      customerId?: number;
+    };
+
+    // 验证该客户确实归本服务器
+    const customer = await prisma.customer.findUnique({
+      where: { id: payload.userId },
+      select: { serverHost: true, id: true, status: true },
+    });
+    if (!customer || customer.serverHost !== THIS_HOST) {
+      return res.status(403).json({ error: '无权访问此服务器' });
+    }
+
+    // 生成正式 token
+    const token = jwt.sign(payload, JWT_ADMIN_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    res.json({ token });
+  } catch {
+    return res.status(401).json({ error: '中转 token 无效或已过期' });
+  }
+});
+
+// 返回当前服务器标识
+authRouter.get('/host-info', (_req, res: Response) => {
+  res.json({ host: THIS_HOST });
+});
+
+// 公开注册（无需登录）
+authRouter.post('/register', async (req: AuthRequest, res: Response) => {
+  try {
+    const { username, password, realName, phone } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: '用户名和密码不能为空' });
+    }
+    if (username.length < 3 || username.length > 50) {
+      return res.status(400).json({ error: '用户名 3-50 字符' });
+    }
+    if (password.length < 6 || password.length > 128) {
+      return res.status(400).json({ error: '密码 6-128 位' });
+    }
+    if (phone && !/^1[3-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({ error: '手机号格式不正确' });
+    }
+
+    const existing = await prisma.customer.findUnique({ where: { username } });
+    if (existing) return res.status(400).json({ error: '用户名已被注册' });
+    const userConflict = await prisma.user.findUnique({ where: { username } });
+    if (userConflict) return res.status(400).json({ error: '用户名已被占用' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90天试用
+
+    const customer = await prisma.customer.create({
+      data: { username, passwordHash, realName: realName || username, phone: phone || null, maxWarehouses: 1, expiresAt, status: 'pending' },
+    });
+
+    // 自动创建仓库
+    const wh = await prisma.warehouse.create({
+      data: { name: `${realName || username}主仓库`, customerId: customer.id },
+    });
+
+    // 创建默认库位
+    const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
+    for (const locName of locNames) {
+      const code = 'LOC-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
+      await prisma.location.create({ data: { name: locName, warehouseId: wh.id, code } });
+    }
+
+    res.status(201).json({ message: '注册成功，90 天免费试用已开通', username, expiresAt });
+  } catch (err) {
+    console.error('Register error:', err);
+    res.status(500).json({ error: '注册失败' });
   }
 });

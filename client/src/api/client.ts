@@ -16,13 +16,15 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+let redirectingToLogin = false;
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      // 强制跳转登录页
-      if (window.location.pathname !== '/login') {
+      if (window.location.pathname !== '/login' && !redirectingToLogin) {
+        redirectingToLogin = true;
         window.location.href = '/login';
       }
     }

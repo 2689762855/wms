@@ -33,6 +33,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'"],
@@ -40,6 +41,7 @@ app.use(helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
+      upgradeInsecureRequests: null,
     },
   },
 }));
@@ -54,6 +56,7 @@ const loginLimiter = rateLimit({
   message: { error: '请求过于频繁，请15分钟后再试' },
 });
 app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/register', rateLimit({ windowMs: 60 * 60 * 1000, max: 3, message: { error: '注册请求过于频繁，请1小时后再试' } }));
 
 // 通用限速
 app.use('/api', rateLimit({
@@ -87,10 +90,13 @@ let distPath = path.join(__dirname, '../../client/dist');
 if (!fs.existsSync(distPath)) {
   distPath = path.join(__dirname, '../client/dist');
 }
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(distPath, 'landing.html'), (err) => { if (err) res.sendFile(path.join(distPath, 'index.html')); });
+});
 app.use(express.static(distPath));
-// SPA fallback: 非 API 请求返回 index.html
+// SPA fallback: 非首页、非 API 请求返回 index.html
 app.use((_req, res, next) => {
-  if (_req.path.startsWith('/api')) return next();
+  if (_req.path === '/' || _req.path.startsWith('/api')) return next();
   res.sendFile(path.join(distPath, 'index.html'), (err) => { if (err) next(); });
 });
 

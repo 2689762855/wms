@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Modal, Form, Select, Input, Tag, Card, Typography, Space, message } from 'antd';
+import { Table, Button, Modal, Form, Select, Input, Tag, Card, Typography, Space, Popconfirm, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { useAuth } from '../stores/AuthContext';
 import type { Warehouse, CheckTask } from '../types';
 import dayjs from 'dayjs';
 
@@ -18,6 +19,8 @@ export default function CheckTasks() {
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'warehouse_admin' || user?.role === 'tenant_admin';
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: tasks, isLoading } = useQuery({
@@ -34,6 +37,15 @@ export default function CheckTasks() {
       form.resetFields();
     },
     onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
+  });
+
+  const finalizeMutation = useMutation({
+    mutationFn: (id: number) => apiClient.put(`/check-tasks/${id}/finalize`),
+    onSuccess: () => {
+      message.success('盘点已最终确定');
+      queryClient.invalidateQueries({ queryKey: ['check-tasks'] });
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '操作失败'),
   });
 
   const columns = [
@@ -55,9 +67,20 @@ export default function CheckTasks() {
     } },
     { title: '备注', dataIndex: 'note', key: 'note' },
     { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (t: string) => dayjs(t).format('MM-DD HH:mm') },
-    { title: '操作', key: 'actions', render: (_: unknown, r: CheckTask) => (
-      <Button size="small" onClick={() => navigate(`/check-tasks/${r.id}`)}>查看</Button>
-    )},
+    { title: '操作', key: 'actions', render: (_: unknown, r: CheckTask) => {
+      const subs = r.subTasks || [];
+      const allSubDone = subs.length > 0 && subs.every(s => s.status === 'completed');
+      return (
+        <Space size={4}>
+          <Button size="small" onClick={() => navigate(`/check-tasks/${r.id}`)}>查看</Button>
+          {allSubDone && r.status !== 'completed' && isAdmin && (
+            <Popconfirm title="最终确定后数据将锁定为只读" onConfirm={() => finalizeMutation.mutate(r.id)}>
+              <Button size="small" type="primary" loading={finalizeMutation.isPending}>最终确定</Button>
+            </Popconfirm>
+          )}
+        </Space>
+      );
+    }},
   ];
 
   return (
