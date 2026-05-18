@@ -1,8 +1,8 @@
 {
-  "versionCode": 13,
-  "versionName": "2.1",
+  "versionCode": 14,
+  "versionName": "2.2",
   "downloadUrl": "/api/app/download/latest",
-  "changelog": "- 优化：移动端库存查询默认显示全部商品，搜索仅用于快速定位",
+  "changelog": "- 新增：移动端网页版登录页显示 APK 下载入口",
   "forceUpdate": false,
   "minVersionCode": 0
 }

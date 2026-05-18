@@ -213,6 +213,15 @@
   </div>
 </section>
 
+
+<section id="app-download" style="background:#f0f5ff;padding:48px 0;display:none;">
+  <div class="container" style="text-align:center;">
+    <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Android 应用下载</h2>
+    <p style="color:#666;font-size:15px;margin-bottom:20px;">安装 Android APK，享受原生扫码体验</p>
+    <a href="/api/app/download/latest" class="btn btn-primary" style="font-size:16px;">下载 APK</a>
+  </div>
+</section>
+
 <footer>
   <div class="container">
     <p>仓库管家 WMS · 适用于中小仓库、小工厂、批发商的库存管理系统</p>
@@ -318,6 +327,13 @@ async function handleRegister(e) {
     refreshCaptcha();
   }
   return false;
+}
+</script>
+
+
+<script>
+if (typeof Capacitor === "undefined" && window.matchMedia("(max-width: 640px)").matches) {
+  document.getElementById("app-download").style.display = "block";
 }
 </script>
 
