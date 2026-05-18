@@ -107,3 +107,11 @@ APK 使用 `server.url` 加载 Vite 开发服务器实现热更新。原生扫�
 - 新踩坑 → 追加到 `库存管理系统开发总结.md` 的踩坑记录
 - 新技术取舍 → 追加到 `技术选型决策日志.md` 的决策记录
 - 所有操作 → 追加到 `Changelog.md`
+
+## Git 工作流
+
+- 私有仓库：`git@gitee.com:fjm_grkj_kyzz/wms-platform.git`（remote: `platform`）
+- **大修改前必须先存档**：`git add -A && git commit -m "改xxx之前的存档" && git push platform master`
+- 改坏回退：`git reset --hard <commit-hash>`
+- 服务器部署：本地改源码 → `scp` 到 `root@69.165.67.241:/opt/wms/server/`
+- APK 更新：构建后 cp 到 `server/apk/`，更新 `version.json`，scp 到服务器
