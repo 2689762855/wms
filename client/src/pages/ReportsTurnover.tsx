@@ -1,4 +1,4 @@
-import { Card, Typography, Table } from 'antd';
+import { Typography, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 
@@ -7,6 +7,8 @@ export default function ReportsTurnover() {
     queryKey: ['stock-summary'],
     queryFn: () => apiClient.get('/reports/stock-summary').then(r => r.data),
   });
+
+  const summary = data?.summary || [];
 
   const columns = [
     { title: '仓库', dataIndex: 'warehouse', key: 'warehouse' },
@@ -18,15 +20,15 @@ export default function ReportsTurnover() {
   return (
     <div>
       <Typography.Title level={4}>库存周转概览</Typography.Title>
-      <Table rowKey="warehouse" columns={columns} dataSource={data} loading={isLoading} pagination={false}
+      <Table rowKey="warehouse" columns={columns} dataSource={summary} loading={isLoading} pagination={false}
         scroll={{ x: 500 }}
         summary={() => {
-          const totalQty = data?.reduce((s: number, r: { totalQuantity: number }) => s + r.totalQuantity, 0) || 0;
-          const totalVal = data?.reduce((s: number, r: { totalValue: number }) => s + r.totalValue, 0) || 0;
+          const totalQty = summary.reduce((s: number, r: { totalQuantity: number }) => s + r.totalQuantity, 0);
+          const totalVal = summary.reduce((s: number, r: { totalValue: number }) => s + r.totalValue, 0);
           return (
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><strong>合计</strong></Table.Summary.Cell>
-              <Table.Summary.Cell index={1}>{data?.length || 0} 个仓库</Table.Summary.Cell>
+              <Table.Summary.Cell index={1}>{summary.length} 个仓库</Table.Summary.Cell>
               <Table.Summary.Cell index={2}><strong>{totalQty}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={3}><strong>¥{totalVal.toFixed(2)}</strong></Table.Summary.Cell>
             </Table.Summary.Row>
