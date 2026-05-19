@@ -81,6 +81,7 @@ export default function CheckTaskDetail() {
         return diffCount > 0 ? <Tag color="orange">{diffCount}项</Tag> : <span style={{ color: '#999' }}>0</span>;
       },
     },
+    { title: '备注', dataIndex: 'reviewNote', key: 'note', render: (v: string) => v ? <span style={{ color: '#666' }}>{v}</span> : '-' },
     {
       title: '操作', key: 'actions', render: (_: unknown, r: CheckTask) => (
         <Space size={4}>
