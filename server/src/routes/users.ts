@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, authorize } from '../middleware/auth';
+import { AuthRequest, authenticate, authorize, validateId } from '../middleware/auth';
 
 export const usersRouter = Router();
 
@@ -91,7 +91,7 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
 });
 
 // 编辑用户
-usersRouter.put('/:id', authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
+usersRouter.put('/:id', validateId, authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string);
     const target = await prisma.user.findUnique({ where: { id } });
@@ -137,7 +137,7 @@ usersRouter.put('/:id', authenticate, authorize('super_admin', 'warehouse_admin'
 });
 
 // 删除用户
-usersRouter.delete('/:id', authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
+usersRouter.delete('/:id', validateId, authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string);
     if (id === req.userId) return res.status(400).json({ error: '不能删除自己' });

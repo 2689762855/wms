@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, adminWrite } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 
 export const checkTasksRouter = Router();
 checkTasksRouter.use(authenticate);
@@ -58,7 +58,7 @@ checkTasksRouter.get('/sub', async (req: AuthRequest, res: Response) => {
 });
 
 // 盘点任务/子任务详情
-checkTasksRouter.get('/:id', async (req: AuthRequest, res: Response) => {
+checkTasksRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const task = await prisma.checkTask.findUnique({
     where: { id },
@@ -161,7 +161,7 @@ checkTasksRouter.post('/', async (req: AuthRequest, res: Response) => {
 });
 
 // 子任务提交盘点结果
-checkTasksRouter.put('/:id/submit', async (req: AuthRequest, res: Response) => {
+checkTasksRouter.put('/:id/submit', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { items } = req.body;
 
@@ -208,7 +208,7 @@ checkTasksRouter.put('/:id/submit', async (req: AuthRequest, res: Response) => {
 });
 
 // 解决异常：确认调整或驳回重盘（仅管理员）
-checkTasksRouter.put('/:id/resolve', adminWrite, async (req: AuthRequest, res: Response) => {
+checkTasksRouter.put('/:id/resolve', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { action } = req.body;
   if (!['confirm', 'reject'].includes(action)) {
@@ -281,7 +281,7 @@ checkTasksRouter.put('/:id/resolve', adminWrite, async (req: AuthRequest, res: R
 });
 
 // 重开已完成的盘点子任务
-checkTasksRouter.put('/:id/reopen', adminWrite, async (req: AuthRequest, res: Response) => {
+checkTasksRouter.put('/:id/reopen', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const task = await prisma.checkTask.findUnique({ where: { id }, include: { items: true } });
   if (!task) return res.status(404).json({ error: '不存在' });
@@ -326,7 +326,7 @@ checkTasksRouter.put('/:id/reopen', adminWrite, async (req: AuthRequest, res: Re
 });
 
 // 最终确定主任务（所有子任务完成后，管理员确认锁定）
-checkTasksRouter.put('/:id/finalize', adminWrite, async (req: AuthRequest, res: Response) => {
+checkTasksRouter.put('/:id/finalize', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const task = await prisma.checkTask.findUnique({
     where: { id },
@@ -354,7 +354,7 @@ checkTasksRouter.put('/:id/finalize', adminWrite, async (req: AuthRequest, res: 
 });
 
 // 取消/删除主任务（级联删除所有子任务）
-checkTasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
+checkTasksRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const task = await prisma.checkTask.findUnique({ where: { id }, include: { subTasks: { select: { id: true } } } });
   if (!task) return res.status(404).json({ error: '不存在' });

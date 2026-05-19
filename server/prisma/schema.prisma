@@ -29,6 +29,10 @@ model User {
   outboundOrders     OutboundOrder[]   @relation("OutboundOperator")
   transferOrders     TransferOrder[]   @relation("TransferOperator")
   checkTasks         CheckTask[]       @relation("CheckOperator")
+
+  @@index([warehouseId])
+  @@index([createdById])
+  @@index([role])
 }
 
 model Warehouse {
@@ -49,6 +53,8 @@ model Warehouse {
   fromTransfers   TransferOrder[]   @relation("FromWarehouse")
   toTransfers     TransferOrder[]   @relation("ToWarehouse")
   checkTasks      CheckTask[]
+
+  @@index([customerId])
 }
 
 model Category {
@@ -60,6 +66,9 @@ model Category {
   customerId Int?
   customer   Customer?  @relation(fields: [customerId], references: [id])
   products   Product[]
+
+  @@index([parentId])
+  @@index([customerId])
 }
 
 model Product {
@@ -85,6 +94,11 @@ model Product {
   transferItems  TransferItem[]
   stockLogs      StockLog[]
   checkItems     CheckItem[]
+
+  @@index([name])
+  @@index([barcode])
+  @@index([categoryId])
+  @@index([customerId])
 }
 
 model Inventory {
@@ -99,6 +113,10 @@ model Inventory {
   updatedAt   DateTime  @updatedAt
 
   @@unique([productId, warehouseId, locationId])
+
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([quantity])
 }
 
 model InboundOrder {
@@ -116,6 +134,10 @@ model InboundOrder {
   createdAt   DateTime @default(now())
 
   items InboundItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model InboundItem {
@@ -128,6 +150,8 @@ model InboundItem {
   unitPrice  Float?
   locationId Int?
   location   Location?    @relation(fields: [locationId], references: [id])
+
+  @@index([inboundId])
 }
 
 model OutboundOrder {
@@ -145,6 +169,10 @@ model OutboundOrder {
   createdAt   DateTime @default(now())
 
   items OutboundItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model OutboundItem {
@@ -156,6 +184,8 @@ model OutboundItem {
   quantity   Int
   locationId Int?
   location   Location?    @relation(fields: [locationId], references: [id])
+
+  @@index([outboundId])
 }
 
 model TransferOrder {
@@ -176,6 +206,10 @@ model TransferOrder {
   createdAt       DateTime @default(now())
 
   items TransferItem[]
+
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
 }
 
 model TransferItem {
@@ -187,6 +221,8 @@ model TransferItem {
   quantity   Int
   locationId Int?
   location   Location?     @relation(fields: [locationId], references: [id])
+
+  @@index([transferId])
 }
 
 model StockLog {
@@ -200,6 +236,10 @@ model StockLog {
   type        String   // inbound, outbound, transfer_in, transfer_out, check_adjust
   refId       Int?     // 关联单据 ID
   createdAt   DateTime @default(now())
+
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([createdAt])
 }
 
 model CheckTask {
@@ -219,6 +259,9 @@ model CheckTask {
   createdAt    DateTime   @default(now())
 
   items CheckItem[]
+
+  @@index([warehouseId])
+  @@index([parentTaskId])
 }
 
 model CheckItem {
@@ -230,6 +273,8 @@ model CheckItem {
   systemQty Int
   actualQty Int?
   diffQty   Int?
+
+  @@index([taskId])
 }
 
 model Location {
@@ -247,6 +292,8 @@ model Location {
   outboundItems   OutboundItem[]
   transferItems   TransferItem[]
   checkTasks      CheckTask[]
+
+  @@index([warehouseId])
 }
 
 model Customer {
@@ -265,6 +312,8 @@ model Customer {
   warehouses Warehouse[]
   categories Category[]
   products   Product[]
+
+  @@index([createdBy])
 }
 
 model Sequence {

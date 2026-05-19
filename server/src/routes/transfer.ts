@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, adminWrite } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
 export const transferRouter = Router();
@@ -37,7 +37,7 @@ transferRouter.get('/', async (req: AuthRequest, res: Response) => {
   res.json({ data, total, page, pageSize });
 });
 
-transferRouter.get('/:id', async (req: AuthRequest, res: Response) => {
+transferRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const where: Record<string, unknown> = { id };
   if (req.userRole === 'tenant_admin' && req.customerId) {
@@ -113,7 +113,7 @@ transferRouter.post('/', async (req: AuthRequest, res: Response) => {
 });
 
 // 确认调拨（直接执行库存转移，跳过审批）
-transferRouter.put('/:id/confirm', async (req: AuthRequest, res: Response) => {
+transferRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { targetLocationId } = req.body;
   const order = await prisma.transferOrder.findUnique({ where: { id }, include: { items: true } });
@@ -182,7 +182,7 @@ transferRouter.put('/:id/confirm', async (req: AuthRequest, res: Response) => {
 });
 
 // 删除调拨单（仅草稿和待审批）
-transferRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
+transferRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const order = await prisma.transferOrder.findUnique({ where: { id } });
   if (!order) return res.status(404).json({ error: '不存在' });
@@ -205,7 +205,7 @@ transferRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // 提交审批（改为 pending 状态，保留给需要跨客户审批的场景）
-transferRouter.put('/:id/submit', async (req: AuthRequest, res: Response) => {
+transferRouter.put('/:id/submit', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const order = await prisma.transferOrder.findUnique({ where: { id } });
   if (!order) return res.status(404).json({ error: '不存在' });
@@ -226,7 +226,7 @@ transferRouter.put('/:id/submit', async (req: AuthRequest, res: Response) => {
 });
 
 // 通过审批
-transferRouter.put('/:id/approve', adminWrite, async (req: AuthRequest, res: Response) => {
+transferRouter.put('/:id/approve', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { targetLocationId } = req.body;
   const order = await prisma.transferOrder.findUnique({ where: { id }, include: { items: true } });
@@ -298,7 +298,7 @@ transferRouter.put('/:id/approve', adminWrite, async (req: AuthRequest, res: Res
 });
 
 // 拒绝
-transferRouter.put('/:id/reject', adminWrite, async (req: AuthRequest, res: Response) => {
+transferRouter.put('/:id/reject', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { reason } = req.body;
   if (!reason) return res.status(400).json({ error: '请填写拒绝理由' });

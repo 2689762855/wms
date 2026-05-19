@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, superAdmin } from '../middleware/auth';
+import { AuthRequest, authenticate, superAdmin, validateId } from '../middleware/auth';
 
 export const customersRouter = Router();
 customersRouter.use(authenticate);
@@ -32,7 +32,7 @@ customersRouter.get('/', async (_req: AuthRequest, res: Response) => {
 });
 
 // 客户详情
-customersRouter.get('/:id', async (req: AuthRequest, res: Response) => {
+customersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
   const customer = await prisma.customer.findUnique({
     where: { id },
@@ -109,7 +109,7 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
 });
 
 // 编辑客户（状态、仓库数量、追加仓库）
-customersRouter.put('/:id', async (req: AuthRequest, res: Response) => {
+customersRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const customer = await prisma.customer.findUnique({ where: { id } });
@@ -160,7 +160,7 @@ customersRouter.put('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // 删除客户（级联删除其仓库下的所有数据）
-customersRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
+customersRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
   try {
     // 获取该客户的所有仓库 ID
@@ -197,7 +197,7 @@ customersRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // 续费：从当前到期日或今天起延长
-customersRouter.put('/:id/renew', async (req: AuthRequest, res: Response) => {
+customersRouter.put('/:id/renew', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
   const { days } = req.body; // 默认 365 天（一年）
   const extendDays = days && days > 0 ? days : 365;

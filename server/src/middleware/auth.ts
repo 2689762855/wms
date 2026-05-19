@@ -85,3 +85,10 @@ export function requireWarehouse(req: AuthRequest, res: Response, next: NextFunc
   if (!req.userWarehouseId) return res.status(403).json({ error: '未分配到任何仓库' });
   next();
 }
+
+/** 校验 :id 参数为有效整数 */
+export function validateId(req: Request, res: Response, next: NextFunction) {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) return res.status(400).json({ error: '无效 ID' });
+  next();
+}

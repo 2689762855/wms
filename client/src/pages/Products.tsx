@@ -108,7 +108,7 @@ export default function Products() {
             const url = URL.createObjectURL(new Blob([res.data]));
             const a = document.createElement('a'); a.href = url; a.download = 'product-template.xlsx'; a.click();
             URL.revokeObjectURL(url);
-          })}>下载模板</Button>
+          }).catch(() => message.error('下载失败，请重试'))}>下载模板</Button>
           <Select
             placeholder="选择入库仓库"
             allowClear

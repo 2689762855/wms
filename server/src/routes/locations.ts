@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, adminWrite, requireWarehouse } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, requireWarehouse, validateId } from '../middleware/auth';
 
 export const locationsRouter = Router();
 locationsRouter.use(authenticate);
@@ -22,7 +22,7 @@ locationsRouter.get('/code/:code', async (req: AuthRequest, res: Response) => {
 });
 
 // 库位下的库存列表
-locationsRouter.get('/:id/inventory', async (req: AuthRequest, res: Response) => {
+locationsRouter.get('/:id/inventory', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
   // 校验库位归属
   if (req.customerId) {
@@ -84,7 +84,7 @@ locationsRouter.post('/', authenticate, adminWrite, requireWarehouse, async (req
 });
 
 // 编辑库位
-locationsRouter.put('/:id', authenticate, adminWrite, async (req: AuthRequest, res: Response) => {
+locationsRouter.put('/:id', validateId, authenticate, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const existing = await prisma.location.findUnique({ where: { id }, include: { warehouse: { select: { customerId: true } } } });
   if (!existing) return res.status(404).json({ error: '库位不存在' });
@@ -97,7 +97,7 @@ locationsRouter.put('/:id', authenticate, adminWrite, async (req: AuthRequest, r
 });
 
 // 删除库位
-locationsRouter.delete('/:id', authenticate, adminWrite, async (req: AuthRequest, res: Response) => {
+locationsRouter.delete('/:id', validateId, authenticate, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const existing = await prisma.location.findUnique({ where: { id }, include: { warehouse: { select: { customerId: true } } } });
   if (!existing) return res.status(404).json({ error: '库位不存在' });

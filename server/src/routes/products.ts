@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
-import { AuthRequest, authenticate, adminWrite } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
 export const productsRouter = Router();
@@ -151,7 +151,7 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
 });
 
 // 商品详情
-productsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
+productsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const product = await prisma.product.findUnique({ where: { id }, include: { category: true } });
   if (!product) return res.status(404).json({ error: '商品不存在' });
@@ -188,7 +188,7 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
 });
 
 // 编辑商品
-productsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
+productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: '商品不存在' });
@@ -212,7 +212,7 @@ productsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) =
 
 
 // 删除商品
-productsRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
+productsRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: '商品不存在' });

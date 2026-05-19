@@ -25,7 +25,8 @@ appRouter.get('/version', (_req: Request, res: Response) => {
       data.downloadUrl = `${protocol}://${host}${data.downloadUrl}`;
     }
     res.json(data);
-  } catch {
+  } catch (err) {
+    console.error('读取版本信息失败:', err);
     res.status(500).json({ error: '读取版本信息失败' });
   }
 });
@@ -56,7 +57,8 @@ appRouter.get('/download/latest', (_req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
     res.setHeader('Content-Disposition', `attachment; filename="${files[0]}"`);
     fs.createReadStream(apkPath).pipe(res);
-  } catch {
+  } catch (err) {
+    console.error('APK 下载失败:', err);
     res.status(500).json({ error: '下载失败' });
   }
 });

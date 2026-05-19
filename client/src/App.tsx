@@ -90,7 +90,7 @@ function AppRoutes() {
         <Route path="outbound/new" element={<MobileOutboundNew />} />
         <Route path="outbound/:id" element={<MobileOutboundDetail />} />
         <Route path="check" element={<MobileCheckList />} />
-        <Route path="check/new" element={<MobileCheckDetail />} />
+
         <Route path="check/:id" element={<MobileCheckDetail />} />
         <Route path="transfer" element={<MobileTransfer />} />
         <Route path="inventory" element={<MobileInventory />} />

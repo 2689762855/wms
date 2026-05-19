@@ -222,7 +222,8 @@ authRouter.post('/claim', async (req: AuthRequest, res: Response) => {
     // 生成正式 token
     const token = jwt.sign(payload, JWT_ADMIN_SECRET, { expiresIn: JWT_EXPIRES_IN });
     res.json({ token });
-  } catch {
+  } catch (err) {
+    console.error('中转 token 验证失败:', err);
     return res.status(401).json({ error: '中转 token 无效或已过期' });
   }
 });

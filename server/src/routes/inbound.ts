@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, adminWrite } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
 export const inboundRouter = Router();
@@ -37,7 +37,7 @@ inboundRouter.get('/', async (req: AuthRequest, res: Response) => {
 });
 
 // 入库单详情
-inboundRouter.get('/:id', async (req: AuthRequest, res: Response) => {
+inboundRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const order = await prisma.inboundOrder.findUnique({
     where: { id },
@@ -100,7 +100,7 @@ inboundRouter.post('/', async (req: AuthRequest, res: Response) => {
 });
 
 // 确认入库（更新库存）
-inboundRouter.put('/:id/confirm', async (req: AuthRequest, res: Response) => {
+inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
 
   const order = await prisma.inboundOrder.findUnique({
@@ -163,7 +163,7 @@ inboundRouter.put('/:id/confirm', async (req: AuthRequest, res: Response) => {
 });
 
 // 删除入库单（仅草稿）
-inboundRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
+inboundRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const order = await prisma.inboundOrder.findUnique({ where: { id } });
   if (!order) return res.status(404).json({ error: '不存在' });
