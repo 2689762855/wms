@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Button, Dropdown, Space, Alert } from 'antd';
+import { Button, Dropdown, Space, Alert, Tag } from 'antd';
 import {
   ImportOutlined,
   ExportOutlined,
@@ -30,7 +30,9 @@ export default function MobileWorkerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const isInCustomerView = user?.role === 'tenant_admin' && !!localStorage.getItem('admin_token');
+  const isTenant = user?.role === 'tenant_admin';
+  const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
+  const plan = isTenant && user?.maxWarehouses != null ? (user.maxWarehouses >= 3 ? 'professional' : 'standard') : null;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
@@ -71,6 +73,8 @@ export default function MobileWorkerLayout() {
           <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
             <Button type="text" icon={<UserOutlined />} size="small">
               {user?.realName || user?.username}
+              {plan === 'standard' && <Tag color="blue" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px' }}>标准版</Tag>}
+              {plan === 'professional' && <Tag color="gold" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px' }}>专业版</Tag>}
             </Button>
           </Dropdown>
         </Space>

@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Layout as AntLayout, Menu, Button, theme, Dropdown, Alert } from 'antd';
+import { Layout as AntLayout, Menu, Button, theme, Dropdown, Alert, Tag } from 'antd';
 import {
   DashboardOutlined,
   BankOutlined,
@@ -42,6 +42,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
   const isSuperAdmin = user?.role === 'super_admin';
   const isTenant = user?.role === 'tenant_admin';
   const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
+  const plan = isTenant && user?.maxWarehouses != null ? (user.maxWarehouses >= 3 ? 'professional' : 'standard') : null;
   const canManageUsers = isSuperAdmin || user?.role === 'warehouse_admin';
 
   // 超管菜单：平台管理 + 客户管理 + 用户管理
@@ -166,7 +167,11 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
               </Button>
             )}
             <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
-              <Button type="text" icon={<UserOutlined />}>{user?.realName || user?.username}</Button>
+              <Button type="text" icon={<UserOutlined />}>
+                {user?.realName || user?.username}
+                {plan === 'standard' && <Tag color="blue" style={{ marginLeft: 6, fontSize: 11, lineHeight: '18px' }}>标准版</Tag>}
+                {plan === 'professional' && <Tag color="gold" style={{ marginLeft: 6, fontSize: 11, lineHeight: '18px' }}>专业版</Tag>}
+              </Button>
             </Dropdown>
           </div>
         </Header>
