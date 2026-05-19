@@ -42,9 +42,8 @@ export default function BarcodeScanner({ onScan }: Props) {
   }, [stopScan]);
 
   const handleScan = async () => {
+    setScanning(true);
     try {
-      const el = document.getElementById(containerId);
-      if (el) el.style.display = 'block';
       const scanner = new Html5Qrcode(containerId);
       scannerRef.current = scanner;
       scanningRef.current = true;
@@ -54,10 +53,10 @@ export default function BarcodeScanner({ onScan }: Props) {
         (text) => handleScanResult(text),
         () => {},
       );
-      setScanning(true);
     } catch (err: any) {
       scanningRef.current = false;
       scannerRef.current = null;
+      setScanning(false);
       const detail = err?.message || err?.toString() || '未知错误';
       console.error('扫码启动失败:', detail);
       message.error(`无法启动摄像头：${detail}`);
@@ -72,37 +71,30 @@ export default function BarcodeScanner({ onScan }: Props) {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
-      {!scanning ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <Input
-            placeholder="手动输入条码"
-            value={manualValue}
-            onChange={e => setManualValue(e.target.value)}
-            onPressEnter={handleManualSubmit}
-            style={{ flex: '1 1 160px', minWidth: 120 }}
-          />
-          <Button onClick={handleManualSubmit}>确认</Button>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <Input
+          placeholder="手动输入条码"
+          value={manualValue}
+          onChange={e => setManualValue(e.target.value)}
+          onPressEnter={handleManualSubmit}
+          style={{ flex: '1 1 160px', minWidth: 120 }}
+        />
+        <Button onClick={handleManualSubmit}>确认</Button>
+        {!scanning ? (
           <Button type="primary" icon={<CameraOutlined />} onClick={handleScan}>
             扫码
           </Button>
-        </div>
-      ) : (
-        <div>
-          <div id={containerId} style={{ width: '100%', maxWidth: 400, margin: '0 auto 12px' }} />
-          <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', marginBottom: 12 }}>
-            请将条码对准取景框
-          </Typography.Text>
-          <Button
-            type="primary"
-            danger
-            icon={<CloseOutlined />}
-            onClick={() => stopScan()}
-            size="large"
-            block
-          >
+        ) : (
+          <Button type="primary" danger icon={<CloseOutlined />} onClick={() => stopScan()}>
             关闭摄像头
           </Button>
-        </div>
+        )}
+      </div>
+      <div id={containerId} style={{ display: scanning ? 'block' : 'none', width: '100%', maxWidth: 400, margin: '0 auto' }} />
+      {scanning && (
+        <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center' }}>
+          请将条码对准取景框
+        </Typography.Text>
       )}
     </Space>
   );
