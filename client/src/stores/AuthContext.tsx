@@ -26,6 +26,7 @@ export function AuthProvider({ children }: { children: any }) {
 
   // 仅在应用启动时验证 token（从 localStorage 恢复登录状态）
   useEffect(() => {
+    aborted.current = false;
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
       setToken(savedToken);

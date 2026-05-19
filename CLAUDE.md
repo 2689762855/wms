@@ -115,3 +115,9 @@ APK 使用 `server.url` 加载 Vite 开发服务器实现热更新。原生扫�
 - 改坏回退：`git reset --hard <commit-hash>`
 - 服务器部署：本地改源码 → `scp` 到 `root@69.165.67.241:/opt/wms/server/`
 - APK 更新：构建后 cp 到 `server/apk/`，更新 `version.json`，scp 到服务器
+
+## 营销落地页
+
+- `server/landing.html` 是根路径 `/` 的静态营销页，独立于 React 应用
+- 部署时需手动复制：`cp server/landing.html client/dist/landing.html`
+- 手机端显示 APK 下载入口（JS 检测非 Capacitor + 屏幕 ≤640px）

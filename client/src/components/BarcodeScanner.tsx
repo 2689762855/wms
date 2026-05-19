@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Input, Button, Space, message } from 'antd';
-import { CameraOutlined, StopOutlined } from '@ant-design/icons';
+import { Input, Button, Space, message, Typography } from 'antd';
+import { CameraOutlined, CloseOutlined } from '@ant-design/icons';
 import { Html5Qrcode } from 'html5-qrcode';
 import { BarcodeScanner as NativeScanner } from '@capacitor-community/barcode-scanner';
 
@@ -37,7 +37,7 @@ export default function BarcodeScanner({ onScan }: Props) {
   const handleScanResult = useCallback((barcode: string) => {
     onScanRef.current(barcode);
     message.success('扫码成功');
-    if (useNative) {
+    if (useNative && NativeScanner) {
       NativeScanner.showBackground();
       NativeScanner.stopScan().catch(() => {});
     } else {
@@ -77,7 +77,6 @@ export default function BarcodeScanner({ onScan }: Props) {
       setScanning(false);
       setUseNative(false);
       message.info('已切换为网页扫码模式');
-      // Auto-retry with web scanner
       startWebScan();
     }
   };
@@ -93,7 +92,7 @@ export default function BarcodeScanner({ onScan }: Props) {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (text) => handleScanResult(text),
-        (err) => { console.error('QR scan error:', err); },
+        () => {}, // ignore scan errors, keep camera open
       );
       setScanning(true);
     } catch {
@@ -107,6 +106,8 @@ export default function BarcodeScanner({ onScan }: Props) {
       await scannerRef.current.stop().catch(() => {});
       scannerRef.current = null;
     }
+    const el = document.getElementById(containerId);
+    if (el) el.style.display = 'none';
     scanningRef.current = false;
     setScanning(false);
   };
@@ -124,11 +125,11 @@ export default function BarcodeScanner({ onScan }: Props) {
       NativeScanner.showBackground();
       NativeScanner.stopScan().catch(() => {});
       document.body.classList.remove('scanner-active');
-      scanningRef.current = false;
-      setScanning(false);
     } else {
       stopWebScan();
     }
+    scanningRef.current = false;
+    setScanning(false);
   };
 
   const handleManualSubmit = () => {
@@ -139,18 +140,40 @@ export default function BarcodeScanner({ onScan }: Props) {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <Input placeholder="手动输入条码" value={manualValue} onChange={e => setManualValue(e.target.value)}
-          onPressEnter={handleManualSubmit} style={{ flex: '1 1 180px', minWidth: 140 }}
-        />
-        <Button onClick={handleManualSubmit}>确认</Button>
-        {!scanning ? (
-          <Button icon={<CameraOutlined />} onClick={handleScan}>扫码</Button>
-        ) : (
-          <Button icon={<StopOutlined />} onClick={handleStop}>停止扫码</Button>
-        )}
-      </div>
-      {!useNative && <div id={containerId} style={{ width: '100%', maxWidth: 320 }} />}
+      {!scanning ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <Input
+            placeholder="手动输入条码"
+            value={manualValue}
+            onChange={e => setManualValue(e.target.value)}
+            onPressEnter={handleManualSubmit}
+            style={{ flex: '1 1 160px', minWidth: 120 }}
+          />
+          <Button onClick={handleManualSubmit}>确认</Button>
+          <Button type="primary" icon={<CameraOutlined />} onClick={handleScan}>
+            扫码
+          </Button>
+        </div>
+      ) : (
+        <div>
+          {!useNative && (
+            <div id={containerId} style={{ width: '100%', maxWidth: 400, margin: '0 auto 12px' }} />
+          )}
+          <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', marginBottom: 12 }}>
+            {useNative ? '摄像头已开启，请对准条码扫描' : '请将条码对准取景框'}
+          </Typography.Text>
+          <Button
+            type="primary"
+            danger
+            icon={<CloseOutlined />}
+            onClick={handleStop}
+            size="large"
+            block
+          >
+            关闭摄像头
+          </Button>
+        </div>
+      )}
     </Space>
   );
 }

@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select } from 'antd';
 import { PlusOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
-import type { Product, Category } from '../types';
+import type { Product, Category, Warehouse } from '../types';
 import { buildTree, toCascaderOptions, findPath, getCategoryPath } from '../utils/categoryTree';
 
 export default function Products() {
@@ -14,7 +14,13 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [form] = Form.useForm();
   const [keyword, setKeyword] = useState('');
+  const [importWarehouseId, setImportWarehouseId] = useState<number | undefined>();
   const queryClient = useQueryClient();
+
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => apiClient.get('/warehouses').then(res => res.data as Warehouse[]),
+  });
 
   const { data: flatCats } = useQuery({
     queryKey: ['categories'],
@@ -103,12 +109,22 @@ export default function Products() {
             const a = document.createElement('a'); a.href = url; a.download = 'product-template.xlsx'; a.click();
             URL.revokeObjectURL(url);
           })}>下载模板</Button>
+          <Select
+            placeholder="选择入库仓库"
+            allowClear
+            style={{ width: 160 }}
+            value={importWarehouseId}
+            onChange={setImportWarehouseId}
+            options={warehouses?.map((w: Warehouse) => ({ label: w.name, value: w.id }))}
+          />
           <Upload accept=".xlsx,.xls,.csv" showUploadList={false} beforeUpload={file => {
+            if (!importWarehouseId) { message.error('请先选择入库仓库'); return false; }
             const form = new FormData();
             form.append('file', file);
+            form.append('warehouseId', String(importWarehouseId));
             apiClient.post('/products/import', form).then(res => {
-              const { created, skipped, errors } = res.data;
-              message.success(`导入完成：新增 ${created} 个商品${skipped > 0 ? `，跳过 ${skipped} 个（SKU重复）` : ''}`);
+              const { created, stockAdded, errors } = res.data;
+              message.success(`导入完成：新增 ${created} 个商品，入库 ${stockAdded} 条`);
               if (errors?.length) message.warning(errors.join('; '));
               queryClient.invalidateQueries({ queryKey: ['products'] });
             }).catch(err => message.error(err.response?.data?.error || '导入失败'));

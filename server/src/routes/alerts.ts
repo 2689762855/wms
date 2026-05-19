@@ -83,13 +83,14 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
       whCache.set(inv.warehouseId, inv.warehouse.name);
     }
   }
-  if (warehouseId && !whCache.has(warehouseId)) {
-    const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true, name: true, customerId: true } });
-    if (wh) { whCache.set(wh.id, wh.name); whCustomerMap.set(wh.id, wh.customerId); }
-  }
-  if (!warehouseId) {
-    const allWh = await prisma.warehouse.findMany({ select: { id: true, name: true, customerId: true } });
-    for (const wh of allWh) { whCache.set(wh.id, wh.name); whCustomerMap.set(wh.id, wh.customerId); }
+  // 确保 allWarehouseIds 中所有仓库的客户数据都已加载
+  const missingWhIds = [...allWarehouseIds].filter(id => !whCustomerMap.has(id));
+  if (missingWhIds.length > 0) {
+    const missingWhs = await prisma.warehouse.findMany({
+      where: { id: { in: missingWhIds } },
+      select: { id: true, name: true, customerId: true },
+    });
+    for (const wh of missingWhs) { whCache.set(wh.id, wh.name); whCustomerMap.set(wh.id, wh.customerId); }
   }
 
   // 按商品×仓库生成预警
@@ -105,9 +106,9 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
 
   for (const product of products) {
     for (const whId of allWarehouseIds) {
-      // 跳过产品与仓库客户不匹配的组合（产品无客户的匹配所有仓库）
+      // 跳过产品与仓库客户不匹配的组合（customerId 严格相等才匹配）
       const whCustomer = whCustomerMap.get(whId);
-      if (product.customerId != null && whCustomer != null && product.customerId !== whCustomer) continue;
+      if (product.customerId !== whCustomer) continue;
 
       const key = `${product.id}-${whId}`;
       const stock = stockMap.get(key);

@@ -84,7 +84,19 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
       let sku = row[0]?.toString().trim() || '';
       if (!sku) sku = nameSkuMap.get(name) || ''; // 同名商品复用 SKU
 
-      const productExists = sku ? !!(await prisma.product.findUnique({ where: { sku }, select: { id: true } })) : false;
+      let productExists = sku ? !!(await prisma.product.findUnique({ where: { sku }, select: { id: true } })) : false;
+
+      // SKU 为空时按名称+客户查重，防止重复导入
+      if (!productExists && !sku) {
+        const existing = await prisma.product.findFirst({
+          where: { name, customerId },
+          select: { sku: true },
+        });
+        if (existing) {
+          sku = existing.sku;
+          productExists = true;
+        }
+      }
 
       if (!productExists) {
         if (!sku) { sku = await nextOrderNo('SKU'); }
@@ -104,34 +116,30 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
           categoryId = cat.id;
         }
 
-        await prisma.product.create({
+        const newProduct = await prisma.product.create({
           data: { sku, name, spec, unit, barcode: barcode || null, categoryId, customerId, safetyStock, costPrice, salePrice },
         });
         created++;
-      }
 
-      // 填了库位名称+数量 → 自动查找或创建库位并入库
-      const locName = row[9]?.toString().trim();
-      const qty = parseInt(row[10] as string);
-      if (locName && !isNaN(qty) && qty > 0 && warehouseId) {
-        // 按名称查找库位，不存在则自动创建
-        let location = await prisma.location.findFirst({ where: { name: locName, warehouseId } });
-        if (!location) {
-          const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
-          location = await prisma.location.create({ data: { name: locName, warehouseId, code } });
+        // 仅新建商品时处理库存入库（已存在的商品跳过，防止重复叠加）
+        const locName = row[9]?.toString().trim();
+        const qty = parseInt(row[10] as string);
+        if (locName && !isNaN(qty) && qty > 0 && warehouseId) {
+          let location = await prisma.location.findFirst({ where: { name: locName, warehouseId } });
+          if (!location) {
+            const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
+            location = await prisma.location.create({ data: { name: locName, warehouseId, code } });
+          }
+          const inv = await prisma.inventory.findUnique({
+            where: { productId_warehouseId_locationId: { productId: newProduct.id, warehouseId, locationId: location.id } },
+          });
+          if (inv) {
+            await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity + qty } });
+          } else {
+            await prisma.inventory.create({ data: { productId: newProduct.id, warehouseId, locationId: location.id, quantity: qty } });
+          }
+          stockAdded++;
         }
-        const product = await prisma.product.findUnique({ where: { sku }, select: { id: true } });
-        if (!product) { errors.push(`第${i + 1}行: 商品创建失败`); continue; }
-
-        const inv = await prisma.inventory.findUnique({
-          where: { productId_warehouseId_locationId: { productId: product.id, warehouseId, locationId: location.id } },
-        });
-        if (inv) {
-          await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity + qty } });
-        } else {
-          await prisma.inventory.create({ data: { productId: product.id, warehouseId, locationId: location.id, quantity: qty } });
-        }
-        stockAdded++;
       }
     }
 
