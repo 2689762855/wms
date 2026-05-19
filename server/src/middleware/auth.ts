@@ -26,7 +26,7 @@ export interface AuthRequest extends Request {
   customerId?: number;
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: '未登录' });
@@ -47,6 +47,17 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     req.userRole = payload.role;
     req.userWarehouseId = payload.warehouseId;
     req.customerId = payload.customerId;
+
+    if (payload.role === 'tenant_admin' && payload.customerId) {
+      const customer = await prisma.customer.findUnique({
+        where: { id: payload.customerId },
+        select: { status: true },
+      });
+      if (customer?.status === 'suspended') {
+        return res.status(403).json({ error: '账号已被暂停，请联系管理员' });
+      }
+    }
+
     next();
   } catch {
     return res.status(401).json({ error: '令牌无效或已过期' });
@@ -68,6 +79,9 @@ export async function adminWrite(req: AuthRequest, res: Response, next: NextFunc
       const customer = await prisma.customer.findUnique({ where: { id: req.customerId }, select: { status: true } });
       if (customer?.status === 'pending') {
         return res.status(403).json({ error: '账号审核中，仅可查看，无法操作' });
+      }
+      if (customer?.status === 'suspended') {
+        return res.status(403).json({ error: '账号已被暂停，请联系管理员' });
       }
     }
     return next();
