@@ -196,7 +196,7 @@ export default function Products() {
                 if (fixed[0]?.status === 'done' && fixed[0]?.response?.imageUrl) {
                   form.setFieldsValue({ imageUrl: fixed[0].response.imageUrl });
                 } else if (fixed.length === 0) {
-                  form.setFieldsValue({ imageUrl: undefined });
+                  form.setFieldsValue({ imageUrl: '' });
                 }
               }}
             >
