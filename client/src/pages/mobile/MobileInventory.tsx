@@ -3,7 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Input, Card, Tag, Typography, Space, Spin, Empty, Modal } from 'antd';
 import { SearchOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import apiClient from '../../api/client';
+import { getServerUrl } from '../../utils/serverConfig';
 import type { InventoryItem } from '../../types';
+
+function toFullUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return (getServerUrl() || '') + path;
+}
 
 export default function MobileInventory() {
   const [keyword, setKeyword] = useState('');
@@ -55,11 +62,11 @@ export default function MobileInventory() {
         {Array.from(grouped.entries()).map(([id, { product, locations }]) => (
           <Card key={id} size="small" style={{ borderRadius: 8 }}>
             <Space size={8} align="start">
-              {(product as any).imageUrl && (
-                <div style={{ width: 48, height: 48, background: `url(${(product as any).imageUrl}) center/cover`, borderRadius: 6, flexShrink: 0, cursor: 'pointer' }} onClick={() => setPreviewImage({ url: (product as any).imageUrl, name: product.name })} />
+              {toFullUrl((product as any).imageUrl) && (
+                <div style={{ width: 48, height: 48, background: `url(${toFullUrl((product as any).imageUrl)}) center/cover`, borderRadius: 6, flexShrink: 0, cursor: 'pointer' }} onClick={() => setPreviewImage({ url: toFullUrl((product as any).imageUrl)!, name: product.name })} />
               )}
               <div style={{ flex: 1 }}>
-                <Typography.Link strong style={{ fontSize: 15 }} onClick={() => (product as any).imageUrl && setPreviewImage({ url: (product as any).imageUrl, name: product.name })}>
+                <Typography.Link strong style={{ fontSize: 15 }} onClick={() => toFullUrl((product as any).imageUrl) && setPreviewImage({ url: toFullUrl((product as any).imageUrl)!, name: product.name })}>
                   {product.name}
                 </Typography.Link>
             <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>

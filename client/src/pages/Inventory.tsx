@@ -3,7 +3,14 @@ import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, mess
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryLevelName } from '../utils/categoryTree';
+import { getServerUrl } from '../utils/serverConfig';
 import type { Warehouse, InventoryItem, Category, Location } from '../types';
+
+function toFullUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return (getServerUrl() || '') + path;
+}
 
 function LocationDetail({ productId, warehouseId }: { productId: number; warehouseId?: number }) {
   const queryClient = useQueryClient();
@@ -126,7 +133,7 @@ export default function Inventory() {
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 130 },
     { title: '商品名称', key: 'name', render: (_: unknown, r: InventoryItem & { locationCount?: number }) => {
       const lv2 = getCategoryLevelName(r.product?.category, 2, catMap);
-      const imgUrl = (r.product as any)?.imageUrl;
+      const imgUrl = toFullUrl((r.product as any)?.imageUrl);
       return (
         <Space size={4}>
           {imgUrl && <span style={{ width: 24, height: 24, display: 'inline-block', background: `url(${imgUrl}) center/cover`, borderRadius: 2, cursor: 'pointer' }} onClick={() => setPreviewImage({ url: imgUrl, name: r.product?.name || '' })} />}
