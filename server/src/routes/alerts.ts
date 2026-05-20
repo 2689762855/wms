@@ -5,7 +5,7 @@ import { AuthRequest, authenticate } from '../middleware/auth';
 export const alertsRouter = Router();
 alertsRouter.use(authenticate);
 
-// 库存预警：按商品+仓库维度，各仓库库存严格低于安全库存时预警
+// 库存预警：低库存 + 临期，按商品+仓库维度
 alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
   let warehouseId = req.query.warehouseId ? parseInt(req.query.warehouseId as string) : undefined;
   let tenantWhIds: number[] | undefined;
@@ -132,6 +132,68 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
           locations: stock?.locations || [],
         });
       }
+    }
+  }
+
+  // 临期预警：查有保质期且到期日临近的商品
+  const now = new Date();
+  const expiryProducts = await prisma.product.findMany({
+    where: {
+      expiryDate: { not: null },
+      ...(req.customerId ? { customerId: req.customerId } : {}),
+    },
+    include: { category: true },
+  });
+
+  for (const product of expiryProducts) {
+    const daysLeft = Math.ceil((product.expiryDate!.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+    if (daysLeft > product.expiryWarningDays) continue;
+
+    // 查该商品在各仓库的库存
+    const invWhere2: Record<string, unknown> = {
+      productId: product.id,
+      quantity: { gt: 0 },
+    };
+    if (warehouseId) invWhere2.warehouseId = warehouseId;
+    else if (tenantWhIds) invWhere2.warehouseId = { in: tenantWhIds };
+    else if (req.userRole !== 'super_admin' && req.userWarehouseId) invWhere2.warehouseId = req.userWarehouseId;
+
+    const stocks = await prisma.inventory.findMany({
+      where: invWhere2,
+      include: { warehouse: { select: { id: true, name: true } }, location: { select: { name: true, code: true } } },
+    });
+
+    if (!stocks.length) continue;
+
+    // 按仓库汇总
+    const whMap2 = new Map<number, { qty: number; locations: { name: string; code: string; qty: number }[] }>();
+    for (const s of stocks) {
+      const e = whMap2.get(s.warehouseId);
+      if (e) { e.qty += s.quantity; e.locations.push({ name: s.location?.name || '无库位', code: s.location?.code || '', qty: s.quantity }); }
+      else whMap2.set(s.warehouseId, { qty: s.quantity, locations: [{ name: s.location?.name || '无库位', code: s.location?.code || '', qty: s.quantity }] });
+    }
+
+    for (const [whId, stock] of whMap2) {
+      result.push({
+        product: {
+          id: product.id,
+          sku: product.sku,
+          name: product.name,
+          spec: product.spec,
+          unit: product.unit,
+          barcode: product.barcode,
+          category: product.category,
+          expiryDate: product.expiryDate,
+          expiryWarningDays: product.expiryWarningDays,
+        },
+        warehouseId: whId,
+        warehouseName: whCache.get(whId) || '',
+        currentQty: stock.qty,
+        safetyStock: 0,
+        shortage: daysLeft,
+        locations: stock.locations,
+        alertType: 'expiry',
+      });
     }
   }
 

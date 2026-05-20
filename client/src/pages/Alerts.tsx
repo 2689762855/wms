@@ -1,18 +1,23 @@
 import { useState, useMemo } from 'react';
-import { Table, Select, Card, Typography, Tag, Space, Tooltip } from 'antd';
+import { Table, Select, Card, Typography, Tag, Space, Tooltip, Tabs } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryLevelName } from '../utils/categoryTree';
 import type { Warehouse, Category } from '../types';
 
 interface AlertItem {
-  product: { id: number; sku: string; name: string; spec?: string; unit: string; barcode?: string; category?: Category | null };
+  product: {
+    id: number; sku: string; name: string; spec?: string; unit: string;
+    barcode?: string; category?: Category | null;
+    expiryDate?: string; expiryWarningDays?: number;
+  };
   warehouseId: number;
   warehouseName: string;
   currentQty: number;
   safetyStock: number;
   shortage: number;
   locations: { name: string; code: string; qty: number }[];
+  alertType?: string;
 }
 
 export default function Alerts() {
@@ -31,7 +36,10 @@ export default function Alerts() {
     return map;
   }, [categories]);
 
-  const columns = [
+  const stockAlerts = useMemo(() => data.filter((a: AlertItem) => a.alertType !== 'expiry'), [data]);
+  const expiryAlerts = useMemo(() => data.filter((a: AlertItem) => a.alertType === 'expiry'), [data]);
+
+  const stockColumns = [
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 130 },
     { title: '商品名称', key: 'name', render: (_: unknown, r: AlertItem) => {
       const lv2 = getCategoryLevelName(r.product?.category, 2, catMap);
@@ -56,14 +64,46 @@ export default function Alerts() {
     { title: '建议', key: 'suggestion', render: (_: unknown, r: AlertItem) => r.currentQty === 0 ? <span style={{ color: '#ff4d4f' }}>缺货！需补货 {r.shortage} 件</span> : `需补货 ${r.shortage} 件` },
   ];
 
+  const expiryColumns = [
+    { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 130 },
+    { title: '商品名称', key: 'name', render: (_: unknown, r: AlertItem) => {
+      const lv2 = getCategoryLevelName(r.product?.category, 2, catMap);
+      return <span>{lv2 ? <><span style={{ color: '#888' }}>{lv2}</span> - </> : null}{r.product?.name}</span>;
+    } },
+    { title: '仓库', dataIndex: 'warehouseName', key: 'warehouse' },
+    { title: '当前库存', dataIndex: 'currentQty', key: 'currentQty' },
+    { title: '到期日', key: 'expiry', render: (_: unknown, r: AlertItem) => {
+      const d = r.product.expiryDate ? new Date(r.product.expiryDate).toLocaleDateString('zh-CN') : '-';
+      return <span>{d}</span>;
+    } },
+    { title: '剩余天数', key: 'daysLeft', render: (_: unknown, r: AlertItem) => {
+      if (r.shortage <= 0) return <Tag color="red">已过期</Tag>;
+      if (r.shortage <= 7) return <Tag color="red">{r.shortage} 天</Tag>;
+      return <Tag color="orange">{r.shortage} 天</Tag>;
+    } },
+    { title: '库位', key: 'locations', render: (_: unknown, r: AlertItem) => {
+      const tip = r.locations.map(l => `${l.name}: ${l.qty}`).join(', ');
+      return <Tooltip title={tip}><span style={{ color: '#888' }}>{r.locations.length} 个库位</span></Tooltip>;
+    } },
+  ];
+
+  const tabItems = [
+    { key: 'stock', label: <span>库存不足 <Tag color="red">{stockAlerts.length}</Tag></span>,
+      children: <Table rowKey={(r: AlertItem) => `${r.product.id}-${r.warehouseId}`} columns={stockColumns} dataSource={stockAlerts} loading={isLoading} pagination={false} scroll={{ x: 800 }} size="small" />,
+    },
+    { key: 'expiry', label: <span>临期预警 <Tag color="orange">{expiryAlerts.length}</Tag></span>,
+      children: <Table rowKey={(r: AlertItem) => `${r.product.id}-${r.warehouseId}`} columns={expiryColumns} dataSource={expiryAlerts} loading={isLoading} pagination={false} scroll={{ x: 800 }} size="small" />,
+    },
+  ];
+
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>库存预警 <Tag color="red">{data.length} 项低于安全库存</Tag></Typography.Title>}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>库存预警</Typography.Title>}>
       <Space style={{ marginBottom: 16 }}>
         <Select placeholder="筛选仓库" allowClear style={{ width: 160 }} onChange={setWarehouseId}>
           {warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}
         </Select>
       </Space>
-      <Table rowKey={(r: AlertItem) => `${r.product.id}-${r.warehouseId}`} columns={columns} dataSource={data} loading={isLoading} pagination={false} scroll={{ x: 800 }} />
+      <Tabs items={tabItems} />
     </Card>
   );
 }

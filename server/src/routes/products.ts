@@ -179,7 +179,7 @@ productsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
 
 // 创建商品
 productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
-  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl } = req.body;
+  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl, expiryDate, expiryWarningDays } = req.body;
   if (!name) return res.status(400).json({ error: '商品名称必填' });
   if (name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
@@ -201,6 +201,8 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
       costPrice,
       salePrice,
       imageUrl: imageUrl || null,
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      expiryWarningDays: expiryWarningDays || 30,
     },
     include: { category: true },
   });
@@ -216,12 +218,14 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
     return res.status(403).json({ error: '无权操作此商品' });
   }
 
-  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl } = req.body;
+  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl, expiryDate, expiryWarningDays } = req.body;
   if (name && name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
   if (barcode && barcode.length > 100) return res.status(400).json({ error: '条码不能超过 100 字符' });
   const updateData: Record<string, unknown> = { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice };
   if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
+  if (expiryDate !== undefined) updateData.expiryDate = expiryDate ? new Date(expiryDate) : null;
+  if (expiryWarningDays !== undefined) updateData.expiryWarningDays = expiryWarningDays || 30;
   const product = await prisma.product.update({
     where: { id },
     data: updateData,
