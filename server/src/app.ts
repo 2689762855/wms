@@ -105,8 +105,17 @@ app.use(errorHandler);
 
 // 确保上传目录存在
 fs.mkdirSync(path.join(__dirname, '../uploads/products'), { recursive: true });
-// 商品图片静态托管
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// 商品图片静态托管（显式设置 MIME 类型）
+const mimeTypes: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+};
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  setHeaders(res, filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    if (mimeTypes[ext]) res.setHeader('Content-Type', mimeTypes[ext]);
+  },
+}));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, '0.0.0.0', () => {
