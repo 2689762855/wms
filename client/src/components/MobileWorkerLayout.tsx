@@ -12,7 +12,6 @@ import {
   InboxOutlined,
   RollbackOutlined,
 } from '@ant-design/icons';
-import PWAInstallPrompt from './PWAInstallPrompt';
 import PullToRefresh from './PullToRefresh';
 import ServerConfigModal from './ServerConfigModal';
 import ErrorBoundary from './ErrorBoundary';
@@ -122,7 +121,6 @@ export default function MobileWorkerLayout() {
           </div>
         ))}
       </div>
-      <PWAInstallPrompt />
     </div>
   );
 }

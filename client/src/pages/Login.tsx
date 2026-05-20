@@ -4,7 +4,6 @@ import { Form, Input, Button, Card, Typography, message } from 'antd';
 import { UserOutlined, LockOutlined, InboxOutlined } from '@ant-design/icons';
 import apiClient from '../api/client';
 import { useAuth } from '../stores/AuthContext';
-import PWAInstallPrompt from '../components/PWAInstallPrompt';
 import ServerConfigModal from '../components/ServerConfigModal';
 
 export default function Login() {
@@ -87,7 +86,6 @@ export default function Login() {
           </Typography.Text>
         )}
       </Card>
-      <PWAInstallPrompt />
     </div>
   );
 }

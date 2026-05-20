@@ -135,6 +135,9 @@ function AppContent() {
   const [updateForce, setUpdateForce] = useState(false);
 
   useEffect(() => {
+    let isCapacitor = false;
+    try { isCapacitor = !!(window as any).Capacitor?.isNativePlatform?.(); } catch {}
+    if (!isCapacitor) return;
     const timer = setTimeout(() => {
       checkForUpdate().then((result) => {
         if (result.hasUpdate && result.serverVersion) {
