@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Input, Card, Tag, Typography, Space, Spin, Empty, Modal, Image } from 'antd';
+import { Input, Card, Tag, Typography, Space, Spin, Empty, Modal } from 'antd';
 import { SearchOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import apiClient from '../../api/client';
 import type { InventoryItem } from '../../types';
@@ -101,7 +101,7 @@ export default function MobileInventory() {
         width="auto"
         centered
       >
-        {previewImage && <Image src={previewImage.url} alt={previewImage.name} style={{ maxWidth: '80vw', maxHeight: '70vh' }} />}
+        {previewImage && <img src={previewImage.url} alt={previewImage.name} style={{ maxWidth: '80vw', maxHeight: '70vh', display: 'block' }} />}
       </Modal>
     </div>
   );

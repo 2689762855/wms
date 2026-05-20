@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, Image, message } from 'antd';
+import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, message } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryLevelName } from '../utils/categoryTree';
@@ -179,7 +179,7 @@ export default function Inventory() {
         width="auto"
         centered
       >
-        {previewImage && <Image src={previewImage.url} alt={previewImage.name} style={{ maxWidth: '80vw', maxHeight: '70vh' }} />}
+        {previewImage && <img src={previewImage.url} alt={previewImage.name} style={{ maxWidth: '80vw', maxHeight: '70vh', display: 'block' }} />}
       </Modal>
     </Card>
   );
