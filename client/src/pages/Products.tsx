@@ -188,10 +188,14 @@ export default function Products() {
                 }
               }}
               onChange={({ fileList: newList }) => {
-                setImageFileList(newList);
-                if (newList[0]?.status === 'done' && newList[0]?.response?.imageUrl) {
-                  form.setFieldsValue({ imageUrl: newList[0].response.imageUrl });
-                } else if (newList.length === 0) {
+                const fixed = newList.map(f => {
+                  if (!f.url && f.response?.imageUrl) f.url = f.response.imageUrl;
+                  return f;
+                });
+                setImageFileList(fixed);
+                if (fixed[0]?.status === 'done' && fixed[0]?.response?.imageUrl) {
+                  form.setFieldsValue({ imageUrl: fixed[0].response.imageUrl });
+                } else if (fixed.length === 0) {
                   form.setFieldsValue({ imageUrl: undefined });
                 }
               }}
