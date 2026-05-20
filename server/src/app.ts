@@ -21,6 +21,7 @@ import { usersRouter } from './routes/users';
 import { locationsRouter } from './routes/locations';
 import { customersRouter } from './routes/customers';
 import { stockMoveRouter } from './routes/stockMove';
+import { settingsRouter } from './routes/settings';
 import { appRouter } from './routes/app';
 import { errorHandler } from './middleware/errorHandler';
 
@@ -100,6 +101,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/locations', locationsRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/stock-move', stockMoveRouter);
+app.use('/api/settings', settingsRouter);
 app.use('/api/app', appRouter);
 
 // 生产环境：托管前端静态文件

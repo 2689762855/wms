@@ -324,3 +324,8 @@ model Sequence {
   name     String @id
   nextVal  Int    @default(1)
 }
+
+model Setting {
+  key   String @id
+  value String
+}

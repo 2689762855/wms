@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Popconfirm, Tag } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Popconfirm, Tag, Switch } from 'antd';
 import { PlusOutlined, TeamOutlined, EditOutlined, StopOutlined, PlayCircleOutlined, DollarOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -21,6 +21,19 @@ export default function Customers() {
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const queryClient = useQueryClient();
+
+  const { data: autoApprove } = useQuery({
+    queryKey: ['autoApprove'],
+    queryFn: () => apiClient.get('/settings/auto-approve').then(r => r.data.enabled),
+  });
+
+  const autoApproveMutation = useMutation({
+    mutationFn: (enabled: boolean) => apiClient.put('/settings/auto-approve', { enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['autoApprove'] });
+      message.success(autoApprove ? '已关闭自动审批' : '已开启自动审批');
+    },
+  });
 
   const { data: customers, isLoading } = useQuery<CustomerInfo[]>({
     queryKey: ['customers'],
@@ -123,9 +136,16 @@ export default function Customers() {
     <div>
       <Typography.Title level={4}>客户管理</Typography.Title>
       <Card size="small" style={{ marginBottom: 12 }}>
-        <Space>
-          <TeamOutlined />
-          <Typography.Text type="secondary">新客户自动获得 90 天免费试用 · 续费按年收费 · 到期前 7 天提醒 · 到期后自动暂停</Typography.Text>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Space>
+            <TeamOutlined />
+            <Typography.Text type="secondary">新客户自动获得 90 天免费试用 · 续费按年收费 · 到期前 7 天提醒 · 到期后自动暂停</Typography.Text>
+          </Space>
+          <Space>
+            <Switch checked={autoApprove} onChange={(v) => autoApproveMutation.mutate(v)} loading={autoApproveMutation.isPending} />
+            <Typography.Text>自动通过注册审批</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>开启后新注册的客户无需手动审批，直接激活</Typography.Text>
+          </Space>
         </Space>
       </Card>
       <Card extra={<Button type="primary" icon={<PlusOutlined />}

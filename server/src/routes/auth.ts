@@ -258,8 +258,12 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90天试用
 
+    // 检查是否开启自动审批
+    const autoSetting = await prisma.setting.findUnique({ where: { key: 'autoApproveRegistrations' } });
+    const initialStatus = autoSetting?.value === 'true' ? 'active' : 'pending';
+
     const customer = await prisma.customer.create({
-      data: { username, passwordHash, realName: realName || username, phone: phone || null, maxWarehouses: 1, expiresAt, status: 'pending' },
+      data: { username, passwordHash, realName: realName || username, phone: phone || null, maxWarehouses: 1, expiresAt, status: initialStatus },
     });
 
     // 自动创建仓库
