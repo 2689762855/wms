@@ -61,6 +61,7 @@
   .price-card ul { list-style: none; text-align: left; margin: 24px 0; }
   .price-card ul li { padding: 6px 0; color: #555; font-size: 14px; }
   .price-card ul li::before { content: '✓ '; color: #52c41a; font-weight: 700; }
+  .price-card ul li.caveat::before { content: '⚠ '; color: #faad14; font-weight: 400; }
 
   .cta { text-align: center; padding: 80px 0; }
   .cta h2 { font-size: 32px; font-weight: 700; margin-bottom: 12px; }
@@ -164,9 +165,11 @@
         <ul>
           <li>全部功能无限制</li>
           <li>多仓库 / 多用户</li>
-          <li>Win/Mac/Linux 均可</li>
-          <li>一键启动，无需配置</li>
           <li>数据完全本地</li>
+          <li>一键启动，无需配置</li>
+          <li class="caveat" style="color:#999;font-size:13px;">需电脑安装 Node.js</li>
+          <li class="caveat" style="color:#999;font-size:13px;">仅限 Windows 系统</li>
+          <li class="caveat" style="color:#999;font-size:13px;">需自行备份数据</li>
         </ul>
         <a href="/WMS-Package.zip" class="btn btn-outline" style="width:100%">下载安装包</a>
       </div>
