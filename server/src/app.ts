@@ -85,6 +85,11 @@ app.use('/api/app', appRouter);
 
 // 生产环境：托管前端静态文件
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 确保上传目录存在
+fs.mkdirSync(path.join(__dirname, '../uploads/products'), { recursive: true });
+// 商品图片静态托管（必须在 SPA fallback 之前）
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // 兼容两种目录结构：开发时 ../../client/dist，部署时 ../client/dist
 let distPath = path.join(__dirname, '../../client/dist');
 if (!fs.existsSync(distPath)) {
@@ -94,28 +99,14 @@ app.get('/', (_req, res) => {
   res.sendFile(path.join(distPath, 'landing.html'), (err) => { if (err) res.sendFile(path.join(distPath, 'index.html')); });
 });
 app.use(express.static(distPath));
-// SPA fallback: 非首页、非 API 请求返回 index.html
+// SPA fallback: 非首页、非 API、非 uploads 请求返回 index.html
 app.use((_req, res, next) => {
-  if (_req.path === '/' || _req.path.startsWith('/api')) return next();
+  if (_req.path === '/' || _req.path.startsWith('/api') || _req.path.startsWith('/uploads')) return next();
   res.sendFile(path.join(distPath, 'index.html'), (err) => { if (err) next(); });
 });
 
 // Error handling
 app.use(errorHandler);
-
-// 确保上传目录存在
-fs.mkdirSync(path.join(__dirname, '../uploads/products'), { recursive: true });
-// 商品图片静态托管（显式设置 MIME 类型）
-const mimeTypes: Record<string, string> = {
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-};
-app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
-  setHeaders(res, filePath) {
-    const ext = path.extname(filePath).toLowerCase();
-    if (mimeTypes[ext]) res.setHeader('Content-Type', mimeTypes[ext]);
-  },
-}));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, '0.0.0.0', () => {
