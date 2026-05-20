@@ -1,8 +1,1 @@
-{
-  "versionCode": 14,
-  "versionName": "2.2",
-  "downloadUrl": "/api/app/download/latest",
-  "changelog": "- 新增：移动端网页版登录页显示 APK 下载入口",
-  "forceUpdate": false,
-  "minVersionCode": 0
-}
+{"versionCode":20,"versionName":"2.3.5","url":"https://ckglxt.top/apk","changelog":"商品图片上传+库存查询看图+软删除"}
