@@ -146,7 +146,7 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
   });
 
   for (const product of expiryProducts) {
-    const daysLeft = Math.ceil((product.expiryDate!.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+    const daysLeft = Math.floor((product.expiryDate!.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
     if (daysLeft > product.expiryWarningDays) continue;
 
     // 查该商品在各仓库的库存
@@ -197,7 +197,14 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     }
   }
 
-  result.sort((a, b) => b.shortage - a.shortage);
+  result.sort((a, b) => {
+    const aExp = (a as any).alertType === 'expiry';
+    const bExp = (b as any).alertType === 'expiry';
+    if (aExp && !bExp) return -1;
+    if (!aExp && bExp) return 1;
+    if (aExp) return (a as any).shortage - (b as any).shortage; // 临期：剩余天数少优先
+    return b.shortage - a.shortage; // 库存：缺货多优先
+  });
 
   res.json(result);
 });

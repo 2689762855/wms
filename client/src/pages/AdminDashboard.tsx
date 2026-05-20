@@ -25,7 +25,7 @@ export default function AdminDashboard() {
     onSuccess: (res) => {
       login(res.data.token, res.data.user);
       message.success('已进入客户视角');
-      setTimeout(() => window.location.reload(), 300);
+      window.location.reload();
     },
     onError: (err: any) => message.error(err.response?.data?.error || '切换失败'),
   });

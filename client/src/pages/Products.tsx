@@ -76,6 +76,7 @@ export default function Products() {
       const path = findPath(tree, p.categoryId);
       if (path) values.categoryId = path;
     }
+    if ((p as any).expiryDate) values.expiryDate = dayjs((p as any).expiryDate);
     form.setFieldsValue(values);
     setImageFileList((p as any).imageUrl ? [{ uid: '-1', name: '商品图片', status: 'done', url: (p as any).imageUrl }] : []);
     setOpen(true);

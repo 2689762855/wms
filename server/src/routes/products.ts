@@ -202,7 +202,7 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
       salePrice,
       imageUrl: imageUrl || null,
       expiryDate: expiryDate ? new Date(expiryDate) : null,
-      expiryWarningDays: expiryWarningDays || 30,
+      expiryWarningDays: expiryWarningDays ?? 30,
     },
     include: { category: true },
   });
@@ -225,7 +225,7 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
   const updateData: Record<string, unknown> = { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice };
   if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
   if (expiryDate !== undefined) updateData.expiryDate = expiryDate ? new Date(expiryDate) : null;
-  if (expiryWarningDays !== undefined) updateData.expiryWarningDays = expiryWarningDays || 30;
+  if (expiryWarningDays !== undefined) updateData.expiryWarningDays = expiryWarningDays ?? 30;
   const product = await prisma.product.update({
     where: { id },
     data: updateData,
