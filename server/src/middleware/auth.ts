@@ -53,7 +53,10 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
         where: { id: payload.customerId, deletedAt: null },
         select: { status: true },
       });
-      if (customer?.status === 'suspended') {
+      if (!customer) {
+        return res.status(403).json({ error: '账号已被停用，请联系管理员' });
+      }
+      if (customer.status === 'suspended') {
         return res.status(403).json({ error: '账号已被暂停，请联系管理员' });
       }
     }
