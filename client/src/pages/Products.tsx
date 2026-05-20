@@ -1,11 +1,18 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select, Image } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select, Image, Descriptions } from 'antd';
 import { PlusOutlined, UploadOutlined, DownloadOutlined, InboxOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
 import type { Product, Category, Warehouse } from '../types';
 import { buildTree, toCascaderOptions, findPath, getCategoryPath } from '../utils/categoryTree';
+import { getServerUrl } from '../utils/serverConfig';
+
+function imgFullUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return (getServerUrl() || '') + path;
+}
 
 export default function Products() {
   const { user } = useAuth();
@@ -16,6 +23,7 @@ export default function Products() {
   const [keyword, setKeyword] = useState('');
   const [importWarehouseId, setImportWarehouseId] = useState<number | undefined>();
   const [imageFileList, setImageFileList] = useState<any[]>([]);
+  const [viewProduct, setViewProduct] = useState<Product | null>(null);
   const queryClient = useQueryClient();
 
   const { data: warehouses } = useQuery({
@@ -80,7 +88,11 @@ export default function Products() {
 
   const columns = [
     { title: 'SKU', dataIndex: 'sku', key: 'sku', width: 140 },
-    { title: '商品名称', dataIndex: 'name', key: 'name' },
+    { title: '商品名称', dataIndex: 'name', key: 'name',
+      render: (name: string, record: Product) => (
+        <Typography.Link onClick={() => setViewProduct(record)}>{name}</Typography.Link>
+      ),
+    },
     { title: '规格', dataIndex: 'spec', key: 'spec' },
     { title: '单位', dataIndex: 'unit', key: 'unit', width: 60 },
     { title: '条码', dataIndex: 'barcode', key: 'barcode', width: 130 },
@@ -220,6 +232,33 @@ export default function Products() {
             </Form.Item>
           </Space>
         </Form>
+      </Modal>
+      <Modal
+        title="商品详情"
+        open={!!viewProduct}
+        onCancel={() => setViewProduct(null)}
+        footer={<Button onClick={() => setViewProduct(null)}>关闭</Button>}
+        width={560}
+      >
+        {viewProduct && (
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            {viewProduct.imageUrl && (
+              <div style={{ textAlign: 'center' }}>
+                <Image src={imgFullUrl(viewProduct.imageUrl)} alt={viewProduct.name} style={{ maxHeight: 300 }} />
+              </div>
+            )}
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="SKU">{viewProduct.sku}</Descriptions.Item>
+              <Descriptions.Item label="商品名称">{viewProduct.name}</Descriptions.Item>
+              <Descriptions.Item label="规格">{viewProduct.spec || '-'}</Descriptions.Item>
+              <Descriptions.Item label="单位">{viewProduct.unit}</Descriptions.Item>
+              <Descriptions.Item label="条码">{viewProduct.barcode || '-'}</Descriptions.Item>
+              <Descriptions.Item label="安全库存">{viewProduct.safetyStock}</Descriptions.Item>
+              <Descriptions.Item label="成本价">{viewProduct.costPrice != null ? `¥${viewProduct.costPrice}` : '-'}</Descriptions.Item>
+              <Descriptions.Item label="售价">{viewProduct.salePrice != null ? `¥${viewProduct.salePrice}` : '-'}</Descriptions.Item>
+            </Descriptions>
+          </Space>
+        )}
       </Modal>
     </Card>
   );
