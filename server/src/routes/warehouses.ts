@@ -46,7 +46,7 @@ warehousesRouter.post('/', async (req: AuthRequest, res: Response) => {
   // 客户创建仓库需检查数量限制
   let customerId: number | null = null;
   if (req.userRole === 'tenant_admin') {
-    const customer = await prisma.customer.findUnique({ where: { id: req.userId } });
+    const customer = await prisma.customer.findFirst({ where: { id: req.userId, deletedAt: null } });
     if (!customer || customer.status !== 'active') {
       return res.status(403).json({ error: '账号不可用' });
     }

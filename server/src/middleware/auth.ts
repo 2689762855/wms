@@ -49,8 +49,8 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     req.customerId = payload.customerId;
 
     if (payload.role === 'tenant_admin' && payload.customerId) {
-      const customer = await prisma.customer.findUnique({
-        where: { id: payload.customerId },
+      const customer = await prisma.customer.findFirst({
+        where: { id: payload.customerId, deletedAt: null },
         select: { status: true },
       });
       if (customer?.status === 'suspended') {
@@ -76,7 +76,7 @@ export function authorize(...roles: string[]) {
 export async function adminWrite(req: AuthRequest, res: Response, next: NextFunction) {
   if (req.userRole === 'super_admin' || req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
     if (req.userRole === 'tenant_admin' && req.customerId) {
-      const customer = await prisma.customer.findUnique({ where: { id: req.customerId }, select: { status: true } });
+      const customer = await prisma.customer.findFirst({ where: { id: req.customerId, deletedAt: null }, select: { status: true } });
       if (customer?.status === 'pending') {
         return res.status(403).json({ error: '账号审核中，仅可查看，无法操作' });
       }

@@ -38,8 +38,8 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
     }
 
     // 再查 Customer 表
-    const customer = await prisma.customer.findUnique({
-      where: { username },
+    const customer = await prisma.customer.findFirst({
+      where: { username, deletedAt: null },
       include: { warehouses: { take: 1, orderBy: { id: 'asc' } } },
     });
     if (customer) {
@@ -105,8 +105,8 @@ authRouter.post('/switch-customer', authenticate, async (req: AuthRequest, res: 
     const { customerId } = req.body;
     if (!customerId) return res.status(400).json({ error: '请指定客户' });
 
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, deletedAt: null },
       include: { warehouses: { take: 1, orderBy: { id: 'asc' } } },
     });
     if (!customer) return res.status(404).json({ error: '客户不存在' });
@@ -128,8 +128,8 @@ authRouter.post('/switch-customer', authenticate, async (req: AuthRequest, res: 
 authRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (req.userRole === 'tenant_admin') {
-      const customer = await prisma.customer.findUnique({
-        where: { id: req.userId },
+      const customer = await prisma.customer.findFirst({
+        where: { id: req.userId, deletedAt: null },
         include: { warehouses: { select: { id: true, name: true } } },
       });
       if (!customer) return res.status(404).json({ error: '客户不存在' });
@@ -155,8 +155,8 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
 
-    const customer = await prisma.customer.findUnique({
-      where: { username },
+    const customer = await prisma.customer.findFirst({
+      where: { username, deletedAt: null },
       include: { warehouses: { take: 1, orderBy: { id: 'asc' } } },
     });
     if (!customer) {
@@ -211,8 +211,8 @@ authRouter.post('/claim', async (req: AuthRequest, res: Response) => {
     };
 
     // 验证该客户确实归本服务器
-    const customer = await prisma.customer.findUnique({
-      where: { id: payload.userId },
+    const customer = await prisma.customer.findFirst({
+      where: { id: payload.userId, deletedAt: null },
       select: { serverHost: true, id: true, status: true },
     });
     if (!customer || customer.serverHost !== THIS_HOST) {
@@ -250,7 +250,7 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: '手机号格式不正确' });
     }
 
-    const existing = await prisma.customer.findUnique({ where: { username } });
+    const existing = await prisma.customer.findFirst({ where: { username, deletedAt: null } });
     if (existing) return res.status(400).json({ error: '用户名已被注册' });
     const userConflict = await prisma.user.findUnique({ where: { username } });
     if (userConflict) return res.status(400).json({ error: '用户名已被占用' });

@@ -308,6 +308,7 @@ model Customer {
   serverHost    String?   // null=本机, s2.cgklxt.top=其他服务器
   createdBy     Int?
   createdAt     DateTime  @default(now())
+  deletedAt     DateTime? // null=正常, 非null=软删除（7天后彻底清理）
 
   warehouses Warehouse[]
   categories Category[]

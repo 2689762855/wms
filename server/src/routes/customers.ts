@@ -8,8 +8,10 @@ customersRouter.use(authenticate);
 customersRouter.use(superAdmin);
 
 // 客户列表
-customersRouter.get('/', async (_req: AuthRequest, res: Response) => {
+customersRouter.get('/', async (req: AuthRequest, res: Response) => {
+  const includeDeleted = req.query.includeDeleted === 'true';
   const customers = await prisma.customer.findMany({
+    where: includeDeleted ? {} : { deletedAt: null },
     include: {
       warehouses: { select: { id: true, name: true, createdAt: true } },
       _count: { select: { products: true } },
@@ -34,8 +36,8 @@ customersRouter.get('/', async (_req: AuthRequest, res: Response) => {
 // 客户详情
 customersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
-  const customer = await prisma.customer.findUnique({
-    where: { id },
+  const customer = await prisma.customer.findFirst({
+    where: { id, deletedAt: null },
     include: {
       warehouses: { include: { _count: { select: { inventories: true, users: true } } } },
       _count: { select: { products: true } },
@@ -57,7 +59,7 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
     if (password.length < 6) return res.status(400).json({ error: '密码至少 6 位' });
     if (password.length > 128) return res.status(400).json({ error: '密码不能超过 128 位' });
 
-    const existing = await prisma.customer.findUnique({ where: { username } });
+    const existing = await prisma.customer.findFirst({ where: { username, deletedAt: null } });
     if (existing) return res.status(400).json({ error: '用户名已存在' });
     const userConflict = await prisma.user.findUnique({ where: { username } });
     if (userConflict) return res.status(400).json({ error: '用户名已被员工账号使用' });
@@ -112,7 +114,7 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
 customersRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const customer = await prisma.customer.findUnique({ where: { id } });
+    const customer = await prisma.customer.findFirst({ where: { id, deletedAt: null } });
     if (!customer) return res.status(404).json({ error: '客户不存在' });
 
     const { realName, status, maxWarehouses, password, addWarehouseName } = req.body;
@@ -159,40 +161,37 @@ customersRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) 
   }
 });
 
-// 删除客户（级联删除其仓库下的所有数据）
+// 软删除客户（保留 7 天数据，超管可恢复）
 customersRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
   try {
-    // 获取该客户的所有仓库 ID
-    const warehouses = await prisma.warehouse.findMany({ where: { customerId: id }, select: { id: true } });
-    const warehouseIds = warehouses.map(w => w.id);
+    const customer = await prisma.customer.findFirst({ where: { id, deletedAt: null } });
+    if (!customer) return res.status(404).json({ error: '客户不存在' });
 
-    // 级联删除顺序：子表 → 父表
-    for (const wid of warehouseIds) {
-      await prisma.stockLog.deleteMany({ where: { warehouseId: wid } });
-      await prisma.checkItem.deleteMany({ where: { task: { warehouseId: wid } } });
-      await prisma.checkTask.deleteMany({ where: { warehouseId: wid } });
-      await prisma.transferItem.deleteMany({ where: { transfer: { OR: [{ fromWarehouseId: wid }, { toWarehouseId: wid }] } } });
-      await prisma.transferOrder.deleteMany({ where: { OR: [{ fromWarehouseId: wid }, { toWarehouseId: wid }] } });
-      await prisma.outboundItem.deleteMany({ where: { outbound: { warehouseId: wid } } });
-      await prisma.outboundOrder.deleteMany({ where: { warehouseId: wid } });
-      await prisma.inboundItem.deleteMany({ where: { inbound: { warehouseId: wid } } });
-      await prisma.inboundOrder.deleteMany({ where: { warehouseId: wid } });
-      await prisma.inventory.deleteMany({ where: { warehouseId: wid } });
-      await prisma.user.deleteMany({ where: { warehouseId: wid } });
-      await prisma.location.deleteMany({ where: { warehouseId: wid } });
-      await prisma.warehouse.delete({ where: { id: wid } });
-    }
+    await prisma.customer.update({ where: { id }, data: { deletedAt: new Date() } });
 
-    await prisma.product.deleteMany({ where: { customerId: id } });
-    await prisma.category.deleteMany({ where: { customerId: id } });
-    await prisma.customer.delete({ where: { id } });
-
-    res.json({ message: '已删除客户及其所有数据' });
+    res.json({ message: '已停用客户，数据保留 7 天后自动清理' });
   } catch (err: any) {
     if (err.code === 'P2025') return res.status(404).json({ error: '客户不存在' });
     console.error('Delete customer error:', err);
     res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// 恢复软删除的客户
+customersRouter.put('/:id/restore', validateId, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  try {
+    const customer = await prisma.customer.findFirst({ where: { id, deletedAt: { not: null } } });
+    if (!customer) return res.status(404).json({ error: '客户不存在或未删除' });
+
+    await prisma.customer.update({ where: { id }, data: { deletedAt: null } });
+
+    const { passwordHash: _, ...safe } = customer;
+    res.json({ message: '已恢复客户', customer: { ...safe, deletedAt: null } });
+  } catch (err) {
+    console.error('Restore customer error:', err);
+    res.status(500).json({ error: '恢复失败' });
   }
 });
 
@@ -202,7 +201,7 @@ customersRouter.put('/:id/renew', validateId, async (req: AuthRequest, res: Resp
   const { days } = req.body; // 默认 365 天（一年）
   const extendDays = days && days > 0 ? days : 365;
 
-  const customer = await prisma.customer.findUnique({ where: { id } });
+  const customer = await prisma.customer.findFirst({ where: { id, deletedAt: null } });
   if (!customer) return res.status(404).json({ error: '客户不存在' });
 
   const base = customer.expiresAt && customer.expiresAt > new Date() ? customer.expiresAt : new Date();
