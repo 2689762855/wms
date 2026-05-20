@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select, DatePicker } from 'antd';
 import locale from 'antd/es/date-picker/locale/zh_CN';
+import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+dayjs.locale('zh-cn');
 import { PlusOutlined, UploadOutlined, DownloadOutlined, InboxOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
