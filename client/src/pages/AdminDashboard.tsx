@@ -24,8 +24,8 @@ export default function AdminDashboard() {
     mutationFn: (customerId: number) => apiClient.post('/auth/switch-customer', { customerId }),
     onSuccess: (res) => {
       login(res.data.token, res.data.user);
-      message.success('已进入客户视角，可操作其仓库数据');
-      navigate('/dashboard', { replace: true });
+      message.success('已进入客户视角');
+      setTimeout(() => window.location.reload(), 300);
     },
     onError: (err: any) => message.error(err.response?.data?.error || '切换失败'),
   });
