@@ -87,6 +87,7 @@ model Product {
   salePrice  Float?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  imageUrl   String?   // 商品图片路径（本地上传）
 
   inventories    Inventory[]
   inboundItems   InboundItem[]

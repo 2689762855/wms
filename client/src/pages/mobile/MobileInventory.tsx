@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Input, Card, Tag, Typography, Space, Spin, Empty } from 'antd';
+import { Input, Card, Tag, Typography, Space, Spin, Empty, Modal, Image } from 'antd';
 import { SearchOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import apiClient from '../../api/client';
 import type { InventoryItem } from '../../types';
 
 export default function MobileInventory() {
   const [keyword, setKeyword] = useState('');
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   const { data: items, isLoading, isError } = useQuery({
     queryKey: ['inventory-search', keyword],
@@ -53,7 +54,14 @@ export default function MobileInventory() {
       <Space direction="vertical" style={{ width: '100%' }} size={8}>
         {Array.from(grouped.entries()).map(([id, { product, locations }]) => (
           <Card key={id} size="small" style={{ borderRadius: 8 }}>
-            <Typography.Text strong style={{ fontSize: 15 }}>{product.name}</Typography.Text>
+            <Space size={8} align="start">
+              {(product as any).imageUrl && (
+                <div style={{ width: 48, height: 48, background: `url(${(product as any).imageUrl}) center/cover`, borderRadius: 6, flexShrink: 0, cursor: 'pointer' }} onClick={() => setPreviewImage({ url: (product as any).imageUrl, name: product.name })} />
+              )}
+              <div style={{ flex: 1 }}>
+                <Typography.Link strong style={{ fontSize: 15 }} onClick={() => (product as any).imageUrl && setPreviewImage({ url: (product as any).imageUrl, name: product.name })}>
+                  {product.name}
+                </Typography.Link>
             <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
               {product.sku}{product.spec ? ' · ' + product.spec : ''}
             </Typography.Text>
@@ -80,9 +88,21 @@ export default function MobileInventory() {
                 合计: {locations.reduce((s, l) => s + l.qty, 0)}
               </Typography.Text>
             </div>
+              </div>
+            </Space>
           </Card>
         ))}
       </Space>
+      <Modal
+        open={!!previewImage}
+        title={previewImage?.name || '商品图片'}
+        footer={null}
+        onCancel={() => setPreviewImage(null)}
+        width="auto"
+        centered
+      >
+        {previewImage && <Image src={previewImage.url} alt={previewImage.name} style={{ maxWidth: '80vw', maxHeight: '70vh' }} />}
+      </Modal>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import multer from 'multer';
+import path from 'path';
 import * as XLSX from 'xlsx';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
@@ -9,6 +10,16 @@ export const productsRouter = Router();
 productsRouter.use(authenticate);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// 商品图片上传（磁盘存储）
+const imageStorage = multer.diskStorage({
+  destination: path.join(__dirname, '../../uploads/products'),
+  filename(_req, file, cb) {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `product-${Date.now()}-${Math.random().toString(36).substring(2, 6)}${ext}`);
+  },
+});
+const uploadImage = multer({ storage: imageStorage, limits: { fileSize: 2 * 1024 * 1024 } });
 
 // 商品列表（分页、搜索、分类筛选）
 productsRouter.get('/', async (req: AuthRequest, res: Response) => {
@@ -52,6 +63,13 @@ productsRouter.get('/template', (_req: AuthRequest, res: Response) => {
 });
 
 // 批量导入商品（必须在 /:id 之前）
+// 上传商品图片
+productsRouter.post('/upload-image', adminWrite, uploadImage.single('image'), async (req: AuthRequest, res: Response) => {
+  if (!req.file) return res.status(400).json({ error: '请选择图片文件' });
+  const imageUrl = `/uploads/products/${req.file.filename}`;
+  res.json({ imageUrl });
+});
+
 productsRouter.post('/import', adminWrite, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) return res.status(400).json({ error: '请上传 Excel 文件' });
@@ -160,7 +178,7 @@ productsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
 
 // 创建商品
 productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
-  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice } = req.body;
+  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl } = req.body;
   if (!name) return res.status(400).json({ error: '商品名称必填' });
   if (name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
@@ -181,6 +199,7 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
       safetyStock: safetyStock || 0,
       costPrice,
       salePrice,
+      imageUrl: imageUrl || null,
     },
     include: { category: true },
   });
@@ -196,13 +215,15 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
     return res.status(403).json({ error: '无权操作此商品' });
   }
 
-  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice } = req.body;
+  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl } = req.body;
   if (name && name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
   if (barcode && barcode.length > 100) return res.status(400).json({ error: '条码不能超过 100 字符' });
+  const updateData: Record<string, unknown> = { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice };
+  if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
   const product = await prisma.product.update({
     where: { id },
-    data: { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice },
+    data: updateData,
     include: { category: true },
   });
   res.json(product);

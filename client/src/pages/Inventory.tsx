@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, message } from 'antd';
+import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, Image, message } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryLevelName } from '../utils/categoryTree';
@@ -89,6 +89,7 @@ function LocationDetail({ productId, warehouseId }: { productId: number; warehou
 export default function Inventory() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [keyword, setKeyword] = useState('');
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories').then(r => r.data) });
@@ -125,7 +126,15 @@ export default function Inventory() {
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 130 },
     { title: '商品名称', key: 'name', render: (_: unknown, r: InventoryItem & { locationCount?: number }) => {
       const lv2 = getCategoryLevelName(r.product?.category, 2, catMap);
-      return <span>{lv2 ? <><span style={{ color: '#888' }}>{lv2}</span> - </> : null}{r.product?.name}</span>;
+      const imgUrl = (r.product as any)?.imageUrl;
+      return (
+        <Space size={4}>
+          {imgUrl && <span style={{ width: 24, height: 24, display: 'inline-block', background: `url(${imgUrl}) center/cover`, borderRadius: 2, cursor: 'pointer' }} onClick={() => setPreviewImage({ url: imgUrl, name: r.product?.name || '' })} />}
+          <Typography.Link onClick={() => imgUrl && setPreviewImage({ url: imgUrl, name: r.product?.name || '' })}>
+            {lv2 ? <><span style={{ color: '#888' }}>{lv2}</span> - </> : null}{r.product?.name}
+          </Typography.Link>
+        </Space>
+      );
     } },
     { title: '规格', dataIndex: ['product', 'spec'], key: 'spec' },
     { title: '仓库', dataIndex: ['warehouse', 'name'], key: 'warehouse' },
@@ -162,6 +171,16 @@ export default function Inventory() {
           rowExpandable: (r: InventoryItem) => r.quantity > 0,
         }}
       />
+      <Modal
+        open={!!previewImage}
+        title={previewImage?.name || '商品图片'}
+        footer={null}
+        onCancel={() => setPreviewImage(null)}
+        width="auto"
+        centered
+      >
+        {previewImage && <Image src={previewImage.url} alt={previewImage.name} style={{ maxWidth: '80vw', maxHeight: '70vh' }} />}
+      </Modal>
     </Card>
   );
 }

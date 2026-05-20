@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select } from 'antd';
-import { PlusOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select, Image } from 'antd';
+import { PlusOutlined, UploadOutlined, DownloadOutlined, InboxOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
@@ -15,6 +15,7 @@ export default function Products() {
   const [form] = Form.useForm();
   const [keyword, setKeyword] = useState('');
   const [importWarehouseId, setImportWarehouseId] = useState<number | undefined>();
+  const [imageFileList, setImageFileList] = useState<any[]>([]);
   const queryClient = useQueryClient();
 
   const { data: warehouses } = useQuery({
@@ -60,6 +61,7 @@ export default function Products() {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
+    setImageFileList([]);
     setOpen(true);
   };
 
@@ -72,6 +74,7 @@ export default function Products() {
       if (path) values.categoryId = path;
     }
     form.setFieldsValue(values);
+    setImageFileList((p as any).imageUrl ? [{ uid: '-1', name: '商品图片', status: 'done', url: (p as any).imageUrl }] : []);
     setOpen(true);
   };
 
@@ -163,6 +166,43 @@ export default function Products() {
           </Form.Item>
           <Form.Item name="categoryId" label="分类">
             <Cascader allowClear placeholder="选择分类" options={cascaderOptions} changeOnSelect />
+          </Form.Item>
+          <Form.Item name="imageUrl" label="商品图片" style={{ display: 'none' }}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="商品图片">
+            <Upload
+              accept="image/*"
+              maxCount={1}
+              listType="picture-card"
+              fileList={imageFileList}
+              customRequest={async ({ file, onSuccess, onError }) => {
+                const formData = new FormData();
+                formData.append('image', file as File);
+                try {
+                  const res = await apiClient.post('/products/upload-image', formData);
+                  if (onSuccess) onSuccess(res.data);
+                } catch (err: any) {
+                  if (onError) onError(err);
+                  message.error('上传失败');
+                }
+              }}
+              onChange={({ fileList: newList }) => {
+                setImageFileList(newList);
+                if (newList[0]?.status === 'done' && newList[0]?.response?.imageUrl) {
+                  form.setFieldsValue({ imageUrl: newList[0].response.imageUrl });
+                } else if (newList.length === 0) {
+                  form.setFieldsValue({ imageUrl: undefined });
+                }
+              }}
+            >
+              {imageFileList.length === 0 ? (
+                <div>
+                  <InboxOutlined />
+                  <div style={{ marginTop: 8 }}>点击或拖拽上传</div>
+                </div>
+              ) : null}
+            </Upload>
           </Form.Item>
           <Space size="middle">
             <Form.Item name="safetyStock" label="安全库存" initialValue={0}>

@@ -103,6 +103,11 @@ app.use((_req, res, next) => {
 // Error handling
 app.use(errorHandler);
 
+// 确保上传目录存在
+fs.mkdirSync(path.join(__dirname, '../uploads/products'), { recursive: true });
+// 商品图片静态托管
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`库存管理系统已启动: http://localhost:${PORT}`);

@@ -54,6 +54,7 @@ export interface Product {
   safetyStock: number;
   costPrice?: number;
   salePrice?: number;
+  imageUrl?: string | null;
 }
 
 export interface InventoryItem {
