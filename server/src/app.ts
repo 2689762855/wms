@@ -29,6 +29,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 
 app.use(helmet({
+  crossOriginResourcePolicy: false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
