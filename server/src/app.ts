@@ -46,7 +46,25 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors({ origin: true }));
+// CORS：仅允许受信任的域名（不能放过任意来源）
+const allowedOrigins = [
+  'https://ckglxt.top',
+  'https://cgklxt.top',
+  'https://localhost',
+  'capacitor://localhost',
+  'http://localhost:5173',   // 本地开发
+  'http://192.168.31.225:5173', // 内网开发
+];
+app.use(cors({
+  origin(origin, callback) {
+    // 无 origin 的请求（如 curl、服务器间调用）放行
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // 允许任意 ckglxt.top 子域名
+    if (origin.endsWith('.ckglxt.top') || origin.endsWith('.cgklxt.top')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+}));
 app.use(morgan('short'));
 app.use(express.json({ limit: '1mb' }));
 
