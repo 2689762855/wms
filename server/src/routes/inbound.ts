@@ -86,11 +86,12 @@ inboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
       locationId: locationId || null,
       items: {
-        create: items.map((i: { productId: number; quantity: number; unitPrice?: number; locationId?: number | null }) => ({
+        create: items.map((i: { productId: number; quantity: number; unitPrice?: number; locationId?: number | null; expiryDate?: string | null }) => ({
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           locationId: i.locationId ?? null,
+          expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
         })),
       },
     },

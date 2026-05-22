@@ -174,53 +174,57 @@ export default function Products() {
           <Form.Item name="imageUrl" label="商品图片" style={{ display: 'none' }}>
             <Input />
           </Form.Item>
-          <Form.Item label="商品图片">
-            <Upload
-              accept="image/*"
-              maxCount={1}
-              listType="picture-card"
-              fileList={imageFileList}
-              customRequest={async ({ file, onSuccess, onError }) => {
-                const formData = new FormData();
-                formData.append('image', file as File);
-                try {
-                  const res = await apiClient.post('/products/upload-image', formData);
-                  if (onSuccess) onSuccess(res.data);
-                } catch (err: any) {
-                  if (onError) onError(err);
-                  message.error('上传失败');
-                }
-              }}
-              onChange={({ fileList: newList }) => {
-                const fixed = newList.map(f => {
-                  if (!f.url && f.response?.imageUrl) f.url = f.response.imageUrl;
-                  return f;
-                });
-                setImageFileList(fixed);
-                if (fixed[0]?.status === 'done' && fixed[0]?.response?.imageUrl) {
-                  form.setFieldsValue({ imageUrl: fixed[0].response.imageUrl });
-                } else if (fixed.length === 0) {
-                  form.setFieldsValue({ imageUrl: '' });
-                }
-              }}
-            >
-              {imageFileList.length === 0 ? (
-                <div>
-                  <InboxOutlined />
-                  <div style={{ marginTop: 8 }}>点击或拖拽上传</div>
-                </div>
-              ) : null}
-            </Upload>
-          </Form.Item>
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+            <Form.Item label="商品图片">
+              <Upload
+                accept="image/*"
+                maxCount={1}
+                listType="picture-card"
+                fileList={imageFileList}
+                customRequest={async ({ file, onSuccess, onError }) => {
+                  const formData = new FormData();
+                  formData.append('image', file as File);
+                  try {
+                    const res = await apiClient.post('/products/upload-image', formData);
+                    if (onSuccess) onSuccess(res.data);
+                  } catch (err: any) {
+                    if (onError) onError(err);
+                    message.error('上传失败');
+                  }
+                }}
+                onChange={({ fileList: newList }) => {
+                  const fixed = newList.map(f => {
+                    if (!f.url && f.response?.imageUrl) f.url = f.response.imageUrl;
+                    return f;
+                  });
+                  setImageFileList(fixed);
+                  if (fixed[0]?.status === 'done' && fixed[0]?.response?.imageUrl) {
+                    form.setFieldsValue({ imageUrl: fixed[0].response.imageUrl });
+                  } else if (fixed.length === 0) {
+                    form.setFieldsValue({ imageUrl: '' });
+                  }
+                }}
+              >
+                {imageFileList.length === 0 ? (
+                  <div>
+                    <InboxOutlined />
+                    <div style={{ marginTop: 8 }}>点击或拖拽上传</div>
+                  </div>
+                ) : null}
+              </Upload>
+            </Form.Item>
+            <div style={{ flex: 1 }}>
+              <Form.Item name="expiryDate" label="保质期截止日" valuePropName="value" getValueFromEvent={(v: any) => v}>
+                <DatePicker locale={locale} placeholder="不填则无保质期" style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="expiryWarningDays" label="临期预警天数" initialValue={30}>
+                <InputNumber min={1} max={365} addonAfter="天" style={{ width: '100%' }} />
+              </Form.Item>
+            </div>
+          </div>
           <Space size="middle">
             <Form.Item name="safetyStock" label="安全库存" initialValue={0}>
               <InputNumber min={0} />
-            </Form.Item>
-            <Form.Item name="expiryDate" label="保质期截止日" valuePropName="value" getValueFromEvent={(v: any) => v}>
-              <DatePicker locale={locale} placeholder="不填则无保质期" style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="expiryWarningDays" label="临期预警天数" initialValue={30}>
-              <InputNumber min={1} max={365} addonAfter="天" />
             </Form.Item>
             <Form.Item name="costPrice" label="成本价">
               <InputNumber min={0} precision={2} prefix="¥" />

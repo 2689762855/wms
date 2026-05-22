@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, message, Divider } from 'antd';
+import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider } from 'antd';
+import dayjs from 'dayjs';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
@@ -12,6 +13,7 @@ interface ItemEntry {
   quantity: number;
   unitPrice?: number;
   locationId?: number | null;
+  expiryDate?: string | null;
 }
 
 export default function InboundNew() {
@@ -45,7 +47,7 @@ export default function InboundNew() {
     setItems([...items, { productId, quantity: 1 }]);
   };
 
-  const updateItem = (idx: number, field: keyof ItemEntry, value: number | null) => {
+  const updateItem = (idx: number, field: keyof ItemEntry, value: unknown) => {
     const newItems = [...items];
     (newItems[idx] as Record<string, unknown>)[field] = value;
     setItems(newItems);
@@ -111,6 +113,13 @@ export default function InboundNew() {
                 options={locations?.map((l: Location) => ({ label: l.name, value: l.id }))}
                 disabled={!selectedWarehouseId}
                 notFoundContent={selectedWarehouseId ? '该仓库无库位' : '请先选择仓库'}
+              />
+              <DatePicker
+                allowClear
+                placeholder="保质期至"
+                value={item.expiryDate ? dayjs(item.expiryDate) : null}
+                onChange={(d) => updateItem(idx, 'expiryDate', d ? d.toISOString() : null)}
+                style={{ width: 140 }}
               />
               <Button danger onClick={() => removeItem(idx)} size="small">删除</Button>
             </Space>

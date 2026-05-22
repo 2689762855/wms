@@ -92,7 +92,7 @@ export default function MobileCustomers() {
             <Typography.Text type="secondary">加载中...</Typography.Text>
           ) : (
             customers?.map(c => {
-              const creatorName = c.createdByUser?.realName || c.createdByUser?.username;
+              const creatorName = c.createdByUser?.realName || c.createdByUser?.username || '自注册';
               return (
                 <Card key={c.id} size="small" style={{ marginBottom: 10, borderRadius: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -105,7 +105,7 @@ export default function MobileCustomers() {
                       </div>
                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                         {c.username}
-                        {creatorName && <span> · 开通人：{creatorName}</span>}
+                        <span> · 开通人：{creatorName}</span>
                       </Typography.Text>
                       <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <Tag>{c.warehouses?.length || 0} 个仓库</Tag>

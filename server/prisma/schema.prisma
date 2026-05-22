@@ -153,6 +153,7 @@ model InboundItem {
   unitPrice  Float?
   locationId Int?
   location   Location?    @relation(fields: [locationId], references: [id])
+  expiryDate DateTime?
 
   @@index([inboundId])
 }

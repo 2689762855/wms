@@ -39,6 +39,7 @@ export default function InboundDetail() {
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
     { title: '入库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
+    { title: '保质期至', key: 'expiryDate', width: 110, render: (_: unknown, r: any) => r.expiryDate ? dayjs(r.expiryDate).format('YYYY-MM-DD') : '-' },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
     { title: '单价', dataIndex: 'unitPrice', key: 'unitPrice', width: 80, render: (v: number) => v ? `¥${v.toFixed(2)}` : '-' },
     { title: '小计', key: 'total', width: 80, render: (_: unknown, r: { quantity: number; unitPrice?: number }) => r.unitPrice ? `¥${(r.quantity * r.unitPrice).toFixed(2)}` : '-' },

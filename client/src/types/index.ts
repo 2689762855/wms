@@ -115,6 +115,7 @@ export interface InboundItem {
   unitPrice?: number;
   locationId?: number | null;
   location?: Location | null;
+  expiryDate?: string | null;
 }
 
 export interface OutboundOrder {
