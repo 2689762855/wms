@@ -140,6 +140,15 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
         });
         created++;
 
+        // 仓库安全库存：导入时选中仓库，自动为该仓库设置安全库存
+        if (safetyStock > 0 && warehouseId) {
+          await prisma.productWarehouse.upsert({
+            where: { productId_warehouseId: { productId: newProduct.id, warehouseId } },
+            create: { productId: newProduct.id, warehouseId, safetyStock },
+            update: { safetyStock },
+          });
+        }
+
         // 仅新建商品时处理库存入库（已存在的商品跳过，防止重复叠加）
         const locName = row[9]?.toString().trim();
         const qty = parseInt(row[10] as string);
@@ -179,7 +188,7 @@ productsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
 
 // 创建商品
 productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
-  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl, expiryDate, expiryWarningDays } = req.body;
+  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl, expiryDate, expiryWarningDays, warehouseConfigs } = req.body;
   if (!name) return res.status(400).json({ error: '商品名称必填' });
   if (name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
@@ -206,6 +215,16 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
     },
     include: { category: true },
   });
+
+  if (Array.isArray(warehouseConfigs) && warehouseConfigs.length > 0) {
+    for (const wc of warehouseConfigs) {
+      if (!wc.warehouseId) continue;
+      await prisma.productWarehouse.create({
+        data: { productId: product.id, warehouseId: wc.warehouseId, safetyStock: wc.safetyStock || 0 },
+      });
+    }
+  }
+
   res.status(201).json(product);
 });
 
@@ -218,7 +237,7 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
     return res.status(403).json({ error: '无权操作此商品' });
   }
 
-  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl, expiryDate, expiryWarningDays } = req.body;
+  const { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice, imageUrl, expiryDate, expiryWarningDays, warehouseConfigs } = req.body;
   if (name && name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
   if (barcode && barcode.length > 100) return res.status(400).json({ error: '条码不能超过 100 字符' });
@@ -231,6 +250,17 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
     data: updateData,
     include: { category: true },
   });
+
+  if (Array.isArray(warehouseConfigs)) {
+    await prisma.productWarehouse.deleteMany({ where: { productId: id } });
+    for (const wc of warehouseConfigs) {
+      if (!wc.warehouseId) continue;
+      await prisma.productWarehouse.create({
+        data: { productId: id, warehouseId: wc.warehouseId, safetyStock: wc.safetyStock || 0 },
+      });
+    }
+  }
+
   res.json(product);
 });
 

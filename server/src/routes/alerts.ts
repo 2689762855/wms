@@ -19,39 +19,42 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     warehouseId = req.userWarehouseId;
   }
 
-  // 查出设了安全库存的商品（按客户隔离）
-  const productWhere: Record<string, unknown> = { safetyStock: { gt: 0 } };
+  // 查出所有已配置仓库安全库存的记录
+  const pwWhere: Record<string, unknown> = {};
   if (req.customerId) {
-    productWhere.customerId = req.customerId;
+    // tenant_admin：只看自己客户的仓库
+    if (!tenantWhIds || tenantWhIds.length === 0) return res.json([]);
+    pwWhere.warehouseId = { in: tenantWhIds };
   }
-  const products = await prisma.product.findMany({
-    where: productWhere,
-    include: { category: true },
+  if (warehouseId) pwWhere.warehouseId = warehouseId;
+  else if (req.userRole !== 'super_admin' && req.userWarehouseId) pwWhere.warehouseId = req.userWarehouseId;
+
+  const productWarehouses = await prisma.productWarehouse.findMany({
+    where: pwWhere,
+    include: {
+      product: { include: { category: true } },
+      warehouse: { select: { id: true, name: true } },
+    },
   });
-  if (!products.length) return res.json([]);
+  if (!productWarehouses.length) return res.json([]);
 
-  const productIds = products.map(p => p.id);
-  const productMap = new Map(products.map(p => [p.id, p]));
-
-  // 查这些商品在指定仓库（或全部仓库）的库存
-  const invWhere: Record<string, unknown> = {
-    productId: { in: productIds },
-    quantity: { gt: 0 },
-  };
-  if (warehouseId) invWhere.warehouseId = warehouseId;
+  // 查所有配置对的库存
+  const pwProductIds = [...new Set(productWarehouses.map(pw => pw.productId))];
+  const pwWarehouseIds = [...new Set(productWarehouses.map(pw => pw.warehouseId))];
 
   const inventories = await prisma.inventory.findMany({
-    where: invWhere,
+    where: {
+      productId: { in: pwProductIds },
+      warehouseId: { in: pwWarehouseIds },
+      quantity: { gt: 0 },
+    },
     include: {
-      warehouse: { select: { id: true, name: true } },
       location: { select: { id: true, name: true, code: true } },
     },
   });
 
-  // 按 productId + warehouseId 汇总各库位库存
+  // 按 productId + warehouseId 汇总库存
   const stockMap = new Map<string, { qty: number; locations: { name: string; code: string; qty: number }[] }>();
-  const allWarehouseIds = new Set<number>();
-
   for (const inv of inventories) {
     const key = `${inv.productId}-${inv.warehouseId}`;
     const existing = stockMap.get(key);
@@ -64,36 +67,9 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
         locations: [{ name: inv.location?.name || '无库位', code: inv.location?.code || '', qty: inv.quantity }],
       });
     }
-    allWarehouseIds.add(inv.warehouseId);
   }
 
-  // 加载所有仓库（确保零库存商品也能按仓库生成预警）
-  const whCustomerMap = new Map<number, number | null>();
-  if (warehouseId) {
-    allWarehouseIds.add(warehouseId);
-  } else {
-    const allWh = await prisma.warehouse.findMany({ select: { id: true, name: true, customerId: true } });
-    for (const wh of allWh) { allWarehouseIds.add(wh.id); whCustomerMap.set(wh.id, wh.customerId); }
-  }
-
-  // 仓库名称缓存
-  const whCache = new Map<number, string>();
-  for (const inv of inventories) {
-    if (inv.warehouse && !whCache.has(inv.warehouseId)) {
-      whCache.set(inv.warehouseId, inv.warehouse.name);
-    }
-  }
-  // 确保 allWarehouseIds 中所有仓库的客户数据都已加载
-  const missingWhIds = [...allWarehouseIds].filter(id => !whCustomerMap.has(id));
-  if (missingWhIds.length > 0) {
-    const missingWhs = await prisma.warehouse.findMany({
-      where: { id: { in: missingWhIds } },
-      select: { id: true, name: true, customerId: true },
-    });
-    for (const wh of missingWhs) { whCache.set(wh.id, wh.name); whCustomerMap.set(wh.id, wh.customerId); }
-  }
-
-  // 按商品×仓库生成预警
+  // 按配置生成预警：只检查已配置的商品×仓库对
   const result: {
     product: Record<string, unknown>;
     warehouseId: number;
@@ -102,36 +78,31 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     safetyStock: number;
     shortage: number;
     locations: { name: string; code: string; qty: number }[];
+    alertType?: string;
   }[] = [];
 
-  for (const product of products) {
-    for (const whId of allWarehouseIds) {
-      // 跳过产品与仓库客户不匹配的组合（customerId 严格相等才匹配）
-      const whCustomer = whCustomerMap.get(whId);
-      if (product.customerId !== whCustomer) continue;
-
-      const key = `${product.id}-${whId}`;
-      const stock = stockMap.get(key);
-      const currentQty = stock?.qty || 0;
-      if (currentQty < product.safetyStock) {
-        result.push({
-          product: {
-            id: product.id,
-            sku: product.sku,
-            name: product.name,
-            spec: product.spec,
-            unit: product.unit,
-            barcode: product.barcode,
-            category: product.category,
-          },
-          warehouseId: whId,
-          warehouseName: whCache.get(whId) || '',
-          currentQty,
-          safetyStock: product.safetyStock,
-          shortage: product.safetyStock - currentQty,
-          locations: stock?.locations || [],
-        });
-      }
+  for (const pw of productWarehouses) {
+    const key = `${pw.productId}-${pw.warehouseId}`;
+    const stock = stockMap.get(key);
+    const currentQty = stock?.qty || 0;
+    if (currentQty < pw.safetyStock) {
+      result.push({
+        product: {
+          id: pw.product.id,
+          sku: pw.product.sku,
+          name: pw.product.name,
+          spec: pw.product.spec,
+          unit: pw.product.unit,
+          barcode: pw.product.barcode,
+          category: pw.product.category,
+        },
+        warehouseId: pw.warehouseId,
+        warehouseName: pw.warehouse.name,
+        currentQty,
+        safetyStock: pw.safetyStock,
+        shortage: pw.safetyStock - currentQty,
+        locations: stock?.locations || [],
+      });
     }
   }
 
@@ -165,12 +136,12 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
 
     if (!stocks.length) continue;
 
-    // 按仓库汇总
-    const whMap2 = new Map<number, { qty: number; locations: { name: string; code: string; qty: number }[] }>();
+    // 按仓库汇总（同时缓存仓库名）
+    const whMap2 = new Map<number, { qty: number; whName: string; locations: { name: string; code: string; qty: number }[] }>();
     for (const s of stocks) {
       const e = whMap2.get(s.warehouseId);
       if (e) { e.qty += s.quantity; e.locations.push({ name: s.location?.name || '无库位', code: s.location?.code || '', qty: s.quantity }); }
-      else whMap2.set(s.warehouseId, { qty: s.quantity, locations: [{ name: s.location?.name || '无库位', code: s.location?.code || '', qty: s.quantity }] });
+      else whMap2.set(s.warehouseId, { qty: s.quantity, whName: s.warehouse?.name || '', locations: [{ name: s.location?.name || '无库位', code: s.location?.code || '', qty: s.quantity }] });
     }
 
     for (const [whId, stock] of whMap2) {
@@ -187,22 +158,22 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
           expiryWarningDays: product.expiryWarningDays,
         },
         warehouseId: whId,
-        warehouseName: whCache.get(whId) || '',
+        warehouseName: stock.whName,
         currentQty: stock.qty,
         safetyStock: 0,
         shortage: daysLeft,
         locations: stock.locations,
-        alertType: 'expiry',
+        alertType: 'expiry' as const,
       });
     }
   }
 
   result.sort((a, b) => {
-    const aExp = (a as any).alertType === 'expiry';
-    const bExp = (b as any).alertType === 'expiry';
+    const aExp = a.alertType === 'expiry';
+    const bExp = b.alertType === 'expiry';
     if (aExp && !bExp) return -1;
     if (!aExp && bExp) return 1;
-    if (aExp) return (a as any).shortage - (b as any).shortage; // 临期：剩余天数少优先
+    if (aExp) return a.shortage - b.shortage; // 临期：剩余天数少优先
     return b.shortage - a.shortage; // 库存：缺货多优先
   });
 

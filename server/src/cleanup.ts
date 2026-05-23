@@ -31,6 +31,7 @@ async function cleanup() {
         await prisma.outboundOrder.deleteMany({ where: { warehouseId: wid } });
         await prisma.inboundItem.deleteMany({ where: { inbound: { warehouseId: wid } } });
         await prisma.inboundOrder.deleteMany({ where: { warehouseId: wid } });
+        await prisma.productWarehouse.deleteMany({ where: { warehouseId: wid } });
         await prisma.inventory.deleteMany({ where: { warehouseId: wid } });
         await prisma.user.deleteMany({ where: { warehouseId: wid } });
         await prisma.location.deleteMany({ where: { warehouseId: wid } });

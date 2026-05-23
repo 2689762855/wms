@@ -1,15 +1,50 @@
 import { useState, useMemo } from 'react';
-import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, message } from 'antd';
+import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, message, InputNumber } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryLevelName } from '../utils/categoryTree';
 import { getServerUrl } from '../utils/serverConfig';
-import type { Warehouse, InventoryItem, Category, Location } from '../types';
+import type { Warehouse, InventoryItem, Category, Location, ProductWarehouse } from '../types';
 
 function toFullUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http')) return path;
   return (getServerUrl() || '') + path;
+}
+
+function InlineSafetyStock({ productId, warehouseId, currentValue }: { productId: number; warehouseId: number; currentValue?: number }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState<number>(currentValue ?? 0);
+
+  const saveMutation = useMutation({
+    mutationFn: (safetyStock: number) =>
+      safetyStock > 0
+        ? apiClient.put('/product-warehouses', { productId, warehouseId, safetyStock })
+        : apiClient.delete('/product-warehouses', { data: { productId, warehouseId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['productWarehouses'] });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      setEditing(false);
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '保存失败'),
+  });
+
+  if (editing) {
+    return (
+      <Space size={4}>
+        <InputNumber size="small" min={0} value={value} onChange={(v) => setValue(v || 0)} style={{ width: 80 }} autoFocus onPressEnter={() => saveMutation.mutate(value)} />
+        <Button size="small" type="primary" loading={saveMutation.isPending} onClick={() => saveMutation.mutate(value)}>确定</Button>
+        <Button size="small" onClick={() => { setEditing(false); setValue(currentValue ?? 0); }}>取消</Button>
+      </Space>
+    );
+  }
+
+  if (currentValue != null && currentValue > 0) {
+    return <Tag color="blue" style={{ cursor: 'pointer' }} onClick={() => { setValue(currentValue); setEditing(true); }}>{currentValue}</Tag>;
+  }
+  return <Tag style={{ cursor: 'pointer' }} onClick={() => { setValue(0); setEditing(true); }}>未配置</Tag>;
 }
 
 function LocationDetail({ productId, warehouseId }: { productId: number; warehouseId?: number }) {
@@ -105,6 +140,11 @@ export default function Inventory() {
     queryFn: () => apiClient.get('/inventory', { params: { warehouseId, keyword } }).then(r => r.data),
   });
 
+  const { data: productWarehouses } = useQuery({
+    queryKey: ['productWarehouses', warehouseId],
+    queryFn: () => apiClient.get('/product-warehouses', { params: { warehouseId } }).then(r => r.data as ProductWarehouse[]),
+  });
+
   const catMap = useMemo(() => {
     const map = new Map<number, Category>();
     categories?.forEach((c: Category) => map.set(c.id, c));
@@ -114,7 +154,12 @@ export default function Inventory() {
   // 按 productId + warehouseId 合并，同一个商品不同库位汇总显示
   const grouped = useMemo(() => {
     if (!data) return [];
-    const map = new Map<string, InventoryItem & { totalQty: number; locationCount: number }>();
+    // 仓库安全库存 Map
+    const pwMap = new Map<string, number>();
+    productWarehouses?.forEach((pw: ProductWarehouse) => {
+      pwMap.set(`${pw.productId}-${pw.warehouseId}`, pw.safetyStock);
+    });
+    const map = new Map<string, InventoryItem & { totalQty: number; locationCount: number; perWarehouseSafetyStock?: number }>();
     for (const item of data) {
       const key = `${item.productId}-${item.warehouseId}`;
       const existing = map.get(key);
@@ -123,11 +168,11 @@ export default function Inventory() {
         existing.locationCount += 1;
         if (item.updatedAt > existing.updatedAt) existing.updatedAt = item.updatedAt;
       } else {
-        map.set(key, { ...item, totalQty: item.quantity, locationCount: 1 });
+        map.set(key, { ...item, totalQty: item.quantity, locationCount: 1, perWarehouseSafetyStock: pwMap.get(key) });
       }
     }
     return Array.from(map.values()).filter(item => item.totalQty > 0);
-  }, [data]);
+  }, [data, productWarehouses]);
 
   const columns = [
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 130 },
@@ -147,15 +192,23 @@ export default function Inventory() {
     { title: '仓库', dataIndex: ['warehouse', 'name'], key: 'warehouse' },
     {
       title: '库存数量', key: 'quantity', sorter: (a: { totalQty: number }, b: { totalQty: number }) => a.totalQty - b.totalQty,
-      render: (_: unknown, r: { totalQty: number; locationCount: number; product?: { safetyStock?: number } }) => (
+      render: (_: unknown, r: { totalQty: number; locationCount: number; perWarehouseSafetyStock?: number }) => (
         <Space>
           <span style={{ fontWeight: 'bold' }}>{r.totalQty}</span>
           {r.locationCount > 1 && <Tag>{r.locationCount} 个库位</Tag>}
-          {r.totalQty <= (r.product?.safetyStock || 0) && <Tag color="red">低库存</Tag>}
+          {r.perWarehouseSafetyStock != null && r.totalQty <= r.perWarehouseSafetyStock && <Tag color="red">低库存</Tag>}
         </Space>
       ),
     },
-    { title: '安全库存', dataIndex: ['product', 'safetyStock'], key: 'safetyStock' },
+    { title: '安全库存', key: 'safetyStock', width: 120,
+      render: (_: unknown, r: { productId: number; warehouseId: number; perWarehouseSafetyStock?: number }) => (
+        <InlineSafetyStock
+          productId={r.productId}
+          warehouseId={r.warehouseId}
+          currentValue={r.perWarehouseSafetyStock}
+        />
+      ),
+    },
     { title: '最近更新', dataIndex: 'updatedAt', key: 'updatedAt', render: (t: string) => new Date(t).toLocaleString('zh-CN') },
   ];
 

@@ -8,7 +8,7 @@ import { PlusOutlined, UploadOutlined, DownloadOutlined, InboxOutlined } from '@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
-import type { Product, Category, Warehouse } from '../types';
+import type { Product, Category, Warehouse, ProductWarehouse } from '../types';
 import { buildTree, toCascaderOptions, findPath, getCategoryPath } from '../utils/categoryTree';
 export default function Products() {
   const { user } = useAuth();
@@ -19,6 +19,8 @@ export default function Products() {
   const [keyword, setKeyword] = useState('');
   const [importWarehouseId, setImportWarehouseId] = useState<number | undefined>();
   const [imageFileList, setImageFileList] = useState<any[]>([]);
+  const [warehouseConfigs, setWarehouseConfigs] = useState<{ warehouseId?: number; safetyStock: number }[]>([]);
+  const [configsLoaded, setConfigsLoaded] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: warehouses } = useQuery({
@@ -40,10 +42,15 @@ export default function Products() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) =>
-      editing
-        ? apiClient.put(`/products/${editing!.id}`, values)
-        : apiClient.post('/products', values),
+    mutationFn: (values: Record<string, unknown>) => {
+      const payload: Record<string, unknown> = { ...values };
+      if (configsLoaded) {
+        (payload as any).warehouseConfigs = warehouseConfigs.filter(wc => wc.warehouseId);
+      }
+      return editing
+        ? apiClient.put(`/products/${editing!.id}`, payload)
+        : apiClient.post('/products', payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       message.success(editing ? '已保存' : '已创建');
@@ -65,10 +72,12 @@ export default function Products() {
     setEditing(null);
     form.resetFields();
     setImageFileList([]);
+    setWarehouseConfigs([]);
+    setConfigsLoaded(true);
     setOpen(true);
   };
 
-  const openEdit = (p: Product) => {
+  const openEdit = async (p: Product) => {
     setEditing(p);
     const values: Record<string, unknown> = { ...p };
     if (p.categoryId && flatCats) {
@@ -79,6 +88,14 @@ export default function Products() {
     if ((p as any).expiryDate) values.expiryDate = dayjs((p as any).expiryDate);
     form.setFieldsValue(values);
     setImageFileList((p as any).imageUrl ? [{ uid: '-1', name: '商品图片', status: 'done', url: (p as any).imageUrl }] : []);
+    // 加载已有仓库安全库存配置
+    try {
+      const pws = await apiClient.get('/product-warehouses', { params: { productId: p.id } }).then(r => r.data as ProductWarehouse[]);
+      setWarehouseConfigs(pws.map(pw => ({ warehouseId: pw.warehouseId, safetyStock: pw.safetyStock })));
+      setConfigsLoaded(true);
+    } catch {
+      setConfigsLoaded(false);
+    }
     setOpen(true);
   };
 
@@ -88,7 +105,9 @@ export default function Products() {
     { title: '规格', dataIndex: 'spec', key: 'spec' },
     { title: '单位', dataIndex: 'unit', key: 'unit', width: 60 },
     { title: '条码', dataIndex: 'barcode', key: 'barcode', width: 130 },
-    { title: '安全库存', dataIndex: 'safetyStock', key: 'safetyStock', width: 80 },
+    { title: '安全库存', key: 'safetyStock', width: 100,
+      render: (_: unknown, r: Product) => <span style={{ color: '#888' }}>{r.safetyStock || '—'}</span>,
+    },
     { title: '分类', key: 'category', width: 180,
       render: (_: unknown, r: Product) => r.category ? getCategoryPath(r.category) : '-',
     },
@@ -222,10 +241,25 @@ export default function Products() {
               </Form.Item>
             </div>
           </div>
+          <Form.Item label="仓库安全库存">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              {warehouseConfigs.map((wc, idx) => (
+                <Space key={idx}>
+                  <Select
+                    value={wc.warehouseId}
+                    onChange={(v) => { const next = [...warehouseConfigs]; next[idx] = { ...next[idx], warehouseId: v }; setWarehouseConfigs(next); }}
+                    placeholder="选择仓库"
+                    style={{ width: 160 }}
+                    options={warehouses?.map((w: Warehouse) => ({ label: w.name, value: w.id }))}
+                  />
+                  <InputNumber min={0} value={wc.safetyStock} onChange={(v) => { const next = [...warehouseConfigs]; next[idx] = { ...next[idx], safetyStock: v || 0 }; setWarehouseConfigs(next); }} addonBefore="安全库存" />
+                  <Button danger size="small" onClick={() => setWarehouseConfigs(warehouseConfigs.filter((_, i) => i !== idx))}>删除</Button>
+                </Space>
+              ))}
+              <Button type="dashed" onClick={() => setWarehouseConfigs([...warehouseConfigs, { warehouseId: undefined, safetyStock: 0 }])} block>+ 添加仓库配置</Button>
+            </Space>
+          </Form.Item>
           <Space size="middle">
-            <Form.Item name="safetyStock" label="安全库存" initialValue={0}>
-              <InputNumber min={0} />
-            </Form.Item>
             <Form.Item name="costPrice" label="成本价">
               <InputNumber min={0} precision={2} prefix="¥" />
             </Form.Item>

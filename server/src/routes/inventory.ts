@@ -46,7 +46,30 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
     include: { product: { include: { category: true } }, warehouse: true, location: true },
     orderBy: { product: { name: 'asc' } },
   });
-  res.json(data);
+
+  // 附加仓库级安全库存
+  const pwMap = new Map<string, number>();
+  const distinctPairs = [...new Set(data.map(d => `${d.productId}-${d.warehouseId}`))];
+  if (distinctPairs.length > 0) {
+    const pwRecords = await prisma.productWarehouse.findMany({
+      where: {
+        OR: distinctPairs.map(key => {
+          const [pid, wid] = key.split('-').map(Number);
+          return { productId: pid, warehouseId: wid };
+        }),
+      },
+      select: { productId: true, warehouseId: true, safetyStock: true },
+    });
+    for (const pw of pwRecords) {
+      pwMap.set(`${pw.productId}-${pw.warehouseId}`, pw.safetyStock);
+    }
+  }
+
+  const enriched = data.map(d => ({
+    ...d,
+    product: d.product ? { ...d.product, warehouseSafetyStock: pwMap.get(`${d.productId}-${d.warehouseId}`) } : d.product,
+  }));
+  res.json(enriched);
 });
 
 // 库存流水

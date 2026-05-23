@@ -55,6 +55,16 @@ export interface Product {
   costPrice?: number;
   salePrice?: number;
   imageUrl?: string | null;
+  warehouseSafetyStock?: number;
+}
+
+export interface ProductWarehouse {
+  id: number;
+  productId: number;
+  product?: Product;
+  warehouseId: number;
+  warehouse?: { id: number; name: string };
+  safetyStock: number;
 }
 
 export interface InventoryItem {
