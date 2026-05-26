@@ -1,6 +1,8 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Layout as AntLayout, Menu, Button, theme, Dropdown, Alert, Tag } from 'antd';
+
+const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 import {
   DashboardOutlined,
   BankOutlined,
@@ -39,7 +41,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, []);
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = !isStandalone && user?.role === 'super_admin';
   const isTenant = user?.role === 'tenant_admin';
   const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
   const plan = isTenant && user?.maxWarehouses != null ? (user.maxWarehouses >= 3 ? 'professional' : 'standard') : null;

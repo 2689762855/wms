@@ -13,7 +13,7 @@ console.log('=== 库存管理系统 - 部署打包 ===\n');
 
 // 1. 构建前端
 console.log('[1/5] 构建前端...');
-execSync('npx vite build', { cwd: path.join(root, 'client'), stdio: 'inherit' });
+execSync('npx vite build', { cwd: path.join(root, 'client'), stdio: 'inherit', env: { ...process.env, VITE_STANDALONE: 'true' } });
 
 // 2. 清理并创建部署目录
 console.log('[2/5] 准备部署目录...');
@@ -87,12 +87,7 @@ const copyDir = (src, dest, exclude = []) => {
 
 // 4. 复制服务端代码
 console.log('[4/5] 复制服务端...');
-copyDir(path.join(root, 'server'), serverDir, ['node_modules', 'dist', '.git', '.prisma', 'dev.db', 'dev.db-journal']);
-// 复制 apk 目录到部署包
-const apkSrc = path.join(root, 'server', 'apk');
-if (fs.existsSync(apkSrc)) {
-  copyDir(apkSrc, path.join(serverDir, 'apk'));
-}
+copyDir(path.join(root, 'server'), serverDir, ['node_modules', 'dist', '.git', '.prisma', 'dev.db', 'dev.db-journal', 'apk']);
 // 复制前端构建产物到 server/client/dist
 const clientDist = path.join(serverDir, 'client', 'dist');
 fs.mkdirSync(clientDist, { recursive: true });
@@ -150,7 +145,7 @@ if (fs.existsSync(nodeDir)) {
 
 // 4.6 清理敏感文件（确保每次部署都是干净状态）
 console.log('[清理] 移除敏感文件...');
-const filesToClean = ['.env', 'prisma/dev.db', 'prisma/dev.db-journal'];
+const filesToClean = ['.env', 'prisma/dev.db', 'prisma/dev.db-journal', 'src/routes/app.ts'];
 for (const f of filesToClean) {
   const p = path.join(serverDir, f);
   if (fs.existsSync(p)) {
@@ -293,7 +288,6 @@ if not exist ".env" (
     (
         echo NODE_ENV=production
         echo JWT_ADMIN_SECRET=%random%%random%%random%%random%%random%%random%
-        echo JWT_CUSTOMER_SECRET=%random%%random%%random%%random%%random%%random%
     ) > .env
     echo [信息] 密钥已保存到 .env
 )
@@ -309,6 +303,11 @@ echo [信息] 初始化数据库...
 :: 检查是否首次运行（数据库文件不存在）
 set "FIRST_RUN="
 if not exist "prisma\\dev.db" set "FIRST_RUN=1"
+
+:: 清理上次 Prisma 生成的引擎文件（Windows 文件锁可能导致残留）
+if exist "node_modules\\.prisma" (
+    rd /s /q "node_modules\\.prisma" 2>nul
+)
 
 "%NODE_EXE%" "%NPX_CLI%" -y prisma generate
 if %errorlevel% neq 0 (
@@ -329,10 +328,14 @@ if %errorlevel% neq 0 (
 :: 首次运行：初始化管理员账号
 if defined FIRST_RUN (
     echo [信息] 首次运行，初始化管理员账号...
-    "%NODE_EXE%" "%NPX_CLI%" -y tsx src/initProd.ts
-    if %errorlevel% neq 0 (
-        echo [警告] 初始化失败，可手动运行: npx -y tsx src/initProd.ts
-    )
+    "%NODE_EXE%" "%NPX_CLI%" -y tsx src/initProd.ts admin123
+    echo.
+    echo ============================================
+    echo  默认管理员账号: admin / admin123
+    echo  首次登录后请立即修改密码！
+    echo ============================================
+    echo.
+    pause
 )
 
 :: 启动服务
@@ -384,7 +387,6 @@ if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" << ENVEOF
 NODE_ENV=production
 JWT_ADMIN_SECRET=$(openssl rand -hex 32 2>/dev/null || node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-JWT_CUSTOMER_SECRET=$(openssl rand -hex 32 2>/dev/null || node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 ENVEOF
     chmod 600 "$ENV_FILE"
     echo "[信息] 密钥已保存到 $ENV_FILE"
@@ -414,7 +416,13 @@ npx -y prisma migrate deploy
 # 首次运行：初始化管理员账号
 if [ "$FIRST_RUN" = true ]; then
     echo "[信息] 首次运行，初始化管理员账号..."
-    npx -y tsx src/initProd.ts || echo "[警告] 初始化失败，可手动运行: npx -y tsx src/initProd.ts"
+    npx -y tsx src/initProd.ts admin123
+    echo
+    echo "  ============================================"
+    echo "   默认管理员账号: admin / admin123"
+    echo "   首次登录后请立即修改密码！"
+    echo "  ============================================"
+    echo
 fi
 
 echo
@@ -582,69 +590,68 @@ echo "  如需完全删除，请手动删除整个文件夹。"
 echo
 `;
 
-	// 创建 reset-password.bat
 	const resetBat = `@echo off
-	title 库存管理系统 - 重置管理员密码
+title 库存管理系统 - 重置管理员密码
 
-	echo.
-	echo  ============================================
-	echo      库存管理系统 (WMS)
-	echo      重置管理员密码
-	echo  ============================================
-	echo.
+echo.
+echo  ============================================
+echo      库存管理系统 (WMS)
+echo      重置管理员密码
+echo  ============================================
+echo.
 
-	cd /d "%~dp0server"
+cd /d "%~dp0server"
 
-	:: 查找 Node.js
-	set "NODE_EXE="
+:: 查找 Node.js
+set "NODE_EXE="
 
-	:: 方法1：自带的便携版
-	if exist "%~dp0nodejs\\node.exe" (
-	    set "NODE_EXE=%~dp0nodejs\\node.exe"
-	    set "PATH=%~dp0nodejs;%PATH%"
-	)
+:: 方法1：自带的便携版
+if exist "%~dp0nodejs\node.exe" (
+    set "NODE_EXE=%~dp0nodejs\node.exe"
+    set "PATH=%~dp0nodejs;%PATH%"
+)
 
-	:: 方法2：系统安装的 Node.js
-	if "%NODE_EXE%"=="" (
-	    node --version >nul 2>nul
-	    if %errorlevel% equ 0 set "NODE_EXE=node"
-	)
+:: 方法2：系统安装的 Node.js
+if "%NODE_EXE%"=="" (
+    node --version >/dev/null 2>nul
+    if %errorlevel% equ 0 set "NODE_EXE=node"
+)
 
-	:: 方法3：常见安装路径
-	if "%NODE_EXE%"=="" if exist "C:\\Program Files\\nodejs\\node.exe" set "NODE_EXE=C:\\Program Files\\nodejs\\node.exe"
-	if "%NODE_EXE%"=="" if exist "C:\\Program Files (x86)\\nodejs\\node.exe" set "NODE_EXE=C:\\Program Files (x86)\\nodejs\\node.exe"
+:: 方法3：常见安装路径
+if "%NODE_EXE%"=="" if exist "C:\Program Files\nodejs\node.exe" set "NODE_EXE=C:\Program Files\nodejs\node.exe"
+if "%NODE_EXE%"=="" if exist "C:\Program Files (x86)\nodejs\node.exe" set "NODE_EXE=C:\Program Files (x86)\nodejs\node.exe"
 
-	if "%NODE_EXE%"=="" (
-	    echo [错误] 未找到 Node.js
-	    echo 部署包自带 Node.js，请检查 nodejs 文件夹是否被误删。
-	    pause
-	    exit /b 1
-	)
+if "%NODE_EXE%"=="" (
+    echo [错误] 未找到 Node.js
+    echo 部署包自带 Node.js，请检查 nodejs 文件夹是否被误删。
+    pause
+    exit /b 1
+)
 
-	:: 确保完整路径
-	if "%NODE_EXE%"=="node" (
-	    for /f "tokens=*" %%i in ('where node') do set "NODE_EXE=%%i"
-	)
+:: 确保完整路径
+if "%NODE_EXE%"=="node" (
+    for /f "tokens=*" %%i in ('where node') do set "NODE_EXE=%%i"
+)
 
-	:: 推导 npm/npx CLI 路径
-	for %%a in ("%NODE_EXE%") do set "NODE_HOME=%%~dpa"
-	set "NPX_CLI=%NODE_HOME%node_modules\\npm\\bin\\npx-cli.js"
+:: 推导 npm/npx CLI 路径
+for %%a in ("%NODE_EXE%") do set "NODE_HOME=%%~dpa"
+set "NPX_CLI=%NODE_HOME%node_modules\npm\bin\npx-cli.js"
 
-	echo [信息] 正在重置管理员密码...
-	echo.
+echo [信息] 正在重置管理员密码为 admin123...
+echo.
 
-	"%NODE_EXE%" "%NPX_CLI%" -y tsx src/resetPassword.ts
+"%NODE_EXE%" "%NPX_CLI%" -y tsx src/resetPassword.ts admin admin123
 
-	echo.
-	echo  ============================================
-	echo      请记下上方显示的新密码！
-	echo  ============================================
-	echo.
-	echo  密码已重置，可使用新密码登录系统。
-	echo.
+echo.
+echo  ============================================
+echo      密码已重置为 admin123
+echo  ============================================
+echo.
+echo  请使用 admin / admin123 登录系统。
+echo.
 
-	pause
-	`;
+pause
+`;
 
 	// 写入脚本文件（.bat 文件需要 GBK 编码才能在 Windows cmd 中正确显示中文）
 	fs.writeFileSync(path.join(deployDir, 'start.bat'), startBat, 'utf-8');

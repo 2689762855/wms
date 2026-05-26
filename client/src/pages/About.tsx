@@ -1,6 +1,8 @@
 import { Card, Typography, Space } from 'antd';
 import { MailOutlined, WechatOutlined } from '@ant-design/icons';
 
+const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
+
 export default function About() {
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>关于我们</Typography.Title>}>
@@ -25,7 +27,7 @@ export default function About() {
               { title: '库存预警', desc: '安全库存设置 → 低于安全线自动标红预警' },
               { title: '报表统计', desc: '出入库汇总、仓库对比、周转率分析' },
               { title: '用户与权限', desc: '三级角色（超管/仓管/操作员）、JWT 认证、仓库级数据隔离' },
-              { title: '客户管理', desc: '多租户支持、客户独立仓库、到期/暂停管理' },
+              ...(!isStandalone ? [{ title: '客户管理', desc: '多租户支持、客户独立仓库、到期/暂停管理' }] : []),
               { title: '移动端 APP', desc: 'Android APK、扫码入库/出库/盘点/转移、库位二维码扫码' },
             ].map(f => (
               <div key={f.title} style={{ background: '#fafafa', padding: '12px 16px', borderRadius: 6 }}>

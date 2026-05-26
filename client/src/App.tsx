@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -66,9 +68,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function HomeRedirect() {
   const { user } = useAuth();
-  // matchMedia 比 window.innerWidth 更可靠，不受 viewport 缩放影响
   const isMobile = window.matchMedia('(max-width: 991px)').matches;
-  if (user?.role === 'super_admin') {
+  if (!isStandalone && user?.role === 'super_admin') {
     return <Navigate to={isMobile ? '/m/admin' : '/admin'} replace />;
   }
   if (isMobile) return <Navigate to="/m/inbound" replace />;
@@ -80,7 +81,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/claim" element={<Claim />} />
-      <Route path="/m/admin" element={<ProtectedRoute><MobileCustomers /></ProtectedRoute>} />
+      {!isStandalone && <Route path="/m/admin" element={<ProtectedRoute><MobileCustomers /></ProtectedRoute>} />}
       <Route path="/m" element={<ProtectedRoute><MobileWorkerLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/m/inbound" replace />} />
         <Route path="inbound" element={<MobileInboundList />} />
@@ -97,9 +98,9 @@ function AppRoutes() {
       </Route>
       <Route path="/transfer/:id" element={<ProtectedRoute><AppLayout><TransferDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/warehouses/:id/locations" element={<ProtectedRoute><AppLayout><WarehouseLocations /></AppLayout></ProtectedRoute>} />
-      <Route path="/admin" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+      {!isStandalone && <Route path="/admin" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
-      </Route>
+      </Route>}
       <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<HomeRedirect />} />
         <Route path="dashboard" element={<Dashboard />} />
@@ -122,7 +123,7 @@ function AppRoutes() {
         <Route path="reports/in-out" element={<ReportsInOut />} />
         <Route path="reports/turnover" element={<ReportsTurnover />} />
         <Route path="settings/users" element={<Users />} />
-        <Route path="settings/customers" element={<Customers />} />
+        {!isStandalone && <Route path="settings/customers" element={<Customers />} />}
         <Route path="settings/about" element={<About />} />
       </Route>
     </Routes>
