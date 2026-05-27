@@ -19,7 +19,7 @@ export default function OutboundDetail() {
     mutationFn: () => apiClient.put(`/outbound/${id}/confirm`),
     onSuccess: () => {
       message.success('出库已确认，库存已更新');
-      queryClient.invalidateQueries({ queryKey: ['outbound', id] });
+      queryClient.invalidateQueries({ queryKey: ['outbound'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
     },
     onError: (err: any) => message.error(err.response?.data?.error || '确认失败'),

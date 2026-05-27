@@ -1,56 +1,117 @@
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Table, Typography, Card, Descriptions } from 'antd';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Spin, Modal, Input, message } from 'antd';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
 
 export default function ContainerReport() {
   const { id } = useParams<{ id: string }>();
+  const [editOpen, setEditOpen] = useState(false);
+  const [editText, setEditText] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['container-report', id],
     queryFn: () => apiClient.get(`/containers/${id}/report`).then((r) => r.data),
   });
 
-  if (isLoading) return <Card loading />;
-  if (!data) return null;
+  const saveMutation = useMutation({
+    mutationFn: (template: string) => apiClient.put(`/customers/${data.customerId}/template`, { template }),
+    onSuccess: () => { message.success('模板已保存'); setEditOpen(false); },
+    onError: (err: any) => message.error(err.response?.data?.error || '保存失败'),
+  });
 
-  const columns = [
-    { title: 'SKU', dataIndex: 'sku', width: 100 },
-    { title: '商品名称', dataIndex: 'name' },
-    { title: '规格', dataIndex: 'spec' },
-    { title: '计划数量', dataIndex: 'plannedQty' },
-    { title: '实际装柜', dataIndex: 'actualQty' },
-    { title: '甩柜', dataIndex: 'returnedQty' },
-    { title: '单位', dataIndex: 'unit', width: 60 },
-  ];
+  useEffect(() => {
+    if (data) {
+      setTimeout(() => window.print(), 500);
+    }
+  }, [data]);
+
+  if (isLoading) return <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>;
+  if (!data) return <div>加载失败</div>;
+
+  const items: any[] = data.summary || [];
+
+  // 替换模板变量
+  const renderTemplate = (template: string) => {
+    const vars: Record<string, string> = {
+      containerNo: data.containerNo || '',
+      customerName: data.customerName || '',
+      toYardTime: data.toYardTime ? dayjs(data.toYardTime).format('YYYY-MM-DD HH:mm') : '',
+      sealTime: data.sealTime ? dayjs(data.sealTime).format('YYYY-MM-DD HH:mm') : '',
+      sealDate: data.sealTime ? dayjs(data.sealTime).format('YYYY-MM-DD') : '',
+      totalPlanned: String(data.totals?.totalPlanned || 0),
+      totalActual: String(data.totals?.totalActual || 0),
+      totalReturned: String(data.totals?.totalReturned || 0),
+    };
+
+    // 处理 {{#rows}}...{{/rows}} 循环
+    const rowsRegex = /\{\{#rows\}\}([\s\S]*?)\{\{\/rows\}\}/g;
+    let result = template.replace(rowsRegex, (_match, rowTemplate) => {
+      return items.map((item, idx) => {
+        const rowVars: Record<string, string> = {
+          ...vars,
+          index: String(idx + 1),
+          sku: item.sku || '',
+          name: item.name || '',
+          spec: item.spec || '',
+          unit: item.unit || '',
+          plannedQty: String(item.plannedQty || 0),
+          actualQty: String(item.actualQty || 0),
+          returnedQty: String(item.returnedQty || 0),
+        };
+        let row = rowTemplate;
+        for (const [k, v] of Object.entries(rowVars)) {
+          row = row.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v);
+        }
+        return row;
+      }).join('');
+    });
+
+    // 替换普通变量
+    for (const [k, v] of Object.entries(vars)) {
+      result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v);
+    }
+
+    return result;
+  };
+
+  const template = data.reportTemplate;
+  const htmlContent = template ? renderTemplate(template) : null;
 
   return (
-    <div style={{ padding: 24, maxWidth: 800 }}>
-      <Typography.Title level={3}>装柜报表</Typography.Title>
+    <div style={{ padding: 16, fontFamily: 'sans-serif' }}>
+      <style>{`
+        @page { size: A4 landscape; margin: 8mm; }
+        @media print {
+          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .no-print { display: none; }
+        }
+      `}</style>
 
-      <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="柜号">{data.containerNo}</Descriptions.Item>
-        <Descriptions.Item label="到柜时间">{data.toYardTime ? dayjs(data.toYardTime).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
-        <Descriptions.Item label="封柜时间">{data.sealTime ? dayjs(data.sealTime).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
-        <Descriptions.Item label="状态">{data.status === 'sealed' ? '已封柜' : data.status}</Descriptions.Item>
-      </Descriptions>
+      <div className="no-print" style={{ marginBottom: 16 }}>
+        <button onClick={() => window.print()} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer' }}>打印</button>
+        <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>编辑模板</button>
+        <span style={{ marginLeft: 16, color: '#999', fontSize: 13 }}>提示：打印时请关闭浏览器「页眉和页脚」</span>
+      </div>
 
-      <Table rowKey="sku" columns={columns} dataSource={data.summary || []} pagination={false} size="small"
-        summary={() => (
-          <Table.Summary.Row>
-            <Table.Summary.Cell index={0} colSpan={3}><Typography.Text strong>合计</Typography.Text></Table.Summary.Cell>
-            <Table.Summary.Cell index={1}><Typography.Text strong>{data.totals?.totalPlanned}</Typography.Text></Table.Summary.Cell>
-            <Table.Summary.Cell index={2}><Typography.Text strong>{data.totals?.totalActual}</Typography.Text></Table.Summary.Cell>
-            <Table.Summary.Cell index={3}><Typography.Text strong>{data.totals?.totalReturned}</Typography.Text></Table.Summary.Cell>
-            <Table.Summary.Cell index={4} />
-          </Table.Summary.Row>
-        )}
-      />
+      <Modal title={`编辑报表模板 - ${data.customerName}`} open={editOpen} onOk={() => saveMutation.mutate(editText)} onCancel={() => setEditOpen(false)} width={800} okText="保存" cancelText="取消">
+        <Input.TextArea value={editText} onChange={e => setEditText(e.target.value)} rows={25} style={{ fontFamily: 'monospace', fontSize: 12 }} placeholder="粘贴 HTML 模板..." />
+        <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
+          可用变量：{`{{containerNo}} {{customerName}} {{sealDate}} {{sealTime}} {{toYardTime}} {{totalPlanned}} {{totalActual}} {{totalReturned}}`}<br />
+          循环行：{`{{#rows}}...{{/rows}}`} 内可用 {`{{index}} {{sku}} {{name}} {{plannedQty}} {{actualQty}} {{returnedQty}} {{spec}} {{unit}}`}
+        </div>
+      </Modal>
 
-      <Typography.Text type="secondary" style={{ display: 'block', marginTop: 24 }}>
-        打印日期：{dayjs().format('YYYY-MM-DD HH:mm')}
-      </Typography.Text>
+      {htmlContent ? (
+        <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+      ) : (
+        <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+          <p>该客户尚未设置报表模板</p>
+          <p style={{ fontSize: 13 }}>请联系管理员在客户设置中上传 HTML 模板</p>
+          <p style={{ fontSize: 12, marginTop: 20 }}>模板使用 {'{{变量}}'} 占位，支持 {'{{#rows}}...{{/rows}}'} 循环</p>
+        </div>
+      )}
     </div>
   );
 }

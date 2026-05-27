@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, superAdmin, validateId } from '../middleware/auth';
+import { AuthRequest, authenticate, superAdmin, adminWrite, validateId } from '../middleware/auth';
 
 export const customersRouter = Router();
 customersRouter.use(authenticate);
@@ -213,4 +213,21 @@ customersRouter.put('/:id/renew', validateId, async (req: AuthRequest, res: Resp
   });
 
   res.json({ message: `已续费 ${extendDays} 天`, expiresAt: newExpiresAt });
+});
+
+// 更新客户报表模板
+customersRouter.put('/:id/template', authenticate, adminWrite, validateId, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  const { template } = req.body;
+  if (typeof template !== 'string') return res.status(400).json({ error: '模板内容必填' });
+  await prisma.customer.update({ where: { id }, data: { reportTemplate: template } });
+  res.json({ message: '模板已保存' });
+});
+
+// 获取客户报表模板
+customersRouter.get('/:id/template', authenticate, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  const customer = await prisma.customer.findUnique({ where: { id }, select: { reportTemplate: true } });
+  if (!customer) return res.status(404).json({ error: '客户不存在' });
+  res.json({ template: customer.reportTemplate || null });
 });

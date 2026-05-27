@@ -1,0 +1,22 @@
+<style>
+table { border-collapse: collapse; width: 794px;font-size:12px; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+th { background-color: #f2f2f2; font-weight: bold; }
+tr:nth-child(even) { background-color: #f9f9f9; }
+tr:hover { background-color: #f5f5f5; }
+</style>
+<table align="center">
+  <thead><tr><th colspan="7" style="font-size:16px;">越南文得立家具制品有限公司<br>CÔNG TY TNHH SẢN XUẤT GIA DỤNG WEN DE LI VIỆT NAM</th></tr></thead>
+  <tbody>
+    <tr><td colspan="7" style="font-size:14px;">成品出货单<br>Phiếu xuất kho thành phẩm</td></tr>
+    <tr><td style="width:70px;">客户<br>Khách hàng</td><td style="width:120px;">{{customerName}}</td><td style="width:90px;">装柜日期<br>Ngày đóng cont</td><td>{{sealDate}}</td><td style="color:#cc0000;">货柜号<br>Số cont</td><td colspan="2">{{containerNo}}</td></tr>
+    <tr><td>到柜时间<br>Giờ đến đóng cont</td><td colspan="3">{{toYardTime}}</td><td style="color:#cc0000;">排柜编号<br>Mã đóng cont</td><td colspan="2"></td></tr>
+    <tr><td>封柜时间<br>Giờ niêm phong cont</td><td colspan="3">{{sealTime}}</td><td style="color:#cc0000;">订舱号<br>Booking No.</td><td colspan="2"></td></tr>
+    <tr><td>序号<br>STT</td><td>产品SKU<br>Mã SKU</td><td>数量<br>Số lượng</td><td style="color:#cc0000;width:90px;">实装数<br>SL thực tế đóng</td><td style="color:#cc0000;">短装数量<br>SL thiếu</td><td style="width:50px;">装柜人员签字<br>Ký tên NV đóng cont</td><td style="width: 180px;">备注</td></tr>
+    {{#rows}}
+    <tr><td style="height: 40px;">{{index}}</td><td style="height: 40px;">{{sku}}</td><td style="height: 40px;">{{plannedQty}}</td><td style="height: 40px;color:#cc0000;">{{actualQty}}</td><td style="height: 40px;color:#cc0000;">{{returnedQty}}</td><td style="height: 40px;"></td><td style="height: 40px;"></td></tr>
+    {{/rows}}
+    <tr><td colspan="2" style="color:#cc0000;text-align:right;">合计：</td><td style="color:#cc0000;">计划数量 {{totalPlanned}} 件</td><td style="color:#cc0000;">实装 {{totalActual}} 件</td><td style="color:#cc0000;">甩货 {{totalReturned}} 件</td><td>货件号：</td><td></td></tr>
+    <tr><td colspan="2">装柜负责人<br>Phụ trách đóng cont</td><td></td><td>成品仓核对签字<br>Ký xác nhận kho TP</td><td colspan="3"></td></tr>
+  </tbody>
+</table>

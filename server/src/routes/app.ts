@@ -45,7 +45,7 @@ appRouter.get('/download/latest', (_req: Request, res: Response) => {
           const m = name.match(/v([\d.]+)/);
           if (!m) return 0;
           const parts = m[1].split('.').map(Number);
-          return parts[0] * 1000 + (parts[1] || 0);
+          return (parts[0] || 0) * 1000000 + (parts[1] || 0) * 1000 + (parts[2] || 0);
         };
         return getVer(b) - getVer(a);
       });

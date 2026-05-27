@@ -38,6 +38,7 @@ export default function MobileOutboundDetail() {
           <Descriptions.Item label="单号">{order.orderNo}</Descriptions.Item>
           <Descriptions.Item label="仓库">{order.warehouse?.name}</Descriptions.Item>
           <Descriptions.Item label="领用人">{order.receiver || '-'}</Descriptions.Item>
+          <Descriptions.Item label="关联货柜">{order.container ? <Tag color="blue">{order.container.containerNo}</Tag> : '-'}</Descriptions.Item>
           {order.location && <Descriptions.Item label="库位">{order.location.name}</Descriptions.Item>}
           <Descriptions.Item label="时间">{new Date(order.createdAt).toLocaleString('zh-CN')}</Descriptions.Item>
         </Descriptions>

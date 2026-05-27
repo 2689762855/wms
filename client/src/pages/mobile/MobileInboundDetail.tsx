@@ -40,6 +40,15 @@ export default function MobileInboundDetail() {
           <Descriptions.Item label="单号">{order.orderNo}</Descriptions.Item>
           <Descriptions.Item label="仓库">{order.warehouse?.name}</Descriptions.Item>
           <Descriptions.Item label="供应商">{order.supplier || '-'}</Descriptions.Item>
+          <Descriptions.Item label="关联合同">
+            {(() => {
+              const contracts = [...new Set((order.items || []).filter((i: any) => i.contract).map((i: any) => `${i.contract.contractNo}|${i.contract.id}`))];
+              return contracts.length > 0 ? contracts.map((s: string) => {
+                const [no, cid] = s.split('|');
+                return <Tag key={cid} color="blue">{no}</Tag>;
+              }) : '-';
+            })()}
+          </Descriptions.Item>
           {order.location && <Descriptions.Item label="库位">{order.location.name}</Descriptions.Item>}
           <Descriptions.Item label="时间">{new Date(order.createdAt).toLocaleString('zh-CN')}</Descriptions.Item>
         </Descriptions>

@@ -52,7 +52,7 @@ export default function Containers() {
     { title: '柜号', dataIndex: 'containerNo', key: 'containerNo', render: (v: string, r: any) => <a onClick={() => navigate(`/containers/${r.id}`)}>{v}</a> },
     { title: '客户', dataIndex: ['customer', 'realName'], key: 'customer' },
     { title: '状态', dataIndex: 'status', render: (v: string) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.label}</Tag> },
-    { title: '商品数', key: 'items', render: (_: any, r: any) => r.items?.length || 0 },
+    { title: '商品数', key: 'items', render: (_: any, r: any) => new Set(r.items?.map((i: any) => i.productId)).size || 0 },
     { title: '到柜时间', dataIndex: 'toYardTime', render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
     { title: '封柜时间', dataIndex: 'sealTime', render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
     { title: '创建时间', dataIndex: 'createdAt', render: (v: string) => v?.substring(0, 10) },

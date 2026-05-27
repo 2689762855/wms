@@ -34,6 +34,12 @@ export default function MobileInboundNew() {
     queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 9999 } }).then(r => r.data),
   });
 
+  const { data: selectedContract } = useQuery({
+    queryKey: ['mobile-contract', selectedContractId],
+    queryFn: () => apiClient.get(`/contracts/${selectedContractId}`).then(r => r.data),
+    enabled: !!selectedContractId,
+  });
+
   const { data: productsData, isLoading: loadingProducts } = useQuery({
     queryKey: ['mobile-product-search', productSearch],
     queryFn: () => apiClient.get('/products', { params: { keyword: productSearch, pageSize: 30 } }).then(r => r.data.data as Product[]),
@@ -93,6 +99,16 @@ export default function MobileInboundNew() {
       message.error('查询商品失败');
     }
   }, []);
+
+  const addFromContract = (ci: any) => {
+    const remaining = ci.plannedQty - ci.receivedQty;
+    if (remaining <= 0) return;
+    setCart(prev => {
+      const existing = prev.find(i => i.productId === ci.productId);
+      if (existing) return prev;
+      return [...prev, { key: String(Date.now()), productId: ci.productId, product: ci.product, quantity: Math.min(remaining, ci.plannedQty), contractId: selectedContractId } as any];
+    });
+  };
 
   const updateQuantity = (key: string, delta: number) => {
     setCart(prev => prev.map(i => {
@@ -188,6 +204,27 @@ export default function MobileInboundNew() {
                 <Select allowClear placeholder="选择合同" value={selectedContractId} onChange={(v) => setSelectedContractId(v ?? null)} style={{ width: '100%' }} size="large"
                   options={contractsData?.data?.map((c: any) => ({ label: `${c.contractNo} (${c.customer?.realName || c.customer?.username})`, value: c.id }))} />
               </div>
+              {selectedContract && (
+                <Card size="small" title={`合同 ${selectedContract.contractNo}`} style={{ background: '#fafafa' }}>
+                  {selectedContract.items?.map((ci: any) => {
+                    const remaining = ci.plannedQty - ci.receivedQty;
+                    const inCart = cart.find(i => i.productId === ci.productId);
+                    return (
+                      <div key={ci.productId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <Typography.Text style={{ flex: 1, fontSize: 14 }}>{ci.product?.name}</Typography.Text>
+                        <Tag>{ci.receivedQty}/{ci.plannedQty}</Tag>
+                        {inCart ? (
+                          <Tag color="blue">已添加 x{inCart.quantity}</Tag>
+                        ) : remaining > 0 ? (
+                          <Button size="small" type="primary" onClick={() => addFromContract(ci)}>加入</Button>
+                        ) : (
+                          <Tag color="green">已完成</Tag>
+                        )}
+                      </div>
+                    );
+                  })}
+                </Card>
+              )}
               <Button type="primary" size="large" block loading={confirmMutation.isPending}
                 disabled={cart.length === 0}
                 onClick={() => confirmMutation.mutate()} style={{ height: 48, fontSize: 16 }}>

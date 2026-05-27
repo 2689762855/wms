@@ -26,7 +26,7 @@ containersRouter.get('/', async (req: AuthRequest, res: Response) => {
         customer: { select: { id: true, username: true, realName: true } },
         items: {
           include: {
-            product: { select: { id: true, sku: true, name: true, spec: true, unit: true } },
+            product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
           },
         },
       },
@@ -48,7 +48,7 @@ containersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response)
       customer: { select: { id: true, username: true, realName: true } },
       items: {
         include: {
-          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } },
+          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
           location: { select: { id: true, name: true } },
         },
       },
@@ -78,7 +78,7 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
       customer: { select: { id: true, username: true, realName: true } },
       items: {
         include: {
-          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } },
+          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
         },
       },
     },
@@ -121,7 +121,7 @@ containersRouter.put('/:id/load', validateId, adminWrite, async (req: AuthReques
   const updated = await prisma.container.findUnique({
     where: { id },
     include: {
-      items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
+      items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } } } },
     },
   });
   res.json(updated);
@@ -139,53 +139,92 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
   if (!container) return res.status(404).json({ error: '货柜不存在' });
   if (container.status !== 'loading') return res.status(400).json({ error: '请先完成装柜' });
 
-  const updated = await prisma.$transaction(async (tx) => {
-    for (const item of container.items) {
-      const outbound = await tx.outboundOrder.findUnique({
-        where: { id: item.outboundId },
-        select: { warehouseId: true },
-      });
-      const warehouseId = outbound?.warehouseId;
-      if (!warehouseId) continue;
+  const returnLocations = req.body.returnLocations as Record<string, number> | undefined;
 
+  const updated = await prisma.$transaction(async (tx) => {
+    // 按商品合并甩柜数量，统一归还
+    const returnMap = new Map<number, { warehouseId: number; qty: number; locationId?: number }>();
+    for (const item of container.items) {
       if (item.returnedQty > 0) {
+        const outbound = await tx.outboundOrder.findUnique({
+          where: { id: item.outboundId },
+          select: { warehouseId: true },
+        });
+        const warehouseId = outbound?.warehouseId;
+        if (!warehouseId) continue;
+
+        const existing = returnMap.get(item.productId);
+        if (existing) {
+          existing.qty += item.returnedQty;
+        } else {
+          const userLocation = returnLocations?.[String(item.productId)];
+          returnMap.set(item.productId, {
+            warehouseId,
+            qty: item.returnedQty,
+            locationId: userLocation ? Number(userLocation) : undefined,
+          });
+        }
+      }
+    }
+
+    for (const [productId, data] of returnMap) {
+      const { warehouseId, qty, locationId: userLocId } = data;
+
+      // 优先用用户指定的库位
+      let locationId = userLocId;
+      if (!locationId) {
         const inv = await tx.inventory.findFirst({
-          where: { productId: item.productId, warehouseId },
+          where: { productId, warehouseId },
           orderBy: { quantity: 'desc' },
         });
-        const totalBefore = (await tx.inventory.aggregate({
-          where: { productId: item.productId, warehouseId },
-          _sum: { quantity: true },
-        }))._sum.quantity || 0;
+        if (inv) locationId = inv.locationId;
+        if (!locationId) {
+          const obItem = await tx.outboundItem.findFirst({
+            where: { outboundId: { in: container.items.map(i => i.outboundId) }, productId },
+            select: { locationId: true },
+          });
+          locationId = obItem?.locationId ?? undefined;
+        }
+      }
 
+      const totalBefore = (await tx.inventory.aggregate({
+        where: { productId, warehouseId },
+        _sum: { quantity: true },
+      }))._sum.quantity || 0;
+
+      if (locationId) {
+        const inv = await tx.inventory.findFirst({
+          where: { productId, warehouseId, locationId },
+        });
         if (inv) {
           await tx.inventory.update({
             where: { id: inv.id },
-            data: { quantity: { increment: item.returnedQty } },
+            data: { quantity: { increment: qty } },
           });
         } else {
-          const obItem = await tx.outboundItem.findFirst({
-            where: { outboundId: item.outboundId, productId: item.productId },
-            select: { locationId: true },
+          await tx.inventory.create({
+            data: { productId, warehouseId, locationId, quantity: qty },
           });
-          const locationId = item.locationId || obItem?.locationId;
-          if (locationId) {
-            await tx.inventory.create({
-              data: { productId: item.productId, warehouseId, locationId, quantity: item.returnedQty },
-            });
-          }
         }
+      }
 
-        await tx.stockLog.create({
-          data: {
-            productId: item.productId,
-            warehouseId,
-            changeQty: item.returnedQty,
-            beforeQty: totalBefore,
-            afterQty: totalBefore + item.returnedQty,
-            type: 'container_return',
-            refId: id,
-          },
+      await tx.stockLog.create({
+        data: {
+          productId,
+          warehouseId,
+          changeQty: qty,
+          beforeQty: totalBefore,
+          afterQty: totalBefore + qty,
+          type: 'container_return',
+          refId: id,
+        },
+      });
+
+      // 更新该商品所有货柜条目的归还库位
+      if (locationId) {
+        await tx.containerItem.updateMany({
+          where: { containerId: id, productId },
+          data: { returnLocationId: locationId },
         });
       }
     }
@@ -194,7 +233,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
       where: { id },
       data: { status: 'sealed', sealTime: new Date() },
       include: {
-        items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
+        items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } } } },
       },
     });
   });
@@ -218,24 +257,38 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   const container = await prisma.container.findUnique({
     where: { id },
     include: {
+      customer: { select: { realName: true, username: true, reportTemplate: true } },
       items: {
         include: {
-          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } },
+          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
         },
       },
     },
   });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
 
-  const summary = container.items.map((item) => ({
-    sku: item.product.sku,
-    name: item.product.name,
-    spec: item.product.spec,
-    unit: item.product.unit,
-    plannedQty: item.plannedQty,
-    actualQty: item.actualQty || 0,
-    returnedQty: item.returnedQty,
-  }));
+  // 按商品合并
+  const merged = new Map<number, { sku: string; name: string; spec: string; unit: string; plannedQty: number; actualQty: number; returnedQty: number }>();
+  for (const item of container.items) {
+    const pid = item.productId;
+    const existing = merged.get(pid);
+    if (existing) {
+      existing.plannedQty += item.plannedQty;
+      existing.actualQty += (item.actualQty || 0);
+      existing.returnedQty += item.returnedQty;
+    } else {
+      merged.set(pid, {
+        sku: item.product.sku,
+        name: item.product.name,
+        spec: item.product.spec,
+        unit: item.product.unit,
+        plannedQty: item.plannedQty,
+        actualQty: item.actualQty || 0,
+        returnedQty: item.returnedQty,
+      });
+    }
+  }
+  const summary = Array.from(merged.values());
 
   const totals = summary.reduce(
     (acc, item) => {
@@ -252,6 +305,9 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     toYardTime: container.toYardTime,
     sealTime: container.sealTime,
     status: container.status,
+    customerId: container.customerId,
+    customerName: container.customer?.realName || container.customer?.username || '',
+    reportTemplate: container.customer?.reportTemplate || null,
     summary,
     totals,
   });

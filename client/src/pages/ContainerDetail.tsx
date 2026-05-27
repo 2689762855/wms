@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions } from 'antd';
+import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions, Select } from 'antd';
 import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -17,11 +17,58 @@ export default function ContainerDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [actualQs, setActualQs] = useState<Record<string, number>>({});
+  const [returnLocations, setReturnLocations] = useState<Record<string, number | null>>({});
 
   const { data: container, isLoading } = useQuery({
     queryKey: ['container', id],
     queryFn: () => apiClient.get(`/containers/${id}`).then((r) => r.data),
   });
+
+  // 获取仓库库位列表（用于甩柜归还选择）
+  const firstItem = container?.items?.[0];
+  const { data: warehouseLocations } = useQuery({
+    queryKey: ['container-return-locations', firstItem?.outboundId],
+    queryFn: async () => {
+      if (!firstItem?.outboundId) return [];
+      const outbound = await apiClient.get(`/outbound/${firstItem.outboundId}`).then(r => r.data);
+      if (!outbound?.warehouseId) return [];
+      return apiClient.get('/locations', { params: { warehouseId: outbound.warehouseId } }).then(r => r.data);
+    },
+    enabled: !!firstItem?.outboundId,
+  });
+
+  // 合并同商品
+  const mergedItems = useMemo(() => {
+    if (!container?.items) return [];
+    const map = new Map<number, { product: any; plannedQty: number; rawActualQty: number; locationId?: number | null }>();
+    for (const item of container.items) {
+      const pid = item.productId;
+      const existing = map.get(pid);
+      if (existing) {
+        existing.plannedQty += item.plannedQty;
+        existing.rawActualQty += (item.actualQty ?? 0);
+      } else {
+        map.set(pid, {
+          product: item.product,
+          plannedQty: item.plannedQty,
+          rawActualQty: (item.actualQty ?? 0),
+          locationId: item.locationId,
+        });
+      }
+    }
+    return Array.from(map.entries()).map(([pid, data]) => {
+      // actualQs 覆盖表示用户手调后的总实装数，否则用原始合计
+      const totalActual = actualQs[`${pid}`] != null ? actualQs[`${pid}`] : data.rawActualQty;
+      return {
+        productId: pid,
+        product: data.product,
+        plannedQty: data.plannedQty,
+        actualQty: totalActual,
+        returnedQty: Math.max(0, data.plannedQty - totalActual),
+        locationId: data.locationId,
+      };
+    });
+  }, [container?.items, actualQs]);
 
   const loadMutation = useMutation({
     mutationFn: (items: any[]) => apiClient.put(`/containers/${id}/load`, { items }),
@@ -33,7 +80,10 @@ export default function ContainerDetail() {
   });
 
   const sealMutation = useMutation({
-    mutationFn: () => apiClient.put(`/containers/${id}/seal`),
+    mutationFn: async (vars: { items: any[]; returnLocs: Record<string, number> }) => {
+      await apiClient.put(`/containers/${id}/load`, { items: vars.items });
+      await apiClient.put(`/containers/${id}/seal`, { returnLocations: vars.returnLocs });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['container', id] });
       queryClient.invalidateQueries({ queryKey: ['containers'] });
@@ -44,70 +94,46 @@ export default function ContainerDetail() {
 
   const handleLoad = () => {
     if (!container) return;
-    const items = container.items?.map((i: any) => ({
-      ...i,
-      actualQty: actualQs[`${i.productId}`] ?? i.actualQty ?? 0,
-    }));
+    const items = (container.items || []).map((i: any) => {
+      const merged = mergedItems.find(m => m.productId === i.productId);
+      if (!merged) return { outboundId: i.outboundId, productId: i.productId, plannedQty: i.plannedQty, actualQty: i.actualQty ?? 0, locationId: i.locationId };
+      // 按计划数比例分配合并后的实装数到各条目
+      const ratio = merged.plannedQty > 0 ? i.plannedQty / merged.plannedQty : 0;
+      return {
+        outboundId: i.outboundId,
+        productId: i.productId,
+        plannedQty: i.plannedQty,
+        actualQty: Math.round(merged.actualQty * ratio),
+        locationId: i.locationId,
+      };
+    });
     loadMutation.mutate(items);
   };
 
   const handleSeal = () => {
+    if (!container) return;
+    // 构建当前实装数（从合并视图展开到原始条目）
+    const items = (container.items || []).map((i: any) => {
+      const merged = mergedItems.find(m => m.productId === i.productId);
+      if (!merged) return { outboundId: i.outboundId, productId: i.productId, plannedQty: i.plannedQty, actualQty: i.actualQty ?? 0, locationId: i.locationId };
+      const ratio = merged.plannedQty > 0 ? i.plannedQty / merged.plannedQty : 0;
+      return { outboundId: i.outboundId, productId: i.productId, plannedQty: i.plannedQty, actualQty: Math.round(merged.actualQty * ratio), locationId: i.locationId };
+    });
+    const returnLocs: Record<string, number> = {};
+    for (const [k, v] of Object.entries(returnLocations)) {
+      if (v != null) returnLocs[k] = v;
+    }
+    const hasReturn = mergedItems.some((m: any) => m.returnedQty > 0);
     Modal.confirm({
       title: '确认封柜？',
-      content: '封柜后将按实装数记录流水，甩柜部分归还库存。封柜后不可修改。',
-      onOk: () => sealMutation.mutate(),
+      content: hasReturn ? '有甩柜商品，请确认归还库位已选择。封柜后不可修改。' : '封柜后将按实装数记录流水。封柜后不可修改。',
+      onOk: () => sealMutation.mutate({ items, returnLocs }),
     });
   };
 
-  const printReport = () => {
-    const items = container?.items || [];
-    const rows = items.map((i: any) => {
-      const actual = actualQs[`${i.productId}`] ?? i.actualQty ?? 0;
-      return `<tr>
-        <td>${i.product?.sku || ''}</td>
-        <td>${i.product?.name || ''}</td>
-        <td>${i.product?.spec || ''}</td>
-        <td>${i.plannedQty}</td>
-        <td>${actual}</td>
-        <td>${Math.max(0, i.plannedQty - actual)}</td>
-        <td>${i.product?.unit || 'pcs'}</td>
-      </tr>`;
-    }).join('');
-    const totalPlanned = items.reduce((s: number, i: any) => s + i.plannedQty, 0);
-    const totalActual = items.reduce((s: number, i: any) => s + (actualQs[`${i.productId}`] ?? i.actualQty ?? 0), 0);
-    const totalReturned = Math.max(0, totalPlanned - totalActual);
+  const printReport = () => { window.open(`/containers/${id}/report`, '_blank'); };
 
-    const w = window.open('', '_blank');
-    if (w) {
-      w.document.write(`<html><head><meta charset="utf-8"><title>装柜报表</title>
-        <style>body{font-family:sans-serif;padding:24px;max-width:800px;margin:0 auto}
-        h2{margin-bottom:4px}.info{margin-bottom:16px;color:#666}
-        table{width:100%;border-collapse:collapse;margin-top:12px}
-        th,td{border:1px solid #ddd;padding:8px 12px;text-align:center}
-        th{background:#f5f5f5}td{font-size:14px}
-        .total{font-weight:bold;background:#fafafa}
-        .footer{margin-top:24px;color:#999;font-size:12px}
-        @media print{.footer{display:none}}
-</style></head><body>
-        <h2>装柜报表</h2>
-        <div class="info">
-          <p>柜号：${container.containerNo}</p>
-          <p>到柜时间：${container.toYardTime ? dayjs(container.toYardTime).format('YYYY-MM-DD HH:mm') : '-'}</p>
-          <p>封柜时间：${container.sealTime ? dayjs(container.sealTime).format('YYYY-MM-DD HH:mm') : '-'}</p>
-          <p>状态：${container.status === 'sealed' ? '已封柜' : container.status}</p>
-        </div>
-        <table>
-          <thead><tr><th>SKU</th><th>商品</th><th>规格</th><th>计划</th><th>实装</th><th>甩柜</th><th>单位</th></tr></thead>
-          <tbody>${rows}
-            <tr class="total"><td colspan="3">合计</td><td>${totalPlanned}</td><td>${totalActual}</td><td>${totalReturned}</td><td></td></tr>
-          </tbody>
-        </table>
-        <p class="footer">打印时间：${dayjs().format('YYYY-MM-DD HH:mm')}</p>
-      </body></html>`);
-      w.document.close();
-      setTimeout(() => w.print(), 300);
-    }
-  };
+  const locationOptions = (warehouseLocations || []).map((l: any) => ({ label: l.name, value: l.id }));
 
   const columns = [
     { title: 'SKU', dataIndex: ['product', 'sku'], width: 100 },
@@ -121,6 +147,7 @@ export default function ContainerDetail() {
         return (
           <InputNumber
             min={0}
+            max={r.plannedQty}
             value={actualQs[`${r.productId}`] ?? v ?? 0}
             onChange={(n) => setActualQs((prev) => ({ ...prev, [`${r.productId}`]: n || 0 }))}
             style={{ width: 80 }}
@@ -131,9 +158,30 @@ export default function ContainerDetail() {
     {
       title: '甩柜', key: 'returned', width: 60,
       render: (_: any, r: any) => {
-        const actual = actualQs[`${r.productId}`] ?? r.actualQty ?? 0;
-        const returned = Math.max(0, r.plannedQty - actual);
+        const returned = r.returnedQty;
         return returned > 0 ? <Tag color="orange">{returned}</Tag> : <span>-</span>;
+      },
+    },
+    {
+      title: '甩柜归还库位', key: 'returnLoc', width: 160,
+      render: (_: any, r: any) => {
+        if (container?.status === 'sealed') {
+          // 已封柜：显示实际归还库位
+          const returnLoc = container.items?.find((i: any) => i.productId === r.productId && i.returnLocation)?.returnLocation;
+          return returnLoc ? <Tag>{returnLoc.name}</Tag> : <span>-</span>;
+        }
+        if (r.returnedQty <= 0) return <span>-</span>;
+        return (
+          <Select
+            allowClear
+            placeholder="选择归还库位"
+            value={returnLocations[`${r.productId}`] ?? undefined}
+            onChange={(v) => setReturnLocations(prev => ({ ...prev, [`${r.productId}`]: v ?? null }))}
+            style={{ width: 140 }}
+            size="small"
+            options={locationOptions}
+          />
+        );
       },
     },
     { title: '单位', dataIndex: ['product', 'unit'], width: 50 },
@@ -171,10 +219,10 @@ export default function ContainerDetail() {
       )}
 
       <Card title="装柜明细">
-        <Table rowKey="productId" columns={columns} dataSource={container.items || []} pagination={false} size="small"
+        <Table rowKey="productId" columns={columns} dataSource={mergedItems} pagination={false} size="small"
           summary={() => {
-            const totalPlanned = (container.items || []).reduce((s: number, i: any) => s + i.plannedQty, 0);
-            const totalActual = (container.items || []).reduce((s: number, i: any) => s + (actualQs[`${i.productId}`] ?? i.actualQty ?? 0), 0);
+            const totalPlanned = mergedItems.reduce((s: number, i: any) => s + i.plannedQty, 0);
+            const totalActual = mergedItems.reduce((s: number, i: any) => s + i.actualQty, 0);
             const totalReturned = Math.max(0, totalPlanned - totalActual);
             return (
               <Table.Summary.Row>
@@ -183,6 +231,7 @@ export default function ContainerDetail() {
                 <Table.Summary.Cell index={2}><Typography.Text strong>{totalActual}</Typography.Text></Table.Summary.Cell>
                 <Table.Summary.Cell index={3}>{totalReturned > 0 && <Tag color="orange">{totalReturned}</Tag>}</Table.Summary.Cell>
                 <Table.Summary.Cell index={4} />
+                <Table.Summary.Cell index={5} />
               </Table.Summary.Row>
             );
           }}

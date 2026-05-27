@@ -319,7 +319,8 @@ model Location {
   outboundItems   OutboundItem[]
   transferItems   TransferItem[]
   checkTasks      CheckTask[]
-  containerItems  ContainerItem[]
+  containerItemsSource  ContainerItem[] @relation("ContainerItemSource")
+  containerItemsReturn  ContainerItem[] @relation("ContainerItemReturn")
 
   @@index([warehouseId])
 }
@@ -337,6 +338,7 @@ model Customer {
   createdBy     Int?
   createdAt     DateTime  @default(now())
   deletedAt     DateTime? // null=正常, 非null=软删除（7天后彻底清理）
+  reportTemplate String?   // 装柜报表自定义HTML模板，null=默认
 
   warehouses Warehouse[]
   categories Category[]
@@ -411,9 +413,11 @@ model ContainerItem {
   product     Product   @relation(fields: [productId], references: [id])
   plannedQty  Int
   actualQty   Int?
-  returnedQty Int       @default(0)
-  locationId  Int?
-  location    Location? @relation(fields: [locationId], references: [id])
+  returnedQty    Int       @default(0)
+  locationId     Int?
+  location       Location? @relation("ContainerItemSource", fields: [locationId], references: [id])
+  returnLocationId Int?
+  returnLocation Location? @relation("ContainerItemReturn", fields: [returnLocationId], references: [id])
 
   @@index([outboundId])
   @@index([containerId])
