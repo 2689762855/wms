@@ -149,12 +149,16 @@ transferRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
       for (const inv of fromInvs) {
         if (remaining <= 0) break;
         const deduct = Math.min(inv.quantity, remaining);
-        const updated = await tx.inventory.update({
+        const fromTotal = (await tx.inventory.aggregate({
+          where: { productId: item.productId, warehouseId: order.fromWarehouseId },
+          _sum: { quantity: true },
+        }))._sum.quantity || 0;
+        await tx.inventory.update({
           where: { id: inv.id },
           data: { quantity: { decrement: deduct } },
         });
         await tx.stockLog.create({
-          data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: inv.quantity, afterQty: updated.quantity, type: 'transfer_out', refId: order.id },
+          data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: fromTotal, afterQty: fromTotal - deduct, type: 'transfer_out', refId: order.id },
         });
         remaining -= deduct;
       }
@@ -167,8 +171,12 @@ transferRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
       } else {
         await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: item.quantity } });
       }
+      const toTotalBefore = (await tx.inventory.aggregate({
+        where: { productId: item.productId, warehouseId: order.toWarehouseId },
+        _sum: { quantity: true },
+      }))._sum.quantity || 0;
       await tx.stockLog.create({
-        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toBeforeQty, afterQty: toBeforeQty + item.quantity, type: 'transfer_in', refId: order.id },
+        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toTotalBefore, afterQty: toTotalBefore + item.quantity, type: 'transfer_in', refId: order.id },
       });
     }
     await tx.transferOrder.update({ where: { id }, data: { status: 'approved', reviewedAt: new Date() } });
@@ -262,12 +270,16 @@ transferRouter.put('/:id/approve', validateId, adminWrite, async (req: AuthReque
       for (const inv of fromInvs) {
         if (remaining <= 0) break;
         const deduct = Math.min(inv.quantity, remaining);
-        const updated = await tx.inventory.update({
+        const fromTotal = (await tx.inventory.aggregate({
+          where: { productId: item.productId, warehouseId: order.fromWarehouseId },
+          _sum: { quantity: true },
+        }))._sum.quantity || 0;
+        await tx.inventory.update({
           where: { id: inv.id },
           data: { quantity: { decrement: deduct } },
         });
         await tx.stockLog.create({
-          data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: inv.quantity, afterQty: updated.quantity, type: 'transfer_out', refId: order.id },
+          data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: fromTotal, afterQty: fromTotal - deduct, type: 'transfer_out', refId: order.id },
         });
         remaining -= deduct;
       }
@@ -280,8 +292,12 @@ transferRouter.put('/:id/approve', validateId, adminWrite, async (req: AuthReque
       } else {
         await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: item.quantity } });
       }
+      const toTotalBefore = (await tx.inventory.aggregate({
+        where: { productId: item.productId, warehouseId: order.toWarehouseId },
+        _sum: { quantity: true },
+      }))._sum.quantity || 0;
       await tx.stockLog.create({
-        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toBeforeQty, afterQty: toBeforeQty + item.quantity, type: 'transfer_in', refId: order.id },
+        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toTotalBefore, afterQty: toTotalBefore + item.quantity, type: 'transfer_in', refId: order.id },
       });
     }
 

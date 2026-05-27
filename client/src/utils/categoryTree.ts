@@ -39,7 +39,7 @@ export function findPath(tree: TreeNode[], targetId: number): number[] | null {
 
 export function getCategoryPath(cat: { name: string; parent?: { name: string; parent?: { name: string } } | null } | null | undefined): string {
   if (!cat) return '-';
-  if (cat.parent?.parent) return cat.parent.parent.name + ' - ' + cat.parent.name;
+  if (cat.parent?.parent) return cat.parent.parent.name + ' - ' + cat.parent.name + ' - ' + cat.name;
   if (cat.parent) return cat.parent.name + ' - ' + cat.name;
   return cat.name;
 }

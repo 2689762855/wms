@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Typography, Input, InputNumber, Space, Tag, message, Result, Descriptions, Modal, List } from 'antd';
+import { Button, Card, Typography, Input, InputNumber, Space, Tag, message, Result, Descriptions, Modal, List, Select } from 'antd';
 import { ArrowLeftOutlined, ScanOutlined } from '@ant-design/icons';
 import BarcodeScanner from '../../components/BarcodeScanner';
 import apiClient from '../../api/client';
+import { getCategoryPath } from '../../utils/categoryTree';
 import type { Location, Product } from '../../types';
 
 interface CartItem {
@@ -26,6 +27,12 @@ export default function MobileInboundNew() {
   const [lastOrderNo, setLastOrderNo] = useState('');
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
+  const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
+
+  const { data: contractsData } = useQuery({
+    queryKey: ['mobile-contracts'],
+    queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 9999 } }).then(r => r.data),
+  });
 
   const { data: productsData, isLoading: loadingProducts } = useQuery({
     queryKey: ['mobile-product-search', productSearch],
@@ -35,7 +42,7 @@ export default function MobileInboundNew() {
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      const items = cart.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice }));
+      const items = cart.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, contractId: selectedContractId }));
       const createRes = await apiClient.post('/inbound', {
         warehouseId: location!.warehouseId,
         locationId: location!.id,
@@ -104,6 +111,7 @@ export default function MobileInboundNew() {
     setLocation(null);
     setSupplier('');
     setCart([]);
+    setSelectedContractId(null);
   };
 
   if (step === 'done') {
@@ -175,6 +183,11 @@ export default function MobileInboundNew() {
                 <Typography.Text type="secondary">供应商</Typography.Text>
                 <Input placeholder="供应商名称" value={supplier} onChange={e => setSupplier(e.target.value)} size="large" />
               </div>
+              <div>
+                <Typography.Text type="secondary">关联合同（可选）</Typography.Text>
+                <Select allowClear placeholder="选择合同" value={selectedContractId} onChange={(v) => setSelectedContractId(v ?? null)} style={{ width: '100%' }} size="large"
+                  options={contractsData?.data?.map((c: any) => ({ label: `${c.contractNo} (${c.customer?.realName || c.customer?.username})`, value: c.id }))} />
+              </div>
               <Button type="primary" size="large" block loading={confirmMutation.isPending}
                 disabled={cart.length === 0}
                 onClick={() => confirmMutation.mutate()} style={{ height: 48, fontSize: 16 }}>
@@ -206,7 +219,7 @@ export default function MobileInboundNew() {
               setProductSearch('');
             }} style={{ cursor: 'pointer' }}>
               <List.Item.Meta
-                title={<>{product.category?.parent?.parent?.name && <span style={{fontSize:12,color:'#999'}}>{product.category.parent.parent.name} - </span>}{product.category?.parent?.name && <span style={{fontSize:12,color:'#999'}}>{product.category.parent.name} - </span>}{product.name}</>}
+                title={<>{(() => { const cp = getCategoryPath(product.category || null); return cp !== '-' ? <span style={{fontSize:12,color:'#999'}}>{cp} - </span> : null; })()}{product.name}</>}
                 description={`${product.sku}${product.spec ? ' · ' + product.spec : ''}${product.barcode ? ' · ' + product.barcode : ''}`} />
             </List.Item>
           )}

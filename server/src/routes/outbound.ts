@@ -26,7 +26,7 @@ outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
   const [data, total] = await Promise.all([
     prisma.outboundOrder.findMany({
       where,
-      include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+      include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
       skip: (page - 1) * pageSize, take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
@@ -39,7 +39,7 @@ outboundRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
   const id = parseInt(req.params.id as string);
   const order = await prisma.outboundOrder.findUnique({
     where: { id },
-    include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+    include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
   });
   if (!order) return res.status(404).json({ error: '不存在' });
   if (req.userRole !== 'super_admin') {
@@ -54,7 +54,7 @@ outboundRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
 });
 
 outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
-  const { warehouseId, receiver, note, items, locationId } = req.body;
+  const { warehouseId, receiver, note, items, locationId, containerId } = req.body;
   if (!warehouseId || !items?.length) return res.status(400).json({ error: '仓库和明细必填' });
   if (receiver && receiver.length > 200) return res.status(400).json({ error: '收货人不能超过 200 字符' });
   if (note && note.length > 1000) return res.status(400).json({ error: '备注不能超过 1000 字符' });
@@ -81,6 +81,7 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       note,
       ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
       locationId: locationId || null,
+      containerId: containerId || null,
       items: {
         create: items.map((i: { productId: number; quantity: number; locationId?: number | null }) => ({
           productId: i.productId,
@@ -122,7 +123,13 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
         throw new Error(`库存不足: productId=${item.productId}, 当前库存=${inv?.quantity || 0}, 出库=${item.quantity}`);
       }
 
-      const updated = await tx.inventory.update({
+      // 先查变动前全库位总量
+      const totalBefore = (await tx.inventory.aggregate({
+        where: { productId: item.productId, warehouseId: order.warehouseId },
+        _sum: { quantity: true },
+      }))._sum.quantity || 0;
+
+      await tx.inventory.update({
         where: { id: inv.id },
         data: { quantity: { decrement: item.quantity } },
       });
@@ -132,8 +139,8 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
           productId: item.productId,
           warehouseId: order.warehouseId,
           changeQty: -item.quantity,
-          beforeQty: inv.quantity,
-          afterQty: updated.quantity,
+          beforeQty: totalBefore,
+          afterQty: totalBefore - item.quantity,
           type: 'outbound',
           refId: order.id,
         },
@@ -141,11 +148,34 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
     }
 
     await tx.outboundOrder.update({ where: { id }, data: { status: 'confirmed' } });
+
+    // 如果关联了货柜，自动填入货柜明细
+    if (order.containerId) {
+      const container = await tx.container.findUnique({ where: { id: order.containerId } });
+      if (container && (container.status === 'pending' || container.status === 'loading')) {
+        for (const item of order.items) {
+          await tx.containerItem.create({
+            data: {
+              containerId: order.containerId,
+              outboundId: id,
+              productId: item.productId,
+              plannedQty: item.quantity,
+              actualQty: item.quantity,
+              returnedQty: 0,
+              locationId: (item as any).locationId ?? null,
+            },
+          });
+        }
+        if (container.status === 'pending') {
+          await tx.container.update({ where: { id: order.containerId }, data: { status: 'loading' } });
+        }
+      }
+    }
   });
 
   const updated = await prisma.outboundOrder.findUnique({
     where: { id },
-    include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+    include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
   });
   res.json(updated);
 });

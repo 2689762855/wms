@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Typography, Descriptions, Table, Tag, Button, Space, message, Popconfirm } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { getCategoryPath } from '../utils/categoryTree';
 import dayjs from 'dayjs';
 
 export default function InboundDetail() {
@@ -35,7 +36,7 @@ export default function InboundDetail() {
   });
 
   const itemColumns = [
-    { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => r.product?.category?.parent?.parent?.name || '-' },
+    { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => { const p = getCategoryPath(r.product?.category || null); return p === '-' ? '-' : p.split(' - ')[0]; } },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
     { title: '入库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
@@ -70,6 +71,7 @@ export default function InboundDetail() {
         </Descriptions.Item>
         <Descriptions.Item label="仓库">{order?.warehouse?.name}</Descriptions.Item>
         <Descriptions.Item label="供应商">{order?.supplier || '-'}</Descriptions.Item>
+        <Descriptions.Item label="关联合同">{(() => { const contracts = [...new Set(order?.items?.filter((i: any) => i.contract).map((i: any) => `${i.contract.contractNo}|${i.contract.id}`) || [])]; return contracts.length > 0 ? contracts.map((s: string) => { const [no, cid] = s.split('|'); return <Tag key={cid} color="blue"><a onClick={() => navigate(`/contracts/${cid}`)} style={{cursor:'pointer'}}>{no}</a></Tag>; }) : '-'; })()}</Descriptions.Item>
         <Descriptions.Item label="备注">{order?.note || '-'}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{dayjs(order?.createdAt).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
       </Descriptions>

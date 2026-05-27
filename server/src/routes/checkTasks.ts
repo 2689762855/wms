@@ -248,8 +248,11 @@ checkTasksRouter.put('/:id/resolve', validateId, adminWrite, async (req: AuthReq
         const inv = await tx.inventory.findFirst({
           where: { productId: item.productId, warehouseId: task.warehouseId, locationId: task.locationId ?? null },
         });
-        const beforeQty = inv?.quantity || 0;
-        const afterQty = beforeQty + item.diffQty;
+        const totalBefore = (await tx.inventory.aggregate({
+          where: { productId: item.productId, warehouseId: task.warehouseId },
+          _sum: { quantity: true },
+        }))._sum.quantity || 0;
+        const afterQty = totalBefore + item.diffQty;
         if (inv) {
           await tx.inventory.update({ where: { id: inv.id }, data: { quantity: { increment: item.diffQty } } });
         } else if (item.diffQty > 0) {
@@ -257,7 +260,7 @@ checkTasksRouter.put('/:id/resolve', validateId, adminWrite, async (req: AuthReq
         } else if (item.diffQty < 0) {
           throw new Error(`库存记录不存在，无法扣减: productId=${item.productId}`);
         }
-        await tx.stockLog.create({ data: { productId: item.productId, warehouseId: task.warehouseId, changeQty: item.diffQty, beforeQty, afterQty, type: 'check_adjust', refId: task.id } });
+        await tx.stockLog.create({ data: { productId: item.productId, warehouseId: task.warehouseId, changeQty: item.diffQty, beforeQty: totalBefore, afterQty, type: 'check_adjust', refId: task.id } });
       }
       await tx.checkTask.update({ where: { id }, data: { status: 'completed', reviewNote } });
       // 检查主任务状态
@@ -307,7 +310,10 @@ checkTasksRouter.put('/:id/reopen', validateId, adminWrite, async (req: AuthRequ
           where: { productId: item.productId, warehouseId: task.warehouseId, locationId: task.locationId ?? null },
         });
         if (inv) {
-          const beforeQty = inv.quantity;
+          const beforeQty = (await tx.inventory.aggregate({
+            where: { productId: item.productId, warehouseId: task.warehouseId },
+            _sum: { quantity: true },
+          }))._sum.quantity || 0;
           const afterQty = beforeQty - item.diffQty;
           await tx.inventory.update({ where: { id: inv.id }, data: { quantity: { decrement: item.diffQty } } });
           await tx.stockLog.create({ data: { productId: item.productId, warehouseId: task.warehouseId, changeQty: -item.diffQty, beforeQty, afterQty, type: 'check_reopen', refId: task.id } });

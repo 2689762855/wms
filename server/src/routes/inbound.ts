@@ -27,7 +27,7 @@ inboundRouter.get('/', async (req: AuthRequest, res: Response) => {
   const [data, total] = await Promise.all([
     prisma.inboundOrder.findMany({
       where,
-      include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+      include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true, contract: { select: { id: true, contractNo: true } } } } },
       skip: (page - 1) * pageSize, take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
@@ -41,7 +41,7 @@ inboundRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =>
   const id = parseInt(req.params.id as string);
   const order = await prisma.inboundOrder.findUnique({
     where: { id },
-    include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+    include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true, contract: { select: { id: true, contractNo: true } } } } },
   });
   if (!order) return res.status(404).json({ error: '不存在' });
   if (req.userRole !== 'super_admin') {
@@ -86,12 +86,13 @@ inboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
       locationId: locationId || null,
       items: {
-        create: items.map((i: { productId: number; quantity: number; unitPrice?: number; locationId?: number | null; expiryDate?: string | null }) => ({
+        create: items.map((i: { productId: number; quantity: number; unitPrice?: number; locationId?: number | null; expiryDate?: string | null; contractId?: number | null }) => ({
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           locationId: i.locationId ?? null,
           expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
+          contractId: i.contractId ?? null,
         })),
       },
     },
@@ -122,8 +123,14 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
   // 使用事务：更新库存 + 记录流水 + 更新单状态
   await prisma.$transaction(async (tx) => {
     for (const item of order.items) {
+      // 先查变动前全库位总量
+      const totalBefore = (await tx.inventory.aggregate({
+        where: { productId: item.productId, warehouseId: order.warehouseId },
+        _sum: { quantity: true },
+      }))._sum.quantity || 0;
+
       const locId = (item as any).locationId ?? order.locationId ?? null;
-      const inv = await tx.inventory.upsert({
+      await tx.inventory.upsert({
         where: {
           productId_warehouseId_locationId: {
             productId: item.productId,
@@ -145,12 +152,36 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
           productId: item.productId,
           warehouseId: order.warehouseId,
           changeQty: item.quantity,
-          beforeQty: inv.quantity - item.quantity,
-          afterQty: inv.quantity,
+          beforeQty: totalBefore,
+          afterQty: totalBefore + item.quantity,
           type: 'inbound',
           refId: order.id,
         },
       });
+
+      // 关联合同：增量更新已入库数量
+      if ((item as any).contractId) {
+        const ci = await tx.contractItem.findUnique({
+          where: { contractId_productId: { contractId: (item as any).contractId, productId: item.productId } },
+        });
+        if (ci) {
+          const newReceived = ci.receivedQty + item.quantity;
+          await tx.contractItem.update({
+            where: { id: ci.id },
+            data: { receivedQty: newReceived },
+          });
+          // 超量预警：received > planned
+          if (newReceived > ci.plannedQty) {
+            console.log(`[合同预警] ${ci.productId} 已入库 ${newReceived}/${ci.plannedQty}`);
+          }
+
+          // 检查合同是否全部完成
+          const allItems = await tx.contractItem.findMany({ where: { contractId: ci.contractId } });
+          if (allItems.length > 0 && allItems.every(it => it.receivedQty >= it.plannedQty)) {
+            await tx.contract.update({ where: { id: ci.contractId }, data: { status: 'completed' } });
+          }
+        }
+      }
     }
 
     await tx.inboundOrder.update({ where: { id }, data: { status: 'confirmed' } });
@@ -158,7 +189,7 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
 
   const updated = await prisma.inboundOrder.findUnique({
     where: { id },
-    include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+    include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true, contract: { select: { id: true, contractNo: true } } } } },
   });
   res.json(updated);
 });

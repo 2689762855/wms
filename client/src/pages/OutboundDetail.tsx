@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Typography, Descriptions, Table, Tag, Button, Space, message, Popconfirm } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { getCategoryPath } from '../utils/categoryTree';
 import dayjs from 'dayjs';
 
 export default function OutboundDetail() {
@@ -35,7 +36,7 @@ export default function OutboundDetail() {
   });
 
   const itemColumns = [
-    { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => r.product?.category?.parent?.parent?.name || '-' },
+    { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => { const p = getCategoryPath(r.product?.category || null); return p === '-' ? '-' : p.split(' - ')[0]; } },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
     { title: '出库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
@@ -67,6 +68,7 @@ export default function OutboundDetail() {
         </Descriptions.Item>
         <Descriptions.Item label="仓库">{order?.warehouse?.name}</Descriptions.Item>
         <Descriptions.Item label="领用人">{order?.receiver || '-'}</Descriptions.Item>
+        <Descriptions.Item label="关联货柜">{order?.container ? <Tag color={order.container.status === 'sealed' ? 'green' : 'blue'}><a onClick={() => navigate(`/containers/${order.container.id}`)} style={{cursor:'pointer'}}>{order.container.containerNo}</a></Tag> : '-'}</Descriptions.Item>
         <Descriptions.Item label="备注">{order?.note || '-'}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{dayjs(order?.createdAt).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
       </Descriptions>

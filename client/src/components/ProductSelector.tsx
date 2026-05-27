@@ -82,7 +82,10 @@ export default function ProductSelector({ open, onCancel, onOk, excludeIds = [] 
     { title: 'SKU', dataIndex: 'sku', key: 'sku', width: 130 },
     {
       title: '一级分类', key: 'rootCat', width: 100,
-      render: (_: unknown, r: Product) => r.category?.parent?.parent?.name || '-',
+      render: (_: unknown, r: Product) => {
+        const path = getCategoryPath(r.category || null);
+        return path === '-' ? '-' : path.split(' - ')[0];
+      },
     },
     { title: '商品名称', dataIndex: 'name', key: 'name' },
     { title: '规格', dataIndex: 'spec', key: 'spec', width: 80 },

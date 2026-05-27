@@ -4,6 +4,7 @@ import { Form, Select, Button, Card, Typography, Space, InputNumber, Input, mess
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
+import { getCategoryPath } from '../utils/categoryTree';
 import ProductSelector from '../components/ProductSelector';
 import type { Warehouse, Product } from '../types';
 
@@ -98,7 +99,7 @@ export default function TransferNew() {
           const locs = getLocationsForProduct(item.productId);
           return (
             <Space key={idx} style={{ marginBottom: 8 }} wrap>
-              <Typography.Text style={{ minWidth: 260 }}>{p ? `${p.category?.parent?.parent?.name || '-'} · ${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
+              <Typography.Text style={{ minWidth: 260 }}>{p ? `${getCategoryPath(p.category || null).split(' - ')[0]} · ${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
               {locs.length > 0 && (
                 <Select
                   placeholder="来源库位"

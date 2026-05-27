@@ -92,25 +92,27 @@ stockMoveRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
           },
         });
 
-        const toBeforeQty = toInv.quantity - item.quantity;
-
-        // 记录日志
+        // 记录日志（总量不变，只是库位间转移）
+        const totalQty = (await tx.inventory.aggregate({
+          where: { productId: item.productId, warehouseId },
+          _sum: { quantity: true },
+        }))._sum.quantity || 0;
         await tx.stockLog.createMany({
           data: [
             {
               productId: item.productId,
               warehouseId,
               changeQty: -item.quantity,
-              beforeQty: fromBeforeQty,
-              afterQty: fromBeforeQty - item.quantity,
+              beforeQty: totalQty,
+              afterQty: totalQty,
               type: 'location_move_out',
             },
             {
               productId: item.productId,
               warehouseId,
               changeQty: item.quantity,
-              beforeQty: toBeforeQty,
-              afterQty: toBeforeQty + item.quantity,
+              beforeQty: totalQty,
+              afterQty: totalQty,
               type: 'location_move_in',
             },
           ],
@@ -156,8 +158,12 @@ stockMoveRouter.post('/assign-location', adminWrite, async (req: AuthRequest, re
       if (existing) {
         await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: inv.quantity } } });
         await tx.inventory.delete({ where: { id: inv.id } });
+        const awTotal = (await tx.inventory.aggregate({
+          where: { productId: inv.productId, warehouseId: inv.warehouseId },
+          _sum: { quantity: true },
+        }))._sum.quantity || 0;
         await tx.stockLog.create({
-          data: { productId: inv.productId, warehouseId: inv.warehouseId, changeQty: inv.quantity, beforeQty: existing.quantity, afterQty: existing.quantity + inv.quantity, type: 'assign_location', refId: inv.id },
+          data: { productId: inv.productId, warehouseId: inv.warehouseId, changeQty: 0, beforeQty: awTotal, afterQty: awTotal, type: 'assign_location', refId: inv.id },
         });
       } else {
         await tx.inventory.update({ where: { id: inv.id }, data: { locationId: toLocationId } });

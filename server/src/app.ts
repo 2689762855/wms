@@ -24,6 +24,8 @@ import { stockMoveRouter } from './routes/stockMove';
 import { settingsRouter } from './routes/settings';
 import { appRouter } from './routes/app';
 import { productWarehousesRouter } from './routes/productWarehouses';
+import { contractsRouter } from './routes/contracts';
+import { containersRouter } from './routes/containers';
 import { errorHandler } from './middleware/errorHandler';
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -104,6 +106,8 @@ app.use('/api/customers', customersRouter);
 app.use('/api/stock-move', stockMoveRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/product-warehouses', productWarehousesRouter);
+app.use('/api/contracts', contractsRouter);
+app.use('/api/containers', containersRouter);
 app.use('/api/app', appRouter);
 
 // 生产环境：托管前端静态文件

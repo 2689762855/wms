@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, message, Divider } from 'antd';
+import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, message, Divider, Tag } from 'antd';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ProductSelector from '../components/ProductSelector';
 import { useAuth } from '../stores/AuthContext';
+import { getCategoryPath } from '../utils/categoryTree';
 import type { Warehouse, Product, InventoryItem } from '../types';
 
 interface ItemEntry {
@@ -20,6 +21,7 @@ export default function OutboundNew() {
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemEntry[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [selectedContainerId, setSelectedContainerId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user?.realName) form.setFieldValue('receiver', user.realName);
@@ -27,6 +29,13 @@ export default function OutboundNew() {
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: products } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(r => r.data.data) });
+  const { data: containersData } = useQuery({ queryKey: ['containers'], queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data) });
+
+  const { data: selectedContainer } = useQuery({
+    queryKey: ['container', selectedContainerId],
+    queryFn: () => apiClient.get(`/containers/${selectedContainerId}`).then(r => r.data),
+    enabled: !!selectedContainerId,
+  });
 
   const selectedWarehouseId: number | undefined = Form.useWatch('warehouseId', form);
 
@@ -80,28 +89,62 @@ export default function OutboundNew() {
 
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>新建出库单</Typography.Title>}>
-      <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate({ ...values, items })}>
+      <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate({ ...values, items, containerId: selectedContainerId })}>
         <Space size="large" wrap style={{ width: '100%' }}>
           <Form.Item name="warehouseId" label="出库仓库" rules={[{ required: true }]} style={{ minWidth: 180 }}>
             <Select placeholder="选择仓库">{warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}</Select>
           </Form.Item>
           <Form.Item name="receiver" label="领用人/部门"><Input style={{ width: 180 }} /></Form.Item>
           <Form.Item name="note" label="备注"><Input style={{ width: 260 }} /></Form.Item>
+          <Form.Item label="关联货柜（可选）" style={{ minWidth: 240 }}>
+            <Select
+              allowClear
+              placeholder="选择货柜，出库商品关联到货柜"
+              value={selectedContainerId}
+              onChange={(v) => setSelectedContainerId(v ?? null)}
+              options={containersData?.data?.filter((c: any) => c.status === 'pending' || c.status === 'loading').map((c: any) => ({
+                label: `${c.containerNo} (${c.customer?.realName || c.customer?.username}) [${c.status}]`,
+                value: c.id,
+              }))}
+            />
+          </Form.Item>
         </Space>
       </Form>
+
+      {selectedContainer && (
+        <Card size="small" title={`货柜 ${selectedContainer.containerNo} 详情`} style={{ marginBottom: 16, background: '#fafafa' }}>
+          <Space wrap>
+            <Tag color={selectedContainer.status === 'pending' ? 'default' : selectedContainer.status === 'loading' ? 'processing' : 'success'}>
+              {selectedContainer.status === 'pending' ? '待装柜' : selectedContainer.status === 'loading' ? '装柜中' : '已封柜'}
+            </Tag>
+            {selectedContainer.items?.length > 0 ? (
+              selectedContainer.items.map((ci: any) => (
+                <div key={ci.productId} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Typography.Text>{ci.product?.name} ({ci.product?.sku})</Typography.Text>
+                  <Tag>计划 {ci.plannedQty}</Tag>
+                  <Tag color="blue">实装 {ci.actualQty || 0}</Tag>
+                  {ci.returnedQty > 0 && <Tag color="orange">甩柜 {ci.returnedQty}</Tag>}
+                </div>
+              ))
+            ) : (
+              <Typography.Text type="secondary">货柜暂无商品，出库确认后可在此装柜</Typography.Text>
+            )}
+          </Space>
+        </Card>
+      )}
 
       <Divider />
 
       <Space direction="vertical" style={{ width: '100%' }}>
         <BarcodeScanner onScan={onScan} />
 
-        <Typography.Text strong>商品明细</Typography.Text>
+        <Typography.Text strong>商品明细 {selectedContainerId && <Tag color="blue">关联货柜</Tag>}</Typography.Text>
         {items.map((item, idx) => {
           const p = getProduct(item.productId);
           const locOptions = getLocationsForProduct(item.productId);
           return (
             <Space key={idx} style={{ marginBottom: 8 }} wrap>
-              <Typography.Text style={{ minWidth: 300 }}>{p ? `${p.category?.parent?.parent?.name || '-'} · ${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
+              <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
               <InputNumber min={1} value={item.quantity} onChange={(v) => updateItem(idx, 'quantity', v || 1)} style={{ width: 80 }} />
               <Select
                 allowClear

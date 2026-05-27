@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Typography, Input, InputNumber, Space, Tag, message, Result, Descriptions, Modal, List } from 'antd';
+import { Button, Card, Typography, Input, InputNumber, Space, Tag, message, Result, Descriptions, Modal, List, Select } from 'antd';
 import { ArrowLeftOutlined, ScanOutlined } from '@ant-design/icons';
 import BarcodeScanner from '../../components/BarcodeScanner';
 import apiClient from '../../api/client';
+import { getCategoryPath } from '../../utils/categoryTree';
 import { useAuth } from '../../stores/AuthContext';
 import type { Location, Product, InventoryItem } from '../../types';
 
@@ -26,6 +27,12 @@ export default function MobileOutboundNew() {
   const [picks, setPicks] = useState<PickItem[]>([]);
   const [lastOrderNo, setLastOrderNo] = useState('');
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
+  const [selectedContainerId, setSelectedContainerId] = useState<number | null>(null);
+
+  const { data: containersData } = useQuery({
+    queryKey: ['mobile-containers'],
+    queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data),
+  });
 
   // load inventory at scanned location
   const { data: locationInventory, isLoading: loadingInv } = useQuery({
@@ -43,6 +50,7 @@ export default function MobileOutboundNew() {
         locationId: location!.id,
         receiver,
         items,
+        containerId: selectedContainerId,
       });
       const confirmRes = await apiClient.put(`/outbound/${createRes.data.id}/confirm`);
       return confirmRes.data;
@@ -102,6 +110,7 @@ export default function MobileOutboundNew() {
     setLocation(null);
     setReceiver('');
     setPicks([]);
+    setSelectedContainerId(null);
   };
 
   if (step === 'done') {
@@ -206,6 +215,11 @@ export default function MobileOutboundNew() {
                 <Typography.Text type="secondary">领用人</Typography.Text>
                 <Input placeholder="领用人/部门" value={receiver} onChange={e => setReceiver(e.target.value)} size="large" />
               </div>
+              <div>
+                <Typography.Text type="secondary">关联货柜（可选）</Typography.Text>
+                <Select allowClear placeholder="选择货柜" value={selectedContainerId} onChange={(v) => setSelectedContainerId(v ?? null)} style={{ width: '100%' }} size="large"
+                  options={containersData?.data?.filter((c: any) => c.status === 'pending' || c.status === 'loading').map((c: any) => ({ label: `${c.containerNo} (${c.customer?.realName || c.customer?.username})`, value: c.id }))} />
+              </div>
               <Button type="primary" size="large" block loading={confirmMutation.isPending}
                 disabled={picks.reduce((s, p) => s + p.quantity, 0) === 0}
                 onClick={() => confirmMutation.mutate()} style={{ height: 48, fontSize: 16 }}>
@@ -235,7 +249,7 @@ export default function MobileOutboundNew() {
               setInventoryModalOpen(false);
             }} style={{ cursor: 'pointer' }}>
               <List.Item.Meta
-                title={<>{inv.product.category?.parent?.parent?.name && <span style={{fontSize:12,color:'#999'}}>{inv.product.category.parent.parent.name} - </span>}{inv.product.category?.parent?.name && <span style={{fontSize:12,color:'#999'}}>{inv.product.category.parent.name} - </span>}{inv.product.name}</>}
+                title={<>{(() => { const cp = getCategoryPath(inv.product.category || null); return cp !== '-' ? <span style={{fontSize:12,color:'#999'}}>{cp} - </span> : null; })()}{inv.product.name}</>}
                 description={`${inv.product.sku} · 库存 ${inv.quantity}`} />
             </List.Item>
           )}

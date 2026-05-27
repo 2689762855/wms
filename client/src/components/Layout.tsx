@@ -1,8 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Layout as AntLayout, Menu, Button, theme, Dropdown, Alert, Tag } from 'antd';
-
-const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 import {
   DashboardOutlined,
   BankOutlined,
@@ -22,7 +20,11 @@ import {
   TeamOutlined,
   InfoCircleOutlined,
   RollbackOutlined,
+  FileTextOutlined,
+  ContainerOutlined,
 } from '@ant-design/icons';
+
+const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 import { useAuth } from '../stores/AuthContext';
 
 const { Header, Sider, Content } = AntLayout;
@@ -81,6 +83,8 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     { key: 'transfer', label: '调拨管理', icon: <SwapOutlined />, path: '/transfer' },
     { key: 'check-tasks', label: '盘点管理', icon: <CheckSquareOutlined />, path: '/check-tasks' },
     { key: 'alerts', label: '库存预警', icon: <AlertOutlined />, path: '/alerts' },
+    { key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' },
+    { key: 'containers', label: '货柜管理', icon: <ContainerOutlined />, path: '/containers' },
     {
       key: 'reports-group',
       label: '报表统计',
@@ -112,6 +116,8 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     if (path.startsWith('/products')) return ['products-list'];
     if (path.startsWith('/inventory/logs')) return ['inventory-logs'];
     if (path.startsWith('/inventory')) return ['inventory-list'];
+    if (path.startsWith('/contracts')) return ['contracts'];
+    if (path.startsWith('/containers')) return ['containers'];
     if (path.startsWith('/reports/in-out')) return ['reports-in-out'];
     if (path.startsWith('/reports/turnover')) return ['reports-turnover'];
     if (path.startsWith('/settings/users')) return ['settings-users'];

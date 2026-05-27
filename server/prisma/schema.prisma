@@ -93,6 +93,8 @@ model Product {
   expiryWarningDays Int      @default(30) // 提前预警天数
 
   productWarehouses ProductWarehouse[]
+  contractItems  ContractItem[]
+  containerItems ContainerItem[]
   inventories    Inventory[]
   inboundItems   InboundItem[]
   outboundItems  OutboundItem[]
@@ -170,6 +172,8 @@ model InboundItem {
   locationId Int?
   location   Location?    @relation(fields: [locationId], references: [id])
   expiryDate DateTime?
+  contractId  Int?
+  contract    Contract?  @relation(fields: [contractId], references: [id])
 
   @@index([inboundId])
 }
@@ -185,6 +189,8 @@ model OutboundOrder {
   status      String   @default("draft") // draft, confirmed
   locationId  Int?
   location    Location? @relation(fields: [locationId], references: [id])
+  containerId Int?
+  container   Container? @relation(fields: [containerId], references: [id])
   note        String?
   createdAt   DateTime @default(now())
 
@@ -193,6 +199,7 @@ model OutboundOrder {
   @@index([warehouseId])
   @@index([status])
   @@index([createdAt])
+  @@index([containerId])
 }
 
 model OutboundItem {
@@ -312,6 +319,7 @@ model Location {
   outboundItems   OutboundItem[]
   transferItems   TransferItem[]
   checkTasks      CheckTask[]
+  containerItems  ContainerItem[]
 
   @@index([warehouseId])
 }
@@ -333,6 +341,8 @@ model Customer {
   warehouses Warehouse[]
   categories Category[]
   products   Product[]
+  contracts  Contract[]
+  containers  Container[]
 
   @@index([createdBy])
 }
@@ -345,4 +355,66 @@ model Sequence {
 model Setting {
   key   String @id
   value String
+}
+
+model Contract {
+  id          Int       @id @default(autoincrement())
+  contractNo  String    @unique
+  customerId  Int
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  status      String    @default("active") // active, completed, cancelled
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  items       ContractItem[]
+  inboundItems InboundItem[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model ContractItem {
+  id          Int      @id @default(autoincrement())
+  contractId  Int
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  plannedQty  Int
+  receivedQty Int      @default(0)
+
+  @@unique([contractId, productId])
+}
+
+model Container {
+  id           Int       @id @default(autoincrement())
+  containerNo  String    @unique
+  toYardTime   DateTime?
+  sealTime     DateTime?
+  status       String    @default("pending")
+  note         String?
+  customerId   Int
+  customer     Customer  @relation(fields: [customerId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  items        ContainerItem[]
+  outbounds    OutboundOrder[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model ContainerItem {
+  id          Int       @id @default(autoincrement())
+  containerId Int
+  container   Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
+  outboundId  Int
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id])
+  plannedQty  Int
+  actualQty   Int?
+  returnedQty Int       @default(0)
+  locationId  Int?
+  location    Location? @relation(fields: [locationId], references: [id])
+
+  @@index([outboundId])
+  @@index([containerId])
 }

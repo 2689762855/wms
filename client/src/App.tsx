@@ -37,6 +37,11 @@ import WarehouseLocations from './pages/WarehouseLocations';
 import Users from './pages/Users';
 import Customers from './pages/Customers';
 import About from './pages/About';
+import Contracts from './pages/Contracts';
+import ContractDetail from './pages/ContractDetail';
+import Containers from './pages/Containers';
+import ContainerDetail from './pages/ContainerDetail';
+import ContainerReport from './pages/ContainerReport';
 import MobileWorkerLayout from './components/MobileWorkerLayout';
 import MobileInboundList from './pages/mobile/MobileInboundList';
 import MobileInboundNew from './pages/mobile/MobileInboundNew';
@@ -98,6 +103,9 @@ function AppRoutes() {
       </Route>
       <Route path="/transfer/:id" element={<ProtectedRoute><AppLayout><TransferDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/warehouses/:id/locations" element={<ProtectedRoute><AppLayout><WarehouseLocations /></AppLayout></ProtectedRoute>} />
+      <Route path="/contracts/:id" element={<ProtectedRoute><AppLayout><ContractDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/containers/:id" element={<ProtectedRoute><AppLayout><ContainerDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/containers/:id/report" element={<ProtectedRoute><ContainerReport /></ProtectedRoute>} />
       {!isStandalone && <Route path="/admin" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
       </Route>}
@@ -122,6 +130,8 @@ function AppRoutes() {
         <Route path="alerts" element={<Alerts />} />
         <Route path="reports/in-out" element={<ReportsInOut />} />
         <Route path="reports/turnover" element={<ReportsTurnover />} />
+        <Route path="contracts" element={<Contracts />} />
+        <Route path="containers" element={<Containers />} />
         <Route path="settings/users" element={<Users />} />
         {!isStandalone && <Route path="settings/customers" element={<Customers />} />}
         <Route path="settings/about" element={<About />} />

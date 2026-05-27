@@ -4,6 +4,7 @@ import { Card, Typography, Descriptions, Table, Tag, Button, Space, message, Mod
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
+import { getCategoryPath } from '../utils/categoryTree';
 import dayjs from 'dayjs';
 import type { Location } from '../types';
 
@@ -62,7 +63,7 @@ export default function TransferDetail() {
   };
 
   const itemColumns = [
-    { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => r.product?.category?.parent?.parent?.name || '-' },
+    { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => { const p = getCategoryPath(r.product?.category || null); return p === '-' ? '-' : p.split(' - ')[0]; } },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
