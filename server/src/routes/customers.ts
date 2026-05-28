@@ -239,9 +239,9 @@ customerTemplateRouter.get('/:id/template', async (req: AuthRequest, res: Respon
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '无权查看此模板' });
   }
-  const customer = await prisma.customer.findUnique({ where: { id }, select: { reportTemplate: true, templatePreset: true } });
+  const customer = await prisma.customer.findUnique({ where: { id }, select: { reportTemplate: true, templatePreset: true, excelPreset: true } });
   if (!customer) return res.status(404).json({ error: '客户不存在' });
-  res.json({ template: customer.reportTemplate || null, templatePreset: customer.templatePreset || null });
+  res.json({ template: customer.reportTemplate || null, templatePreset: customer.templatePreset || null, excelPreset: customer.excelPreset || null });
 });
 
 // 选择预设模板（admin + 客户自己）
@@ -254,6 +254,18 @@ customerTemplateRouter.put('/:id/template-preset', async (req: AuthRequest, res:
   if (preset !== null && typeof preset !== 'string') return res.status(400).json({ error: '请选择预设模板' });
   await prisma.customer.update({ where: { id }, data: { templatePreset: preset } });
   res.json({ message: '模板已切换' });
+});
+
+// 选择 Excel 导出预设（admin + 客户自己）
+customerTemplateRouter.put('/:id/excel-preset', async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  if (req.userRole === 'tenant_admin' && req.customerId !== id) {
+    return res.status(403).json({ error: '只能切换自己的模板' });
+  }
+  const { preset } = req.body; // null = 使用默认
+  if (preset !== null && typeof preset !== 'string') return res.status(400).json({ error: '请选择预设模板' });
+  await prisma.customer.update({ where: { id }, data: { excelPreset: preset } });
+  res.json({ message: 'Excel 模板已切换' });
 });
 
 // 更新 Excel 导出模板（admin + 客户自己）

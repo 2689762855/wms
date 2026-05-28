@@ -340,6 +340,7 @@ model Customer {
   deletedAt     DateTime? // null=正常, 非null=软删除（7天后彻底清理）
   reportTemplate String?   // 装柜报表自定义HTML模板，null=默认
   templatePreset String?   // 预设模板: manifest | packing-list | shipping-detail
+  excelPreset    String?   // Excel导出预设: manifest | packing-list | shipping-detail（独立于HTML模板）
   exportTemplate String?   // Excel导出自定义列配置JSON，null=用预设
 
   warehouses Warehouse[]

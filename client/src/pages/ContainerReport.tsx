@@ -5,7 +5,7 @@ import { Spin, Modal, Input, message, Select, Checkbox, Button, Space } from 'an
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
-import { presetOptions, excelPresets, defaultExcelTemplate, allColumnKeys, allColumnLabels, type ExcelColumn } from '../utils/reportPresets';
+import { presetOptions, presetLabelMap, excelPresets, defaultExcelTemplate, allColumnKeys, allColumnLabels, type ExcelColumn } from '../utils/reportPresets';
 
 export default function ContainerReport() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +31,12 @@ export default function ContainerReport() {
     onError: (err: any) => message.error(err.response?.data?.error || '切换失败'),
   });
 
+  const excelPresetMutation = useMutation({
+    mutationFn: (preset: string | null) => apiClient.put(`/customers/${data.customerId}/excel-preset`, { preset }),
+    onSuccess: () => { message.success('Excel 模板已切换'); window.location.reload(); },
+    onError: (err: any) => message.error(err.response?.data?.error || '切换失败'),
+  });
+
   const excelSaveMutation = useMutation({
     mutationFn: (exportTemplate: string | null) =>
       apiClient.put(`/customers/${data.customerId}/export-template`, { exportTemplate }),
@@ -44,19 +50,17 @@ export default function ContainerReport() {
     }
   }, [data]);
 
-  // 解析有效导出列配置
+  // Excel 导出列配置：优先自定义 → 预设 → 默认
   const activeColumns = useMemo((): ExcelColumn[] => {
     if (!data) return defaultExcelTemplate.columns;
-    // 自定义模板
     if (data.exportTemplate) {
       try {
         const parsed = JSON.parse(data.exportTemplate);
         if (parsed && Array.isArray(parsed.columns)) return parsed.columns;
       } catch {}
     }
-    // 预设模板对应的 Excel 配置
-    if (data.templatePreset && excelPresets[data.templatePreset]) {
-      return excelPresets[data.templatePreset].columns;
+    if (data.excelPreset && excelPresets[data.excelPreset]) {
+      return excelPresets[data.excelPreset].columns;
     }
     return defaultExcelTemplate.columns;
   }, [data]);
@@ -221,24 +225,42 @@ export default function ContainerReport() {
       `}</style>
 
       <div className="no-print" style={{ marginBottom: 16 }}>
-        <span style={{ fontSize: 13, marginRight: 6 }}>模板:</span>
-        <Select
-          value={presetKey || '__custom'}
-          onChange={(val) => presetMutation.mutate(val === '__custom' ? null : val)}
-          style={{ width: 160, marginRight: 12 }}
-          options={[
-            ...presetOptions.map(p => ({ label: p.name, value: p.key })),
-            { label: '自定义模板', value: '__custom' },
-          ]}
-          loading={presetMutation.isPending}
-        />
-        <button onClick={() => window.print()} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer' }}>打印</button>
-        <button onClick={exportExcel} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>导出 Excel</button>
-        <button onClick={openExcelEditor} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>Excel 列设置</button>
-        {!presetKey && (
-          <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>编辑模板</button>
-        )}
-        <span style={{ marginLeft: 16, color: '#999', fontSize: 13 }}>提示：打印时请关闭浏览器「页眉和页脚」</span>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 13, marginRight: 6 }}>打印:</span>
+          <Select
+            value={presetKey || '__custom'}
+            onChange={(val) => presetMutation.mutate(val === '__custom' ? null : val)}
+            style={{ width: 160, marginRight: 12 }}
+            options={[
+              ...presetOptions.map(p => ({ label: p.name, value: p.key })),
+              { label: '自定义模板', value: '__custom' },
+            ]}
+            loading={presetMutation.isPending}
+          />
+          {!presetKey && (
+            <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '6px 16px', fontSize: 14, cursor: 'pointer' }}>编辑模板</button>
+          )}
+        </div>
+        <div>
+          <span style={{ fontSize: 13, marginRight: 6 }}>Excel:</span>
+          <Select
+            value={data.excelPreset || (hasCustomExport ? '__custom' : '__default')}
+            onChange={(val) => {
+              if (val === '__custom') return;
+              excelPresetMutation.mutate(val === '__default' ? null : val);
+            }}
+            style={{ width: 160, marginRight: 12 }}
+            options={[
+              { label: '默认（出货明细）', value: '__default' },
+              ...presetOptions.map(p => ({ label: p.name, value: p.key })),
+            ]}
+            loading={excelPresetMutation.isPending}
+          />
+          <button onClick={() => window.print()} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer' }}>打印</button>
+          <button onClick={exportExcel} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>导出 Excel</button>
+          <button onClick={openExcelEditor} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>Excel 列设置</button>
+          <span style={{ marginLeft: 16, color: '#999', fontSize: 13 }}>提示：打印时请关闭浏览器「页眉和页脚」</span>
+        </div>
       </div>
 
       {/* HTML 模板编辑 */}
@@ -275,7 +297,7 @@ export default function ContainerReport() {
         <div style={{ marginTop: 12 }}>
           <Button size="small" onClick={resetExcelTemplate} loading={excelSaveMutation.isPending}>恢复默认</Button>
           <span style={{ marginLeft: 8, color: '#999', fontSize: 12 }}>
-            {hasCustomExport ? '当前：自定义列配置' : presetKey ? '当前：跟随预设模板' : '当前：默认列配置'}
+            {hasCustomExport ? '当前：自定义列配置' : data.excelPreset ? '当前：Excel 预设 ' + (presetLabelMap[data.excelPreset] || data.excelPreset) : '当前：默认列配置'}
           </span>
         </div>
       </Modal>
