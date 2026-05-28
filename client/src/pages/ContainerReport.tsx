@@ -98,10 +98,11 @@ export default function ContainerReport() {
   return (
     <div style={{ padding: 16, fontFamily: 'sans-serif' }}>
       <style>{`
-        @page { size: A4 landscape; margin: 8mm; }
+        @page { size: A4 portrait; margin: 8mm; }
         @media print {
           body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .no-print { display: none; }
+          .no-print { display: none !important; }
+          table { page-break-inside: avoid; }
         }
       `}</style>
 
