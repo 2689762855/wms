@@ -20,10 +20,11 @@ export default function Containers() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
+  const [customerFilter, setCustomerFilter] = useState<number | undefined>();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['containers'],
-    queryFn: () => apiClient.get('/containers').then((r) => r.data),
+    queryKey: ['containers', customerFilter],
+    queryFn: () => apiClient.get('/containers', { params: customerFilter ? { customerId: customerFilter } : {} }).then((r) => r.data),
   });
 
   const { data: customers } = useQuery<CustomerInfo[]>({
@@ -68,7 +69,10 @@ export default function Containers() {
 
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>货柜管理</Typography.Title>}
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建货柜</Button>}>
+      extra={<Space>
+        <Select allowClear placeholder="客户筛选" style={{ width: 160 }} showSearch optionFilterProp="label" value={customerFilter} onChange={(v) => setCustomerFilter(v)} options={customers?.map((c) => ({ label: c.realName || c.username, value: c.id }))} />
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建货柜</Button>
+      </Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
         pagination={{ total: data?.total, pageSize: 20, showSizeChanger: false }} />
 
