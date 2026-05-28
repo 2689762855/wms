@@ -30,31 +30,7 @@ export const allColumnLabels: Record<string, string> = {
 };
 
 export const excelPresets: Record<string, ExcelTemplate> = {
-  manifest: {
-    columns: [
-      { key: 'index', label: '序号 No.', width: 6 },
-      { key: 'mark', label: '唛头 Mark', width: 12 },
-      { key: 'name', label: '品名 Description', width: 20 },
-      { key: 'spec', label: '规格 Spec', width: 10 },
-      { key: 'plannedQty', label: '数量 QTY', width: 8 },
-      { key: 'gw', label: '毛重(KG) G.W.', width: 10 },
-      { key: 'nw', label: '净重(KG) N.W.', width: 10 },
-      { key: 'cbm', label: '体积(CBM) Meas.', width: 10 },
-      { key: 'remark', label: '备注 Remark', width: 12 },
-    ],
-  },
-  'packing-list': {
-    columns: [
-      { key: 'index', label: '序号 No.', width: 6 },
-      { key: 'name', label: '品名 Description', width: 20 },
-      { key: 'spec', label: '规格 Spec', width: 10 },
-      { key: 'plannedQty', label: '数量 QTY', width: 8 },
-      { key: 'gw', label: '毛重(KG) G.W.', width: 10 },
-      { key: 'nw', label: '净重(KG) N.W.', width: 10 },
-      { key: 'cbm', label: '体积(CBM) Meas.', width: 10 },
-    ],
-  },
-  'shipping-detail': {
+  full: {
     columns: [
       { key: 'index', label: '序号', width: 6 },
       { key: 'sku', label: 'SKU', width: 14 },
@@ -67,6 +43,33 @@ export const excelPresets: Record<string, ExcelTemplate> = {
       { key: 'remark', label: '备注', width: 12 },
     ],
   },
+  simple: {
+    columns: [
+      { key: 'index', label: '序号', width: 6 },
+      { key: 'sku', label: 'SKU', width: 14 },
+      { key: 'name', label: '品名', width: 20 },
+      { key: 'actualQty', label: '实装数量', width: 10 },
+      { key: 'remark', label: '备注', width: 16 },
+    ],
+  },
+  reconciliation: {
+    columns: [
+      { key: 'index', label: '序号', width: 6 },
+      { key: 'sku', label: 'SKU', width: 14 },
+      { key: 'name', label: '品名', width: 16 },
+      { key: 'spec', label: '规格', width: 10 },
+      { key: 'unit', label: '单位', width: 6 },
+      { key: 'actualQty', label: '实装数量', width: 10 },
+      { key: 'returnedQty', label: '短装数量', width: 10 },
+      { key: 'remark', label: '备注', width: 12 },
+    ],
+  },
 };
 
-export const defaultExcelTemplate: ExcelTemplate = excelPresets['shipping-detail'];
+export const excelPresetNames: Record<string, string> = {
+  full: '全部字段',
+  simple: '简易清单',
+  reconciliation: '对账明细',
+};
+
+export const defaultExcelTemplate: ExcelTemplate = excelPresets.full;

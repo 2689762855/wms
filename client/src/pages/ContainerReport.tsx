@@ -5,7 +5,7 @@ import { Spin, Modal, Input, message, Select, Checkbox, Button, Space } from 'an
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
-import { presetOptions, presetLabelMap, excelPresets, defaultExcelTemplate, allColumnKeys, allColumnLabels, type ExcelColumn } from '../utils/reportPresets';
+import { presetOptions, presetLabelMap, excelPresets, excelPresetNames, defaultExcelTemplate, allColumnKeys, allColumnLabels, type ExcelColumn } from '../utils/reportPresets';
 
 export default function ContainerReport() {
   const { id } = useParams<{ id: string }>();
@@ -251,8 +251,8 @@ export default function ContainerReport() {
             }}
             style={{ width: 160, marginRight: 12 }}
             options={[
-              { label: '默认（出货明细）', value: '__default' },
-              ...presetOptions.map(p => ({ label: p.name, value: p.key })),
+              { label: '默认（全部字段）', value: '__default' },
+              ...Object.entries(excelPresetNames).map(([k, v]) => ({ label: v, value: k })),
             ]}
             loading={excelPresetMutation.isPending}
           />
@@ -297,7 +297,7 @@ export default function ContainerReport() {
         <div style={{ marginTop: 12 }}>
           <Button size="small" onClick={resetExcelTemplate} loading={excelSaveMutation.isPending}>恢复默认</Button>
           <span style={{ marginLeft: 8, color: '#999', fontSize: 12 }}>
-            {hasCustomExport ? '当前：自定义列配置' : data.excelPreset ? '当前：Excel 预设 ' + (presetLabelMap[data.excelPreset] || data.excelPreset) : '当前：默认列配置'}
+            {hasCustomExport ? '当前：自定义列配置' : data.excelPreset ? '当前：' + (excelPresetNames[data.excelPreset] || data.excelPreset) : '当前：默认（全部字段）'}
           </span>
         </div>
       </Modal>
