@@ -83,6 +83,7 @@ export default function Contracts() {
               placeholder="输入生意客户名，新客户自动创建"
               filterOption={(input, option) => (option?.label as string || '').toLowerCase().includes(input.toLowerCase())}
               options={customers?.map((c) => ({ label: c.realName || c.username, value: c.id }))}
+              defaultActiveFirstOption={false}
               onChange={(_val, opt: any) => form.setFieldValue('customerId', opt?.value ?? null)}
             >
               <Input />
