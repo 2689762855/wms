@@ -92,6 +92,18 @@ export default function ContainerDetail() {
     onError: (err: any) => message.error(err.response?.data?.error || '封柜失败'),
   });
 
+  const adjustMutation = useMutation({
+    mutationFn: (items: { productId: number; actualQty: number }[]) =>
+      apiClient.put(`/containers/${id}/adjust`, { items }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['container', id] });
+      queryClient.invalidateQueries({ queryKey: ['containers'] });
+      setActualQs({});
+      message.success('装柜数量已更新，库存已同步调整');
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '调整失败'),
+  });
+
   const handleLoad = () => {
     if (!container) return;
     const items = (container.items || []).map((i: any) => {
@@ -143,13 +155,13 @@ export default function ContainerDetail() {
     {
       title: '实装数量', dataIndex: 'actualQty', width: 120,
       render: (v: number, r: any) => {
-        if (container?.status === 'sealed') return <span style={{ fontWeight: 600 }}>{v || 0}</span>;
+        const key = `${r.productId}`;
+        const val = actualQs[key] != null ? actualQs[key] : (v ?? 0);
         return (
           <InputNumber
             min={0}
-            max={r.plannedQty}
-            value={actualQs[`${r.productId}`] ?? v ?? 0}
-            onChange={(n) => setActualQs((prev) => ({ ...prev, [`${r.productId}`]: n || 0 }))}
+            value={val}
+            onChange={(n) => setActualQs((prev) => ({ ...prev, [key]: n || 0 }))}
             style={{ width: 80 }}
           />
         );
@@ -215,7 +227,27 @@ export default function ContainerDetail() {
       )}
 
       {container.status === 'sealed' && (
-        <Button icon={<PrinterOutlined />} onClick={printReport} style={{ marginBottom: 16 }}>打印装柜报表</Button>
+        <Space style={{ marginBottom: 16 }}>
+          <Button icon={<PrinterOutlined />} onClick={printReport}>打印装柜报表</Button>
+          <Button
+            type="primary"
+            onClick={() => {
+              const adjItems = mergedItems
+                .filter((m: any) => {
+                  const key = `${m.productId}`;
+                  return actualQs[key] != null && actualQs[key] !== m.actualQty;
+                })
+                .map((m: any) => ({ productId: m.productId, actualQty: actualQs[`${m.productId}`] }));
+              if (adjItems.length === 0) { message.info('无变更'); return; }
+              Modal.confirm({
+                title: '确认调整装柜数量？',
+                content: `将修改 ${adjItems.length} 个商品的实装数，系统会自动调整库存。`,
+                onOk: () => adjustMutation.mutate(adjItems),
+              });
+            }}
+            loading={adjustMutation.isPending}
+          >保存调整</Button>
+        </Space>
       )}
 
       <Card title="装柜明细">

@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Spin, Modal, Input, message } from 'antd';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 
 export default function ContainerReport() {
   const { id } = useParams<{ id: string }>();
@@ -95,6 +96,36 @@ export default function ContainerReport() {
   const template = data.reportTemplate;
   const htmlContent = template ? renderTemplate(template) : null;
 
+  const exportExcel = () => {
+    const rows = [
+      ['货柜号', data.containerNo || ''],
+      ['客户', data.customerName || ''],
+      ['到柜时间', data.toYardTime ? dayjs(data.toYardTime).format('YYYY-MM-DD HH:mm') : ''],
+      ['封柜时间', data.sealTime ? dayjs(data.sealTime).format('YYYY-MM-DD HH:mm') : ''],
+      ['', ''],
+      ['序号', 'SKU', '商品', '规格', '单位', '计划数量', '实装数量', '甩柜数量'],
+    ];
+    (data.summary || []).forEach((item: any, idx: number) => {
+      rows.push([
+        String(idx + 1), item.sku, item.name, item.spec || '', item.unit || '',
+        item.plannedQty || 0, item.actualQty || 0,
+        Math.max(0, item.returnedQty || 0),
+      ]);
+    });
+    rows.push([
+      '', '', '', '', '合计',
+      data.totals?.totalPlanned || 0,
+      data.totals?.totalActual || 0,
+      data.totals?.totalReturned || 0,
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '装柜报表');
+    XLSX.writeFile(wb, `${data.containerNo}装柜报表.xlsx`);
+  };
+
   return (
     <div style={{ padding: 16, fontFamily: 'sans-serif' }}>
       <style>{`
@@ -108,6 +139,7 @@ export default function ContainerReport() {
 
       <div className="no-print" style={{ marginBottom: 16 }}>
         <button onClick={() => window.print()} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer' }}>打印</button>
+        <button onClick={exportExcel} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>导出 Excel</button>
         <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>编辑模板</button>
         <span style={{ marginLeft: 16, color: '#999', fontSize: 13 }}>提示：打印时请关闭浏览器「页眉和页脚」</span>
       </div>

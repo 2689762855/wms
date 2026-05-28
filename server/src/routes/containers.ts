@@ -241,6 +241,121 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
   res.json(updated);
 });
 
+// 调整装柜数量（支持封柜后修正，海外仓反馈偏差时使用）
+containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  const { items } = req.body; // [{ productId, actualQty }]
+
+  if (!items || !Array.isArray(items)) {
+    return res.status(400).json({ error: '请提供调整明细' });
+  }
+
+  const container = await prisma.container.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+  if (!container) return res.status(404).json({ error: '货柜不存在' });
+  if (container.status === 'pending') return res.status(400).json({ error: '请先保存装柜数据' });
+
+  const isSealed = container.status === 'sealed';
+
+  await prisma.$transaction(async (tx) => {
+    for (const adj of items) {
+      const pid = adj.productId;
+      const newActual = adj.actualQty || 0;
+      const existingItems = container.items.filter(i => i.productId === pid);
+      if (existingItems.length === 0) continue;
+
+      const totalPlanned = existingItems.reduce((s, i) => s + i.plannedQty, 0);
+      const oldReturnedTotal = existingItems.reduce((s, i) => s + i.returnedQty, 0);
+      const newReturnedTotal = Math.max(0, totalPlanned - newActual);
+
+      // 按计划数比例分配新的实装数和甩柜数到各条目
+      for (const item of existingItems) {
+        const ratio = totalPlanned > 0 ? item.plannedQty / totalPlanned : 0;
+        const itemActual = Math.round(newActual * ratio);
+        const itemReturned = Math.max(0, item.plannedQty - itemActual);
+        await tx.containerItem.update({
+          where: { id: item.id },
+          data: { actualQty: itemActual, returnedQty: itemReturned },
+        });
+      }
+
+      // 封柜后调整库存：oldReturnedTotal 已归还，newReturnedTotal 是修正后的甩柜数
+      if (isSealed && newReturnedTotal !== oldReturnedTotal) {
+        const diff = newReturnedTotal - oldReturnedTotal; // 正数=多甩需补还, 负数=少甩需扣回
+        if (diff === 0) continue;
+
+        // 取原出库单的仓库和归还库位
+        const firstItem = existingItems[0];
+        const ob = await tx.outboundOrder.findUnique({
+          where: { id: firstItem.outboundId },
+          select: { warehouseId: true },
+        });
+        const warehouseId = ob?.warehouseId;
+        if (!warehouseId) continue;
+
+        // 优先用已记录的归还库位
+        let locationId = firstItem.returnLocationId;
+        if (!locationId) {
+          const inv = await tx.inventory.findFirst({
+            where: { productId: pid, warehouseId },
+            orderBy: { quantity: 'desc' },
+          });
+          locationId = inv?.locationId ?? undefined;
+        }
+
+        const totalBefore = (await tx.inventory.aggregate({
+          where: { productId: pid, warehouseId },
+          _sum: { quantity: true },
+        }))._sum.quantity || 0;
+
+        if (locationId) {
+          const inv = await tx.inventory.findFirst({
+            where: { productId: pid, warehouseId, locationId },
+          });
+          if (inv) {
+            await tx.inventory.update({
+              where: { id: inv.id },
+              data: { quantity: { increment: diff } },
+            });
+          } else if (diff > 0) {
+            await tx.inventory.create({
+              data: { productId: pid, warehouseId, locationId, quantity: diff },
+            });
+          }
+        }
+
+        await tx.stockLog.create({
+          data: {
+            productId: pid,
+            warehouseId,
+            changeQty: diff,
+            beforeQty: totalBefore,
+            afterQty: totalBefore + diff,
+            type: 'container_adjust',
+            refId: id,
+          },
+        });
+      }
+    }
+  });
+
+  const updated = await prisma.container.findUnique({
+    where: { id },
+    include: {
+      customer: { select: { id: true, username: true, realName: true } },
+      items: {
+        include: {
+          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } },
+          returnLocation: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+  res.json(updated);
+});
+
 // 删除货柜（仅 pending 状态可删）
 containersRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
