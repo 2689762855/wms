@@ -35,7 +35,7 @@ export default function OutboundNew() {
   // 可选合同列表（active 状态）
   const { data: contracts } = useQuery({
     queryKey: ['contracts-active'],
-    queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 999 } }).then(r => r.data.data),
+    queryFn: () => apiClient.get('/contracts', { params: { status: 'completed', pageSize: 999 } }).then(r => r.data.data),
   });
 
   // 选中合同后获取其商品列表
