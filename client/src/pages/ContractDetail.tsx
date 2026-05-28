@@ -49,6 +49,9 @@ export default function ContractDetail() {
     { title: '商品', dataIndex: ['product', 'name'] },
     { title: '规格', dataIndex: ['product', 'spec'] },
     { title: '单位', dataIndex: ['product', 'unit'], width: 60 },
+    { title: '单价', dataIndex: 'unitPrice', width: 90,
+      render: (v: number) => v ? <Typography.Text>¥{v.toFixed(2)}</Typography.Text> : <span style={{ color: '#ccc' }}>—</span>,
+    },
     {
       title: '计划数量', dataIndex: 'plannedQty',
       render: (v: number) => <Typography.Text strong>{v}</Typography.Text>,
@@ -58,6 +61,14 @@ export default function ContractDetail() {
       render: (v: number, r: any) => {
         const over = v > r.plannedQty;
         return <Tag color={over ? 'red' : v >= r.plannedQty ? 'green' : 'blue'}>{v}</Tag>;
+      },
+    },
+    { title: '金额', key: 'amount', width: 100,
+      render: (_: any, r: any) => {
+        const price = r.unitPrice || 0;
+        const qty = r.receivedQty;
+        if (!price) return <span style={{ color: '#ccc' }}>—</span>;
+        return <Typography.Text strong>¥{(price * qty).toFixed(2)}</Typography.Text>;
       },
     },
     {

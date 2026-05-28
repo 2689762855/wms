@@ -13,7 +13,7 @@ export default function Contracts() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
-  const [selectedProducts, setSelectedProducts] = useState<{ productId?: number; plannedQty: number }[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<{ productId?: number; plannedQty: number; unitPrice?: number }[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
 
   const { data, isLoading } = useQuery({
@@ -87,6 +87,8 @@ export default function Contracts() {
                   options={products?.map((p: any) => ({ label: `${p.sku} | ${p.name}`, value: p.id }))} />
                 <InputNumber min={1} placeholder="计划数量" value={sp.plannedQty}
                   onChange={(v) => { const next = [...selectedProducts]; next[idx] = { ...next[idx], plannedQty: v || 0 }; setSelectedProducts(next); }} />
+                <InputNumber min={0} step={0.01} placeholder="单价" value={sp.unitPrice} style={{ width: 100 }}
+                  onChange={(v) => { const next = [...selectedProducts]; next[idx] = { ...next[idx], unitPrice: v ?? undefined }; setSelectedProducts(next); }} />
                 <Button danger size="small" onClick={() => setSelectedProducts(selectedProducts.filter((_, i) => i !== idx))}>删除</Button>
               </Space>
             ))}

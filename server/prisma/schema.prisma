@@ -385,6 +385,7 @@ model ContractItem {
   product     Product  @relation(fields: [productId], references: [id])
   plannedQty  Int
   receivedQty Int      @default(0)
+  unitPrice   Float?   // 合同批次单价
 
   @@unique([contractId, productId])
 }

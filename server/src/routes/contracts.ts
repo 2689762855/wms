@@ -69,9 +69,10 @@ contractsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
       contractNo,
       customerId: finalCustomerId,
       items: {
-        create: items.map((i: { productId: number; plannedQty: number }) => ({
+        create: items.map((i: { productId: number; plannedQty: number; unitPrice?: number }) => ({
           productId: i.productId,
           plannedQty: i.plannedQty || 0,
+          unitPrice: i.unitPrice ?? undefined,
         })),
       },
     },
@@ -100,10 +101,11 @@ contractsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) 
 
     await prisma.contractItem.deleteMany({ where: { contractId: id } });
     await prisma.contractItem.createMany({
-      data: items.map((i: { productId: number; plannedQty: number }) => ({
+      data: items.map((i: { productId: number; plannedQty: number; unitPrice?: number }) => ({
         contractId: id,
         productId: i.productId,
         plannedQty: i.plannedQty || 0,
+        unitPrice: i.unitPrice ?? undefined,
       })),
     });
   }
