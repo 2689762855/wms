@@ -62,9 +62,17 @@ containersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response)
 
 // 创建货柜
 containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
-  const { containerNo, toYardTime, customerId, note } = req.body;
+  const { containerNo, toYardTime, customerId, customerName, note } = req.body;
   if (!containerNo) return res.status(400).json({ error: '柜号必填' });
-  if (!customerId && !req.customerId) return res.status(400).json({ error: '请选择客户' });
+  let finalCustomerId = customerId || req.customerId;
+  if (!finalCustomerId && customerName) {
+    const bcrypt = require('bcryptjs');
+    const newCust = await prisma.customer.create({
+      data: { username: customerName + '_' + Date.now().toString(36), passwordHash: await bcrypt.hash('123456', 10), realName: customerName },
+    });
+    finalCustomerId = newCust.id;
+  }
+  if (!finalCustomerId) return res.status(400).json({ error: '请选择客户' });
 
   const existing = await prisma.container.findUnique({ where: { containerNo } });
   if (existing) return res.status(400).json({ error: '柜号已存在' });
@@ -73,7 +81,7 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
     data: {
       containerNo,
       toYardTime: toYardTime ? new Date(toYardTime) : null,
-      customerId: customerId || (req.customerId as number),
+      customerId: finalCustomerId,
       note,
     },
     include: {

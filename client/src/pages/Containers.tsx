@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, Card, Typography, message, Tag } from 'antd';
+import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, Card, Typography, message, Tag, AutoComplete } from 'antd';
 import { PlusOutlined, DeleteOutlined, EnterOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -30,7 +30,7 @@ export default function Containers() {
   const { data: customers } = useQuery<CustomerInfo[]>({
     queryKey: ['customers'],
     queryFn: () => apiClient.get('/customers').then((r) => r.data),
-    enabled: user?.role === 'super_admin',
+    enabled: user?.role !== 'operator',
   });
 
   const createMutation = useMutation({
@@ -81,12 +81,17 @@ export default function Containers() {
           <Form.Item name="containerNo" label="柜号" rules={[{ required: true }]}>
             <Input placeholder="如: TGHU1234567" />
           </Form.Item>
-          {user?.role === 'super_admin' && (
-            <Form.Item name="customerId" label="客户" rules={[{ required: true }]}>
-              <Select placeholder="选择客户" showSearch optionFilterProp="label"
-                options={customers?.map((c) => ({ label: `${c.realName || c.username}`, value: c.id }))} />
-            </Form.Item>
-          )}
+          <Form.Item name="customerName" label="客户" rules={[{ required: true }]}>
+            <AutoComplete
+              placeholder="输入生意客户名，新客户自动创建"
+              filterOption={(input, option) => (option?.label as string || '').toLowerCase().includes(input.toLowerCase())}
+              options={customers?.map((c) => ({ label: c.realName || c.username, value: c.id }))}
+              onChange={(_val, opt: any) => form.setFieldValue('customerId', opt?.value ?? null)}
+            >
+              <Input />
+            </AutoComplete>
+          </Form.Item>
+          <Form.Item name="customerId" hidden><Input /></Form.Item>
           <Form.Item name="toYardTime" label="到柜时间">
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
