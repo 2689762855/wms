@@ -41,9 +41,29 @@ export default function OutboundDetail() {
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
     { title: '出库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
+    { title: '合同单价', key: 'unitPrice', width: 90,
+      render: (_: any, r: any) => {
+        const price = getContractPrice(r.productId);
+        return price ? `¥${price.toFixed(2)}` : <span style={{color:'#ccc'}}>—</span>;
+      },
+    },
+    { title: '金额', key: 'amount', width: 90,
+      render: (_: any, r: any) => {
+        const price = getContractPrice(r.productId);
+        return price ? `¥${(price * r.quantity).toFixed(2)}` : <span style={{color:'#ccc'}}>—</span>;
+      },
+    },
   ];
 
   if (isLoading) return <Card loading />;
+
+  const contractItem = order?.items?.find((i: any) => i.contract);
+  const linkedContract = contractItem?.contract;
+  const getContractPrice = (productId: number) => {
+    if (!linkedContract?.items) return undefined;
+    const ci = linkedContract.items.find((ci: any) => ci.productId === productId);
+    return ci?.unitPrice;
+  };
 
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>出库单详情</Typography.Title>}
@@ -69,6 +89,7 @@ export default function OutboundDetail() {
         <Descriptions.Item label="仓库">{order?.warehouse?.name}</Descriptions.Item>
         <Descriptions.Item label="领用人">{order?.receiver || '-'}</Descriptions.Item>
         <Descriptions.Item label="关联货柜">{order?.container ? <Tag color={order.container.status === 'sealed' ? 'green' : 'blue'}><a onClick={() => navigate(`/containers/${order.container.id}`)} style={{cursor:'pointer'}}>{order.container.containerNo}</a></Tag> : '-'}</Descriptions.Item>
+        <Descriptions.Item label="关联合同">{linkedContract ? <Tag color="purple"><a onClick={() => navigate(`/contracts/${linkedContract.id}`)} style={{cursor:'pointer'}}>{linkedContract.contractNo}</a></Tag> : '-'}</Descriptions.Item>
         <Descriptions.Item label="备注">{order?.note || '-'}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{dayjs(order?.createdAt).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
       </Descriptions>
