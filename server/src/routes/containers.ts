@@ -56,6 +56,7 @@ containersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response)
     },
   });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
+  if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
   res.json(container);
 });
 
@@ -98,6 +99,7 @@ containersRouter.put('/:id/load', validateId, adminWrite, async (req: AuthReques
 
   const container = await prisma.container.findUnique({ where: { id } });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
+  if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
   if (container.status !== 'pending' && container.status !== 'loading') return res.status(400).json({ error: '货柜状态不允许装柜' });
 
   // 删除旧明细，重新写入
@@ -138,6 +140,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
     include: { items: true },
   });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
+  if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
   if (container.status !== 'loading') return res.status(400).json({ error: '请先完成装柜' });
 
   const returnLocations = req.body.returnLocations as Record<string, number> | undefined;
@@ -256,6 +259,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
     include: { items: true },
   });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
+  if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
   if (container.status === 'pending') return res.status(400).json({ error: '请先保存装柜数据' });
 
   const isSealed = container.status === 'sealed';
@@ -362,6 +366,7 @@ containersRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest,
   const id = parseInt(req.params.id);
   const container = await prisma.container.findUnique({ where: { id } });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
+  if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
   if (container.status !== 'pending') return res.status(400).json({ error: '仅待装柜状态可删除' });
   await prisma.container.delete({ where: { id } });
   res.json({ message: '已删除' });
@@ -382,6 +387,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     },
   });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
+  if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
 
   // 按商品合并
   const merged = new Map<number, { sku: string; name: string; spec: string; unit: string; plannedQty: number; actualQty: number; returnedQty: number }>();

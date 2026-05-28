@@ -7,6 +7,10 @@ export const customersRouter = Router();
 customersRouter.use(authenticate);
 customersRouter.use(superAdmin);
 
+// 模板路由独立，不受 superAdmin 限制，允许客户自行管理
+export const customerTemplateRouter = Router({ mergeParams: true });
+customerTemplateRouter.use(authenticate);
+
 // 客户列表
 customersRouter.get('/', async (req: AuthRequest, res: Response) => {
   const includeDeleted = req.query.includeDeleted === 'true';
@@ -215,26 +219,37 @@ customersRouter.put('/:id/renew', validateId, async (req: AuthRequest, res: Resp
   res.json({ message: `已续费 ${extendDays} 天`, expiresAt: newExpiresAt });
 });
 
-// 更新客户报表模板
-customersRouter.put('/:id/template', authenticate, adminWrite, validateId, async (req: AuthRequest, res: Response) => {
+// ===== 模板操作（独立路由，不受 superAdmin 限制） =====
+
+// 更新客户报表模板（admin + 客户自己）
+customerTemplateRouter.put('/:id/template', adminWrite, validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
+  if (req.userRole === 'tenant_admin' && req.customerId !== id) {
+    return res.status(403).json({ error: '只能编辑自己的模板' });
+  }
   const { template } = req.body;
   if (typeof template !== 'string') return res.status(400).json({ error: '模板内容必填' });
   await prisma.customer.update({ where: { id }, data: { reportTemplate: template } });
   res.json({ message: '模板已保存' });
 });
 
-// 获取客户报表模板
-customersRouter.get('/:id/template', authenticate, async (req: AuthRequest, res: Response) => {
+// 获取客户报表模板（仅 admin 可看他人模板，客户只能看自己的）
+customerTemplateRouter.get('/:id/template', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
+  if (req.userRole === 'tenant_admin' && req.customerId !== id) {
+    return res.status(403).json({ error: '无权查看此模板' });
+  }
   const customer = await prisma.customer.findUnique({ where: { id }, select: { reportTemplate: true, templatePreset: true } });
   if (!customer) return res.status(404).json({ error: '客户不存在' });
   res.json({ template: customer.reportTemplate || null, templatePreset: customer.templatePreset || null });
 });
 
-// 选择预设模板
-customersRouter.put('/:id/template-preset', authenticate, async (req: AuthRequest, res: Response) => {
+// 选择预设模板（admin + 客户自己）
+customerTemplateRouter.put('/:id/template-preset', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
+  if (req.userRole === 'tenant_admin' && req.customerId !== id) {
+    return res.status(403).json({ error: '只能切换自己的模板' });
+  }
   const { preset } = req.body; // null = 使用自定义模板
   if (preset !== null && typeof preset !== 'string') return res.status(400).json({ error: '请选择预设模板' });
   await prisma.customer.update({ where: { id }, data: { templatePreset: preset } });
