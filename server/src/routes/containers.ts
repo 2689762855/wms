@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
+import { getPresetTemplate } from '../utils/reportPresets';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 
 export const containersRouter = Router();
@@ -372,7 +373,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   const container = await prisma.container.findUnique({
     where: { id },
     include: {
-      customer: { select: { realName: true, username: true, reportTemplate: true } },
+      customer: { select: { realName: true, username: true, reportTemplate: true, templatePreset: true } },
       items: {
         include: {
           product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
@@ -422,7 +423,10 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     status: container.status,
     customerId: container.customerId,
     customerName: container.customer?.realName || container.customer?.username || '',
-    reportTemplate: container.customer?.reportTemplate || null,
+    templatePreset: container.customer?.templatePreset || null,
+    reportTemplate: container.customer?.templatePreset
+      ? (getPresetTemplate(container.customer.templatePreset) || container.customer?.reportTemplate || null)
+      : (container.customer?.reportTemplate || null),
     summary,
     totals,
   });

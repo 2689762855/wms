@@ -339,6 +339,7 @@ model Customer {
   createdAt     DateTime  @default(now())
   deletedAt     DateTime? // null=正常, 非null=软删除（7天后彻底清理）
   reportTemplate String?   // 装柜报表自定义HTML模板，null=默认
+  templatePreset String?   // 预设模板: manifest | packing-list | shipping-detail
 
   warehouses Warehouse[]
   categories Category[]

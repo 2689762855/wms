@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Spin, Modal, Input, message } from 'antd';
+import { Spin, Modal, Input, message, Select } from 'antd';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
+import { presetOptions } from '../utils/reportPresets';
 
 export default function ContainerReport() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +21,12 @@ export default function ContainerReport() {
     mutationFn: (template: string) => apiClient.put(`/customers/${data.customerId}/template`, { template }),
     onSuccess: () => { message.success('模板已保存'); setEditOpen(false); },
     onError: (err: any) => message.error(err.response?.data?.error || '保存失败'),
+  });
+
+  const presetMutation = useMutation({
+    mutationFn: (preset: string | null) => apiClient.put(`/customers/${data.customerId}/template-preset`, { preset }),
+    onSuccess: () => { message.success('模板已切换'); window.location.reload(); },
+    onError: (err: any) => message.error(err.response?.data?.error || '切换失败'),
   });
 
   useEffect(() => {
@@ -138,9 +145,22 @@ export default function ContainerReport() {
       `}</style>
 
       <div className="no-print" style={{ marginBottom: 16 }}>
+        <span style={{ fontSize: 13, marginRight: 6 }}>模板:</span>
+        <Select
+          value={data.templatePreset || '__custom'}
+          onChange={(val) => presetMutation.mutate(val === '__custom' ? null : val)}
+          style={{ width: 160, marginRight: 12 }}
+          options={[
+            ...presetOptions.map(p => ({ label: p.name, value: p.key })),
+            { label: '自定义模板', value: '__custom' },
+          ]}
+          loading={presetMutation.isPending}
+        />
         <button onClick={() => window.print()} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer' }}>打印</button>
         <button onClick={exportExcel} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>导出 Excel</button>
-        <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>编辑模板</button>
+        {!data.templatePreset && (
+          <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '8px 24px', fontSize: 16, cursor: 'pointer', marginLeft: 12 }}>编辑模板</button>
+        )}
         <span style={{ marginLeft: 16, color: '#999', fontSize: 13 }}>提示：打印时请关闭浏览器「页眉和页脚」</span>
       </div>
 

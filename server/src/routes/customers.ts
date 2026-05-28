@@ -227,7 +227,16 @@ customersRouter.put('/:id/template', authenticate, adminWrite, validateId, async
 // 获取客户报表模板
 customersRouter.get('/:id/template', authenticate, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id);
-  const customer = await prisma.customer.findUnique({ where: { id }, select: { reportTemplate: true } });
+  const customer = await prisma.customer.findUnique({ where: { id }, select: { reportTemplate: true, templatePreset: true } });
   if (!customer) return res.status(404).json({ error: '客户不存在' });
-  res.json({ template: customer.reportTemplate || null });
+  res.json({ template: customer.reportTemplate || null, templatePreset: customer.templatePreset || null });
+});
+
+// 选择预设模板
+customersRouter.put('/:id/template-preset', authenticate, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  const { preset } = req.body; // null = 使用自定义模板
+  if (preset !== null && typeof preset !== 'string') return res.status(400).json({ error: '请选择预设模板' });
+  await prisma.customer.update({ where: { id }, data: { templatePreset: preset } });
+  res.json({ message: '模板已切换' });
 });
