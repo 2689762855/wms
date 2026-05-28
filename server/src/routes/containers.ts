@@ -324,7 +324,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
               where: { id: inv.id },
               data: { quantity: { increment: diff } },
             });
-          } else if (diff > 0) {
+          } else {
             await tx.inventory.create({
               data: { productId: pid, warehouseId, locationId, quantity: diff },
             });
