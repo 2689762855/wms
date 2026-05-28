@@ -5,7 +5,7 @@ import { Spin, Modal, Input, message, Select, Checkbox, Button, Space } from 'an
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
-import { presetOptions, presetLabelMap, excelPresets, excelPresetNames, defaultExcelTemplate, allColumnKeys, allColumnLabels, type ExcelColumn } from '../utils/reportPresets';
+import { presetOptions, excelPresets, excelPresetNames, defaultExcelTemplate, allColumnKeys, allColumnLabels, type ExcelColumn } from '../utils/reportPresets';
 
 export default function ContainerReport() {
   const { id } = useParams<{ id: string }>();
@@ -13,25 +13,10 @@ export default function ContainerReport() {
   const [editText, setEditText] = useState('');
   const [excelEditOpen, setExcelEditOpen] = useState(false);
   const [excelColumns, setExcelColumns] = useState<ExcelColumn[]>([]);
-  const [contractId, setContractId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['container-report', id, contractId],
-    queryFn: () => apiClient.get(`/containers/${id}/report`, { params: contractId ? { contractId } : {} }).then((r) => r.data),
-  });
-
-  // 自动检测合同
-  useEffect(() => {
-    if (data?.contractId && contractId === null) {
-      setContractId(data.contractId);
-    }
-  }, [data?.contractId]);
-
-  // 客户合同列表
-  const { data: contracts } = useQuery({
-    queryKey: ['customer-contracts', data?.customerId],
-    queryFn: () => apiClient.get('/contracts', { params: { customerId: data?.customerId, status: 'active', pageSize: 999 } }).then(r => r.data.data),
-    enabled: !!data?.customerId,
+    queryKey: ['container-report', id],
+    queryFn: () => apiClient.get(`/containers/${id}/report`).then((r) => r.data),
   });
 
   const saveMutation = useMutation({
@@ -261,22 +246,6 @@ export default function ContainerReport() {
           />
           {!presetKey && (
             <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '6px 16px', fontSize: 14, cursor: 'pointer' }}>编辑模板</button>
-          )}
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 13, marginRight: 6 }}>对账:</span>
-          <Select
-            allowClear
-            placeholder="选择合同查看价格"
-            value={contractId}
-            onChange={(val) => setContractId(val || null)}
-            style={{ width: 220, marginRight: 12 }}
-            options={(contracts || []).map((c: any) => ({ label: `${c.contractNo}`, value: c.id }))}
-          />
-          {data.contractId && (
-            <span style={{ color: '#52c41a', fontSize: 13 }}>
-              合同金额合计：¥{(data.totals?.totalAmount || 0).toFixed(2)}
-            </span>
           )}
         </div>
         <div>
