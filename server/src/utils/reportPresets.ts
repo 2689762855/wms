@@ -119,3 +119,83 @@ th { background: #f0f0f0; font-weight: bold; }
 export function getPresetTemplate(key: string): string | undefined {
   return reportPresets.find((p) => p.key === key)?.template;
 }
+
+// ===== Excel 导出模板 =====
+
+export interface ExcelColumn {
+  key: string;
+  label: string;
+  width: number; // 列宽（字符数）
+}
+
+export interface ExcelTemplate {
+  columns: ExcelColumn[];
+}
+
+export const excelPresets: Record<string, ExcelTemplate> = {
+  manifest: {
+    columns: [
+      { key: 'index', label: '序号 No.', width: 6 },
+      { key: 'mark', label: '唛头 Mark', width: 12 },
+      { key: 'name', label: '品名 Description', width: 20 },
+      { key: 'spec', label: '规格 Spec', width: 10 },
+      { key: 'plannedQty', label: '数量 QTY', width: 8 },
+      { key: 'gw', label: '毛重(KG) G.W.', width: 10 },
+      { key: 'nw', label: '净重(KG) N.W.', width: 10 },
+      { key: 'cbm', label: '体积(CBM) Meas.', width: 10 },
+      { key: 'remark', label: '备注 Remark', width: 12 },
+    ],
+  },
+  'packing-list': {
+    columns: [
+      { key: 'index', label: '序号 No.', width: 6 },
+      { key: 'name', label: '品名 Description', width: 20 },
+      { key: 'spec', label: '规格 Spec', width: 10 },
+      { key: 'plannedQty', label: '数量 QTY', width: 8 },
+      { key: 'gw', label: '毛重(KG) G.W.', width: 10 },
+      { key: 'nw', label: '净重(KG) N.W.', width: 10 },
+      { key: 'cbm', label: '体积(CBM) Meas.', width: 10 },
+    ],
+  },
+  'shipping-detail': {
+    columns: [
+      { key: 'index', label: '序号', width: 6 },
+      { key: 'sku', label: 'SKU', width: 14 },
+      { key: 'name', label: '品名', width: 16 },
+      { key: 'spec', label: '规格', width: 10 },
+      { key: 'unit', label: '单位', width: 6 },
+      { key: 'plannedQty', label: '计划数量', width: 10 },
+      { key: 'actualQty', label: '实装数量', width: 10 },
+      { key: 'returnedQty', label: '差异', width: 8 },
+      { key: 'remark', label: '备注', width: 12 },
+    ],
+  },
+};
+
+// 默认导出模板（自定义模板时使用）
+export const defaultExcelTemplate: ExcelTemplate = {
+  columns: [
+    { key: 'index', label: '序号', width: 6 },
+    { key: 'sku', label: 'SKU', width: 14 },
+    { key: 'name', label: '品名', width: 16 },
+    { key: 'spec', label: '规格', width: 10 },
+    { key: 'unit', label: '单位', width: 6 },
+    { key: 'plannedQty', label: '计划数量', width: 10 },
+    { key: 'actualQty', label: '实装数量', width: 10 },
+    { key: 'returnedQty', label: '差异', width: 8 },
+    { key: 'remark', label: '备注', width: 12 },
+  ],
+};
+
+export function getExcelPreset(key: string): ExcelTemplate | undefined {
+  return excelPresets[key];
+}
+
+export function parseExportTemplate(json: string | null): ExcelTemplate | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (parsed && Array.isArray(parsed.columns)) return parsed;
+  } catch {}
+  return null;
+}

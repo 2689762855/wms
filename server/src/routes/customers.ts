@@ -255,3 +255,17 @@ customerTemplateRouter.put('/:id/template-preset', async (req: AuthRequest, res:
   await prisma.customer.update({ where: { id }, data: { templatePreset: preset } });
   res.json({ message: '模板已切换' });
 });
+
+// 更新 Excel 导出模板（admin + 客户自己）
+customerTemplateRouter.put('/:id/export-template', adminWrite, validateId, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  if (req.userRole === 'tenant_admin' && req.customerId !== id) {
+    return res.status(403).json({ error: '只能编辑自己的模板' });
+  }
+  const { exportTemplate } = req.body; // JSON string or null
+  if (exportTemplate !== null && typeof exportTemplate !== 'string') {
+    return res.status(400).json({ error: '模板格式错误' });
+  }
+  await prisma.customer.update({ where: { id }, data: { exportTemplate } });
+  res.json({ message: 'Excel 模板已保存' });
+});
