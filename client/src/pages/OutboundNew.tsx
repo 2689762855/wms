@@ -44,6 +44,17 @@ export default function OutboundNew() {
     queryFn: () => apiClient.get(`/contracts/${selectedContractId}`).then(r => r.data.items),
     enabled: !!selectedContractId,
   });
+
+  // 选合同后自动填入商品
+  useEffect(() => {
+    if (contractItems && contractItems.length > 0 && selectedContractId) {
+      setItems(contractItems.map((ci: any) => ({
+        productId: ci.productId,
+        quantity: ci.plannedQty || 1,
+        contractId: selectedContractId,
+      })));
+    }
+  }, [contractItems, selectedContractId]);
   const { data: containersData } = useQuery({ queryKey: ['containers'], queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data) });
 
   const { data: selectedContainer } = useQuery({
