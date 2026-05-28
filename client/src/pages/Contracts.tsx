@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Tag } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Tag, AutoComplete } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -15,10 +15,13 @@ export default function Contracts() {
   const [form] = Form.useForm();
   const [selectedProducts, setSelectedProducts] = useState<{ productId?: number; plannedQty: number; unitPrice?: number }[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [customerFilter, setCustomerFilter] = useState<number | undefined>();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['contracts', statusFilter],
-    queryFn: () => apiClient.get('/contracts', { params: statusFilter ? { status: statusFilter } : {} }).then((r) => r.data),
+    queryKey: ['contracts', statusFilter, customerFilter],
+    queryFn: () => apiClient.get('/contracts', {
+      params: { ...(statusFilter ? { status: statusFilter } : {}), ...(customerFilter ? { customerId: customerFilter } : {}) },
+    }).then((r) => r.data),
   });
 
   const { data: products } = useQuery<any[]>({
@@ -29,7 +32,7 @@ export default function Contracts() {
   const { data: customers } = useQuery<CustomerInfo[]>({
     queryKey: ['customers'],
     queryFn: () => apiClient.get('/customers').then((r) => r.data),
-    enabled: user?.role === 'super_admin',
+    enabled: user?.role !== 'operator',
   });
 
   const createMutation = useMutation({
@@ -62,7 +65,11 @@ export default function Contracts() {
 
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>合同管理</Typography.Title>}
-      extra={<Space><Select allowClear placeholder="状态筛选" style={{ width: 120 }} value={statusFilter || undefined} onChange={(v) => setStatusFilter(v || '')} options={[{ label: '进行中', value: 'active' }, { label: '已完成', value: 'completed' }, { label: '已取消', value: 'cancelled' }]} /><Button type="primary" icon={<PlusOutlined />} onClick={() => { setSelectedProducts([]); form.resetFields(); setOpen(true); }}>新建合同</Button></Space>}>
+      extra={<Space>
+        <Select allowClear placeholder="状态筛选" style={{ width: 120 }} value={statusFilter || undefined} onChange={(v) => setStatusFilter(v || '')} options={[{ label: '进行中', value: 'active' }, { label: '已完成', value: 'completed' }, { label: '已取消', value: 'cancelled' }]} />
+        <Select allowClear placeholder="客户筛选" style={{ width: 160 }} showSearch optionFilterProp="label" value={customerFilter} onChange={(v) => setCustomerFilter(v)} options={customers?.map((c) => ({ label: c.realName || c.username, value: c.id }))} />
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setSelectedProducts([]); form.resetFields(); setOpen(true); }}>新建合同</Button>
+      </Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
         pagination={{ total: data?.total, pageSize: 20, showSizeChanger: false }} />
 
@@ -71,12 +78,17 @@ export default function Contracts() {
           <Form.Item name="contractNo" label="合同号" rules={[{ required: true }]}>
             <Input placeholder="如: CON-2026-001" />
           </Form.Item>
-          {user?.role === 'super_admin' && (
-            <Form.Item name="customerId" label="客户" rules={[{ required: true }]}>
-              <Select placeholder="选择客户" showSearch optionFilterProp="label"
-                options={customers?.map((c) => ({ label: `${c.realName || c.username}`, value: c.id }))} />
-            </Form.Item>
-          )}
+          <Form.Item name="customerName" label="客户" rules={[{ required: true }]}>
+            <AutoComplete
+              placeholder="输入生意客户名，新客户自动创建"
+              filterOption={(input, option) => (option?.label as string || '').toLowerCase().includes(input.toLowerCase())}
+              options={customers?.map((c) => ({ label: c.realName || c.username, value: c.id }))}
+              onChange={(_val, opt: any) => form.setFieldValue('customerId', opt?.value ?? null)}
+            >
+              <Input />
+            </AutoComplete>
+          </Form.Item>
+          <Form.Item name="customerId" hidden><Input /></Form.Item>
           <Typography.Text strong>商品明细</Typography.Text>
           <div style={{ marginTop: 8 }}>
             {selectedProducts.map((sp, idx) => (

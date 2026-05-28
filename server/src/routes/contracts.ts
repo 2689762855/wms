@@ -53,9 +53,21 @@ contractsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 
 // 创建合同
 contractsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
-  const { contractNo, customerId, items } = req.body;
+  const { contractNo, customerId, customerName, items } = req.body;
   if (!contractNo) return res.status(400).json({ error: '合同号必填' });
-  const finalCustomerId = customerId || req.customerId;
+  let finalCustomerId = customerId || req.customerId;
+  if (!finalCustomerId && customerName) {
+    // 自动创建客户
+    const bcrypt = require('bcryptjs');
+    const newCust = await prisma.customer.create({
+      data: {
+        username: customerName + '_' + Date.now().toString(36),
+        passwordHash: await bcrypt.hash('123456', 10),
+        realName: customerName,
+      },
+    });
+    finalCustomerId = newCust.id;
+  }
   if (!finalCustomerId) return res.status(400).json({ error: '请选择客户' });
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: '请添加商品明细' });
