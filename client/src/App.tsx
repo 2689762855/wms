@@ -39,6 +39,7 @@ import Customers from './pages/Customers';
 import About from './pages/About';
 import Contracts from './pages/Contracts';
 import ContractDetail from './pages/ContractDetail';
+import ContractReconciliation from './pages/ContractReconciliation';
 import Containers from './pages/Containers';
 import ContainerDetail from './pages/ContainerDetail';
 import ContainerReport from './pages/ContainerReport';
@@ -104,6 +105,7 @@ function AppRoutes() {
       <Route path="/transfer/:id" element={<ProtectedRoute><AppLayout><TransferDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/warehouses/:id/locations" element={<ProtectedRoute><AppLayout><WarehouseLocations /></AppLayout></ProtectedRoute>} />
       <Route path="/contracts/:id" element={<ProtectedRoute><AppLayout><ContractDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/contracts/:id/reconciliation" element={<ProtectedRoute><AppLayout><ContractReconciliation /></AppLayout></ProtectedRoute>} />
       <Route path="/containers/:id" element={<ProtectedRoute><AppLayout><ContainerDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/containers/:id/report" element={<ProtectedRoute><ContainerReport /></ProtectedRoute>} />
       {!isStandalone && <Route path="/admin" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

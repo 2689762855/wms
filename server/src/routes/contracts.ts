@@ -143,3 +143,90 @@ contractsRouter.patch('/:id/status', adminWrite, async (req: AuthRequest, res: R
   });
   res.json(contract);
 });
+
+// 合同对账：收发存汇总
+contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id);
+  const contract = await prisma.contract.findUnique({
+    where: { id },
+    include: {
+      customer: { select: { id: true, username: true, realName: true } },
+      items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
+    },
+  });
+  if (!contract) return res.status(404).json({ error: '合同不存在' });
+
+  const inboundItems = await prisma.inboundItem.findMany({
+    where: { contractId: id },
+    include: {
+      inbound: { select: { id: true, orderNo: true, createdAt: true } },
+      product: { select: { id: true, sku: true, name: true } },
+    },
+    orderBy: { inbound: { createdAt: 'desc' } },
+  });
+
+  const outboundItems = await prisma.outboundItem.findMany({
+    where: { contractId: id },
+    include: {
+      outbound: { select: { id: true, orderNo: true, createdAt: true } },
+      product: { select: { id: true, sku: true, name: true } },
+    },
+    orderBy: { outbound: { createdAt: 'desc' } },
+  });
+
+  const outboundIds = [...new Set(outboundItems.map(oi => oi.outboundId))];
+  const containerItems = await prisma.containerItem.findMany({
+    where: { outboundId: { in: outboundIds } },
+    include: {
+      container: { select: { id: true, containerNo: true, sealTime: true, status: true } },
+      product: { select: { id: true, sku: true, name: true } },
+    },
+    orderBy: { container: { sealTime: 'desc' } },
+  });
+
+  // 按商品汇总
+  const productMap = new Map<number, {
+    sku: string; name: string; spec: string; unit: string;
+    plannedQty: number; receivedQty: number; unitPrice?: number;
+    shippedQty: number; returnedQty: number;
+  }>();
+
+  for (const ci of contract.items) {
+    productMap.set(ci.productId, {
+      sku: ci.product.sku, name: ci.product.name,
+      spec: ci.product.spec, unit: ci.product.unit,
+      plannedQty: ci.plannedQty, receivedQty: ci.receivedQty,
+      unitPrice: ci.unitPrice ?? undefined,
+      shippedQty: 0, returnedQty: 0,
+    });
+  }
+
+  for (const ci of containerItems) {
+    const entry = productMap.get(ci.productId);
+    if (entry) {
+      entry.shippedQty += (ci.actualQty || 0);
+      entry.returnedQty += Math.max(0, ci.returnedQty);
+    }
+  }
+
+  const summary = Array.from(productMap.values());
+  const totals = summary.reduce((acc, item) => ({
+    planned: acc.planned + item.plannedQty,
+    received: acc.received + item.receivedQty,
+    shipped: acc.shipped + item.shippedQty,
+    returned: acc.returned + item.returnedQty,
+    amount: acc.amount + ((item.unitPrice || 0) * item.shippedQty),
+  }), { planned: 0, received: 0, shipped: 0, returned: 0, amount: 0 });
+
+  res.json({
+    contract: {
+      id: contract.id, contractNo: contract.contractNo, status: contract.status,
+      customer: contract.customer, createdAt: contract.createdAt,
+    },
+    inboundItems,
+    outboundItems,
+    containerItems,
+    summary,
+    totals,
+  });
+});

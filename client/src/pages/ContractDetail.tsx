@@ -104,6 +104,7 @@ export default function ContractDetail() {
           <Button danger icon={<DeleteOutlined />} disabled={hasReceived}
             title={hasReceived ? '已有入库记录，无法删除' : ''}>删除合同</Button>
         </Popconfirm>
+        <Button type="primary" onClick={() => navigate(`/contracts/${id}/reconciliation`)}>对账</Button>
         <Select value={contract.status} style={{ width: 120 }} onChange={(v) => statusMutation.mutate(v)}
           options={[{ label: '进行中', value: 'active' }, { label: '已完成', value: 'completed' }, { label: '已取消', value: 'cancelled' }]} />
       </Space>
