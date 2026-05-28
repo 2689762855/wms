@@ -83,10 +83,11 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       locationId: locationId || null,
       containerId: containerId || null,
       items: {
-        create: items.map((i: { productId: number; quantity: number; locationId?: number | null }) => ({
+        create: items.map((i: { productId: number; quantity: number; locationId?: number | null; contractId?: number | null }) => ({
           productId: i.productId,
           quantity: i.quantity,
           locationId: i.locationId ?? null,
+          contractId: i.contractId ?? null,
         })),
       },
     },

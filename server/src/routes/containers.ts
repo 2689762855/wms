@@ -389,8 +389,18 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   if (!container) return res.status(404).json({ error: '货柜不存在' });
   if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
 
-  // 关联合同价格
-  const contractId = req.query.contractId ? parseInt(req.query.contractId as string) : undefined;
+  // 关联合同：优先使用传入的 contractId，否则从出库单自动检测
+  let contractId = req.query.contractId ? parseInt(req.query.contractId as string) : undefined;
+  if (!contractId) {
+    const outboundIds = [...new Set(container.items.map(i => i.outboundId))];
+    const obItems = await prisma.outboundItem.findMany({
+      where: { outboundId: { in: outboundIds }, contractId: { not: null } },
+      select: { contractId: true },
+      distinct: ['contractId'],
+      take: 2,
+    });
+    if (obItems.length === 1) contractId = obItems[0].contractId!;
+  }
   let contractPriceMap: Map<number, number> = new Map();
   if (contractId) {
     const contractItems = await prisma.contractItem.findMany({

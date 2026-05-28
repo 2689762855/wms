@@ -211,8 +211,11 @@ model OutboundItem {
   quantity   Int
   locationId Int?
   location   Location?    @relation(fields: [locationId], references: [id])
+  contractId Int?
+  contract   Contract?    @relation(fields: [contractId], references: [id])
 
   @@index([outboundId])
+  @@index([contractId])
 }
 
 model TransferOrder {
@@ -370,8 +373,9 @@ model Contract {
   status      String    @default("active") // active, completed, cancelled
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  items       ContractItem[]
-  inboundItems InboundItem[]
+  items        ContractItem[]
+  inboundItems  InboundItem[]
+  outboundItems OutboundItem[]
 
   @@index([customerId])
   @@index([status])

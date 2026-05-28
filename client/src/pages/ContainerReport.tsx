@@ -20,6 +20,13 @@ export default function ContainerReport() {
     queryFn: () => apiClient.get(`/containers/${id}/report`, { params: contractId ? { contractId } : {} }).then((r) => r.data),
   });
 
+  // 自动检测合同
+  useEffect(() => {
+    if (data?.contractId && contractId === null) {
+      setContractId(data.contractId);
+    }
+  }, [data?.contractId]);
+
   // 客户合同列表
   const { data: contracts } = useQuery({
     queryKey: ['customer-contracts', data?.customerId],

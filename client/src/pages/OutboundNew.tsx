@@ -13,6 +13,7 @@ interface ItemEntry {
   productId: number;
   quantity: number;
   locationId?: number | null;
+  contractId?: number | null;
 }
 
 export default function OutboundNew() {
@@ -22,6 +23,7 @@ export default function OutboundNew() {
   const [items, setItems] = useState<ItemEntry[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedContainerId, setSelectedContainerId] = useState<number | null>(null);
+  const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user?.realName) form.setFieldValue('receiver', user.realName);
@@ -29,6 +31,19 @@ export default function OutboundNew() {
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: products } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(r => r.data.data) });
+
+  // 可选合同列表（active 状态）
+  const { data: contracts } = useQuery({
+    queryKey: ['contracts-active'],
+    queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 999 } }).then(r => r.data.data),
+  });
+
+  // 选中合同后获取其商品列表
+  const { data: contractItems } = useQuery({
+    queryKey: ['contract', selectedContractId, 'items'],
+    queryFn: () => apiClient.get(`/contracts/${selectedContractId}`).then(r => r.data.items),
+    enabled: !!selectedContractId,
+  });
   const { data: containersData } = useQuery({ queryKey: ['containers'], queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data) });
 
   const { data: selectedContainer } = useQuery({
@@ -52,7 +67,7 @@ export default function OutboundNew() {
   });
 
   const addItem = (productId: number) => {
-    setItems([...items, { productId, quantity: 1 }]);
+    setItems([...items, { productId, quantity: 1, contractId: selectedContractId }]);
   };
 
   const updateItem = (idx: number, field: keyof ItemEntry, value: number | null) => {
@@ -69,7 +84,7 @@ export default function OutboundNew() {
 
   const onProductsSelected = (selected: Product[]) => {
     for (const p of selected) {
-      setItems(prev => [...prev, { productId: p.id, quantity: 1 }]);
+      setItems(prev => [...prev, { productId: p.id, quantity: 1, contractId: selectedContractId }]);
     }
     if (selected.length) message.success(`已添加 ${selected.length} 个商品`);
     setSelectorOpen(false);
@@ -104,6 +119,18 @@ export default function OutboundNew() {
               onChange={(v) => setSelectedContainerId(v ?? null)}
               options={containersData?.data?.filter((c: any) => c.status === 'pending' || c.status === 'loading').map((c: any) => ({
                 label: `${c.containerNo} (${c.customer?.realName || c.customer?.username}) [${c.status}]`,
+                value: c.id,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item label="关联合同批次（可选）" style={{ minWidth: 240 }}>
+            <Select
+              allowClear
+              placeholder="选择合同，按批次定价"
+              value={selectedContractId}
+              onChange={(v) => setSelectedContractId(v ?? null)}
+              options={(contracts || []).map((c: any) => ({
+                label: `${c.contractNo} (${c.customer?.realName || c.customer?.username})`,
                 value: c.id,
               }))}
             />
