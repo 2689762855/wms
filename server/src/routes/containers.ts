@@ -275,7 +275,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     if (existing) {
       existing.plannedQty += item.plannedQty;
       existing.actualQty += (item.actualQty || 0);
-      existing.returnedQty += item.returnedQty;
+      existing.returnedQty += Math.max(0, item.returnedQty);
     } else {
       merged.set(pid, {
         sku: item.product.sku,
@@ -284,7 +284,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
         unit: item.product.unit,
         plannedQty: item.plannedQty,
         actualQty: item.actualQty || 0,
-        returnedQty: item.returnedQty,
+        returnedQty: Math.max(0, item.returnedQty),
       });
     }
   }

@@ -45,12 +45,21 @@ export default function ContainerReport() {
       totalReturned: String(data.totals?.totalReturned || 0),
     };
 
-    // 处理 {{#rows}}...{{/rows}} 循环
-    const rowsRegex = /\{\{#rows\}\}([\s\S]*?)\{\{\/rows\}\}/g;
-    let result = template.replace(rowsRegex, (_match, rowTemplate) => {
-      return items.map((item, idx) => {
-        const rowVars: Record<string, string> = {
-          ...vars,
+    // 处理 {{#rows min=N}}...{{/rows}} 循环，支持自动补空行
+    const rowsRegex = /\{\{#rows(?:\s+min=(\d+))?\}\}([\s\S]*?)\{\{\/rows\}\}/g;
+    let result = template.replace(rowsRegex, (_match, minStr, rowTemplate) => {
+      const minRows = minStr ? parseInt(minStr) : 0;
+
+      const renderRow = (rowVars: Record<string, string>) => {
+        let row = rowTemplate;
+        for (const [k, v] of Object.entries(rowVars)) {
+          row = row.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v);
+        }
+        return row;
+      };
+
+      const rendered: string[] = items.map((item, idx) => {
+        return renderRow({
           index: String(idx + 1),
           sku: item.sku || '',
           name: item.name || '',
@@ -58,14 +67,21 @@ export default function ContainerReport() {
           unit: item.unit || '',
           plannedQty: String(item.plannedQty || 0),
           actualQty: String(item.actualQty || 0),
-          returnedQty: String(item.returnedQty || 0),
-        };
-        let row = rowTemplate;
-        for (const [k, v] of Object.entries(rowVars)) {
-          row = row.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v);
+          returnedQty: String(Math.max(0, item.returnedQty || 0)),
+        });
+      });
+
+      if (minRows > 0 && rendered.length < minRows) {
+        const emptyRow = renderRow({
+          index: '', sku: '', name: '', spec: '', unit: '',
+          plannedQty: '', actualQty: '', returnedQty: '',
+        });
+        while (rendered.length < minRows) {
+          rendered.push(emptyRow);
         }
-        return row;
-      }).join('');
+      }
+
+      return rendered.join('');
     });
 
     // 替换普通变量
