@@ -13,10 +13,18 @@ export default function ContainerReport() {
   const [editText, setEditText] = useState('');
   const [excelEditOpen, setExcelEditOpen] = useState(false);
   const [excelColumns, setExcelColumns] = useState<ExcelColumn[]>([]);
+  const [contractId, setContractId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['container-report', id],
-    queryFn: () => apiClient.get(`/containers/${id}/report`).then((r) => r.data),
+    queryKey: ['container-report', id, contractId],
+    queryFn: () => apiClient.get(`/containers/${id}/report`, { params: contractId ? { contractId } : {} }).then((r) => r.data),
+  });
+
+  // 客户合同列表
+  const { data: contracts } = useQuery({
+    queryKey: ['customer-contracts', data?.customerId],
+    queryFn: () => apiClient.get('/contracts', { params: { customerId: data?.customerId, status: 'active', pageSize: 999 } }).then(r => r.data.data),
+    enabled: !!data?.customerId,
   });
 
   const saveMutation = useMutation({
@@ -111,6 +119,7 @@ export default function ContainerReport() {
       totalPlanned: String(data.totals?.totalPlanned || 0),
       totalActual: String(data.totals?.totalActual || 0),
       totalReturned: String(data.totals?.totalReturned || 0),
+      totalAmount: data.totals?.totalAmount ? data.totals.totalAmount.toFixed(2) : '0.00',
     };
 
     const rowsRegex = /\{\{#rows(?:\s+min=(\d+))?\}\}([\s\S]*?)\{\{\/rows\}\}/g;
@@ -126,6 +135,7 @@ export default function ContainerReport() {
       };
 
       const rendered: string[] = items.map((item, idx) => {
+        const price = item.unitPrice;
         return renderRow({
           index: String(idx + 1),
           sku: item.sku || '',
@@ -135,6 +145,8 @@ export default function ContainerReport() {
           plannedQty: String(item.plannedQty || 0),
           actualQty: String(item.actualQty || 0),
           returnedQty: String(Math.max(0, item.returnedQty || 0)),
+          unitPrice: price != null ? price.toFixed(2) : '',
+          amount: price != null ? (price * (item.actualQty || 0)).toFixed(2) : '',
         });
       });
 
@@ -171,6 +183,8 @@ export default function ContainerReport() {
       case 'plannedQty': return item.plannedQty || 0;
       case 'actualQty': return item.actualQty || 0;
       case 'returnedQty': return Math.max(0, item.returnedQty || 0);
+      case 'unitPrice': return item.unitPrice != null ? item.unitPrice : '';
+      case 'amount': return item.unitPrice != null ? +(item.unitPrice * (item.actualQty || 0)).toFixed(2) : '';
       default: return '';
     }
   };
@@ -197,6 +211,7 @@ export default function ContainerReport() {
         case 'plannedQty': return data.totals?.totalPlanned || 0;
         case 'actualQty': return data.totals?.totalActual || 0;
         case 'returnedQty': return data.totals?.totalReturned || 0;
+        case 'amount': return data.totals?.totalAmount ? +(data.totals.totalAmount).toFixed(2) : '';
         default: return '';
       }
     });
@@ -239,6 +254,22 @@ export default function ContainerReport() {
           />
           {!presetKey && (
             <button onClick={() => { setEditText(data.reportTemplate || ''); setEditOpen(true); }} style={{ padding: '6px 16px', fontSize: 14, cursor: 'pointer' }}>编辑模板</button>
+          )}
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 13, marginRight: 6 }}>对账:</span>
+          <Select
+            allowClear
+            placeholder="选择合同查看价格"
+            value={contractId}
+            onChange={(val) => setContractId(val || null)}
+            style={{ width: 220, marginRight: 12 }}
+            options={(contracts || []).map((c: any) => ({ label: `${c.contractNo}`, value: c.id }))}
+          />
+          {data.contractId && (
+            <span style={{ color: '#52c41a', fontSize: 13 }}>
+              合同金额合计：¥{(data.totals?.totalAmount || 0).toFixed(2)}
+            </span>
           )}
         </div>
         <div>

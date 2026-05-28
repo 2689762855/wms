@@ -389,15 +389,30 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   if (!container) return res.status(404).json({ error: '货柜不存在' });
   if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
 
+  // 关联合同价格
+  const contractId = req.query.contractId ? parseInt(req.query.contractId as string) : undefined;
+  let contractPriceMap: Map<number, number> = new Map();
+  if (contractId) {
+    const contractItems = await prisma.contractItem.findMany({
+      where: { contractId },
+      select: { productId: true, unitPrice: true },
+    });
+    for (const ci of contractItems) {
+      if (ci.unitPrice != null) contractPriceMap.set(ci.productId, ci.unitPrice);
+    }
+  }
+
   // 按商品合并
-  const merged = new Map<number, { sku: string; name: string; spec: string; unit: string; plannedQty: number; actualQty: number; returnedQty: number }>();
+  const merged = new Map<number, { sku: string; name: string; spec: string; unit: string; plannedQty: number; actualQty: number; returnedQty: number; unitPrice?: number }>();
   for (const item of container.items) {
     const pid = item.productId;
+    const price = contractPriceMap.get(pid);
     const existing = merged.get(pid);
     if (existing) {
       existing.plannedQty += item.plannedQty;
       existing.actualQty += (item.actualQty || 0);
       existing.returnedQty += Math.max(0, item.returnedQty);
+      if (price != null) existing.unitPrice = price;
     } else {
       merged.set(pid, {
         sku: item.product.sku,
@@ -407,6 +422,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
         plannedQty: item.plannedQty,
         actualQty: item.actualQty || 0,
         returnedQty: Math.max(0, item.returnedQty),
+        unitPrice: price ?? undefined,
       });
     }
   }
@@ -417,9 +433,10 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
       acc.totalPlanned += item.plannedQty;
       acc.totalActual += item.actualQty;
       acc.totalReturned += item.returnedQty;
+      if (item.unitPrice != null) acc.totalAmount = (acc.totalAmount || 0) + item.unitPrice * item.actualQty;
       return acc;
     },
-    { totalPlanned: 0, totalActual: 0, totalReturned: 0 },
+    { totalPlanned: 0, totalActual: 0, totalReturned: 0, totalAmount: 0 as number },
   );
 
   res.json({
@@ -435,6 +452,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     reportTemplate: container.customer?.templatePreset
       ? (getPresetTemplate(container.customer.templatePreset) || container.customer?.reportTemplate || null)
       : (container.customer?.reportTemplate || null),
+    contractId: contractId || null,
     summary,
     totals,
   });

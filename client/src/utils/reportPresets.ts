@@ -21,11 +21,12 @@ export interface ExcelTemplate {
   columns: ExcelColumn[];
 }
 
-export const allColumnKeys = ['index', 'sku', 'name', 'spec', 'unit', 'plannedQty', 'actualQty', 'returnedQty', 'mark', 'gw', 'nw', 'cbm', 'remark'];
+export const allColumnKeys = ['index', 'sku', 'name', 'spec', 'unit', 'plannedQty', 'actualQty', 'returnedQty', 'unitPrice', 'amount', 'mark', 'gw', 'nw', 'cbm', 'remark'];
 
 export const allColumnLabels: Record<string, string> = {
   index: '序号', sku: 'SKU', name: '品名', spec: '规格', unit: '单位',
   plannedQty: '计划数量', actualQty: '实装数量', returnedQty: '差异',
+  unitPrice: '合同单价', amount: '金额',
   mark: '唛头', gw: '毛重(KG)', nw: '净重(KG)', cbm: '体积(CBM)', remark: '备注',
 };
 
