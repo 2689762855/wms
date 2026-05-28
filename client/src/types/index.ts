@@ -56,6 +56,7 @@ export interface Product {
   salePrice?: number;
   imageUrl?: string | null;
   warehouseSafetyStock?: number;
+  productWarehouses?: ProductWarehouse[];
 }
 
 export interface ProductWarehouse {

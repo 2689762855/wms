@@ -44,7 +44,7 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
   const [data, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      include: { category: { include: { parent: { include: { parent: true } } } } },
+      include: { category: { include: { parent: { include: { parent: true } } } }, productWarehouses: { include: { warehouse: { select: { name: true } } } } },
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: { createdAt: 'desc' },

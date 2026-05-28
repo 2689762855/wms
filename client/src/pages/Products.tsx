@@ -104,8 +104,18 @@ export default function Products() {
     { title: '规格', dataIndex: 'spec', key: 'spec' },
     { title: '单位', dataIndex: 'unit', key: 'unit', width: 60 },
     { title: '条码', dataIndex: 'barcode', key: 'barcode', width: 130 },
-    { title: '安全库存', key: 'safetyStock', width: 100,
-      render: (_: unknown, r: Product) => <span style={{ color: '#888' }}>{r.safetyStock || '—'}</span>,
+    { title: '安全库存', key: 'safetyStock', width: 130,
+      render: (_: unknown, r: any) => {
+        const pws = r.productWarehouses;
+        if (pws && pws.length > 0) {
+          return (
+            <span style={{ color: '#888', fontSize: 12 }}>
+              {pws.map((pw: any) => `${pw.warehouse?.name || '仓库#' + pw.warehouseId}: ${pw.safetyStock}`).join(', ')}
+            </span>
+          );
+        }
+        return <span style={{ color: '#ccc' }}>—</span>;
+      },
     },
     { title: '分类', key: 'category', width: 180,
       render: (_: unknown, r: Product) => r.category ? getCategoryPath(r.category) : '-',
