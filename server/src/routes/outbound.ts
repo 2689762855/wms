@@ -83,11 +83,12 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       locationId: locationId || null,
       containerId: containerId || null,
       items: {
-        create: items.map((i: { productId: number; quantity: number; locationId?: number | null; contractId?: number | null }) => ({
+        create: items.map((i: { productId: number; quantity: number; locationId?: number | null; contractId?: number | null; batchNo?: string | null }) => ({
           productId: i.productId,
           quantity: i.quantity,
           locationId: i.locationId ?? null,
           contractId: i.contractId ?? null,
+          batchNo: i.batchNo ?? null,
         })),
       },
     },
@@ -113,12 +114,15 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
   await prisma.$transaction(async (tx) => {
     for (const item of order.items) {
       const locId = (item as any).locationId ?? order.locationId ?? null;
+      const batchNo = (item as any).batchNo ?? undefined;
       const inv = await tx.inventory.findFirst({
         where: {
           productId: item.productId,
           warehouseId: order.warehouseId,
           locationId: locId,
+          ...(batchNo ? { batchNo } : {}),
         },
+        orderBy: batchNo ? undefined : { batchNo: 'asc' as any },
       });
       if (!inv || inv.quantity < item.quantity) {
         throw new Error(`库存不足: productId=${item.productId}, 当前库存=${inv?.quantity || 0}, 出库=${item.quantity}`);

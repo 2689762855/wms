@@ -77,6 +77,7 @@ export interface InventoryItem {
   locationId?: number | null;
   location?: Location | null;
   quantity: number;
+  batchNo?: string | null;
   updatedAt: string;
 }
 

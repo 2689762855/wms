@@ -131,9 +131,10 @@ model Inventory {
   locationId  Int?
   location    Location? @relation(fields: [locationId], references: [id])
   quantity    Int       @default(0)
+  batchNo     String?   // 批次号，如 CON001-20260528
   updatedAt   DateTime  @updatedAt
 
-  @@unique([productId, warehouseId, locationId])
+  @@unique([productId, warehouseId, locationId, batchNo])
 
   @@index([warehouseId])
   @@index([productId])
@@ -213,6 +214,7 @@ model OutboundItem {
   location   Location?    @relation(fields: [locationId], references: [id])
   contractId Int?
   contract   Contract?    @relation(fields: [contractId], references: [id])
+  batchNo    String?
 
   @@index([outboundId])
   @@index([contractId])
@@ -426,6 +428,7 @@ model ContainerItem {
   location       Location? @relation("ContainerItemSource", fields: [locationId], references: [id])
   returnLocationId Int?
   returnLocation Location? @relation("ContainerItemReturn", fields: [returnLocationId], references: [id])
+  batchNo        String?
 
   @@index([outboundId])
   @@index([containerId])

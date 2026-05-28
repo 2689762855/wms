@@ -3,6 +3,16 @@ import prisma from '../utils/prisma';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
+// 生成批次号：合同号截取 + 当前日期
+async function genBatchNo(tx: any, contractId?: number): Promise<string | null> {
+  if (!contractId) return null;
+  const c = await tx.contract.findUnique({ where: { id: contractId }, select: { contractNo: true } });
+  if (!c) return null;
+  const d = new Date();
+  return c.contractNo.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + '-' +
+    d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+}
+
 export const inboundRouter = Router();
 inboundRouter.use(authenticate);
 
@@ -124,6 +134,7 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
   await prisma.$transaction(async (tx) => {
     for (const item of order.items) {
       // 先查变动前全库位总量
+      const batchNo = await genBatchNo(tx, (item as any).contractId);
       const totalBefore = (await tx.inventory.aggregate({
         where: { productId: item.productId, warehouseId: order.warehouseId },
         _sum: { quantity: true },
@@ -132,16 +143,18 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
       const locId = (item as any).locationId ?? order.locationId ?? null;
       await tx.inventory.upsert({
         where: {
-          productId_warehouseId_locationId: {
+          productId_warehouseId_locationId_batchNo: {
             productId: item.productId,
             warehouseId: order.warehouseId,
             locationId: locId,
+            batchNo: batchNo,
           },
         },
         create: {
           productId: item.productId,
           warehouseId: order.warehouseId,
           locationId: locId,
+          batchNo: batchNo,
           quantity: item.quantity,
         },
         update: { quantity: { increment: item.quantity } },

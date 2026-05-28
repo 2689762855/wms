@@ -14,6 +14,7 @@ interface ItemEntry {
   quantity: number;
   locationId?: number | null;
   contractId?: number | null;
+  batchNo?: string | null;
 }
 
 export default function OutboundNew() {
@@ -35,7 +36,7 @@ export default function OutboundNew() {
   // 可选合同列表（active 状态）
   const { data: contracts } = useQuery({
     queryKey: ['contracts-active'],
-    queryFn: () => apiClient.get('/contracts', { params: { status: 'completed', pageSize: 999 } }).then(r => r.data.data),
+    queryFn: () => apiClient.get('/contracts', { params: { status: 'completed', pageSize: 999, excludeShipped: true } }).then(r => r.data.data),
   });
 
   // 选中合同后获取其商品列表
@@ -107,9 +108,10 @@ export default function OutboundNew() {
     if (!warehouseInventory) return [];
     return warehouseInventory
       .filter((inv: InventoryItem) => inv.productId === productId && inv.quantity > 0)
+      .sort((a, b) => (a.batchNo || '').localeCompare(b.batchNo || '')) // FIFO
       .map((inv: InventoryItem) => ({
-        label: `${inv.location?.name || '-'} (库存: ${inv.quantity})`,
-        value: inv.locationId,
+        label: `${inv.location?.name || '-'} [${inv.batchNo || '无批次'}] (库存: ${inv.quantity})`,
+        value: JSON.stringify({ locationId: inv.locationId, batchNo: inv.batchNo }),
       }));
   };
 
@@ -187,8 +189,15 @@ export default function OutboundNew() {
               <Select
                 allowClear
                 placeholder="出库库位"
-                value={item.locationId}
-                onChange={(v) => updateItem(idx, 'locationId', v ?? null)}
+                value={item.locationId != null ? JSON.stringify({ locationId: item.locationId, batchNo: item.batchNo }) : undefined}
+                onChange={(v) => {
+                  if (v) {
+                    const parsed = JSON.parse(v);
+                    const next = [...items]; next[idx] = { ...next[idx], locationId: parsed.locationId, batchNo: parsed.batchNo }; setItems(next);
+                  } else {
+                    const next = [...items]; next[idx] = { ...next[idx], locationId: null, batchNo: null }; setItems(next);
+                  }
+                }}
                 style={{ width: 200 }}
                 options={locOptions}
                 disabled={!selectedWarehouseId}

@@ -19,7 +19,9 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
   if (customerId) where.customerId = customerId;
   if (req.customerId) where.customerId = req.customerId;
 
-  const [data, total] = await Promise.all([
+  const excludeShipped = req.query.excludeShipped === 'true';
+
+  const [rawData, total] = await Promise.all([
     prisma.contract.findMany({
       where,
       include: {
@@ -32,6 +34,24 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
     }),
     prisma.contract.count({ where }),
   ]);
+
+  // 过滤已全部出货的合同
+  let data = rawData;
+  if (excludeShipped && rawData.length > 0) {
+    const contractIds = rawData.map(c => c.id);
+    const obItems = await prisma.outboundItem.findMany({
+      where: { contractId: { in: contractIds } },
+      select: { contractId: true, productId: true, quantity: true },
+    });
+    const shippedMap = new Map<string, number>(); // "contractId_productId" → total shipped
+    for (const ob of obItems) {
+      const k = `${ob.contractId}_${ob.productId}`;
+      shippedMap.set(k, (shippedMap.get(k) || 0) + ob.quantity);
+    }
+    data = rawData.filter(c =>
+      c.items.some(ci => (shippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
+    );
+  }
   res.json({ data, total, page, pageSize });
 });
 
