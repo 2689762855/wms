@@ -19,8 +19,7 @@ export default function Products() {
   const [keyword, setKeyword] = useState('');
   const [importWarehouseId, setImportWarehouseId] = useState<number | undefined>();
   const [imageFileList, setImageFileList] = useState<any[]>([]);
-  const [warehouseConfigs, setWarehouseConfigs] = useState<{ warehouseId?: number; safetyStock: number }[]>([]);
-  const [configsLoaded, setConfigsLoaded] = useState(false);
+  const [warehouseConfigs, setWarehouseConfigs] = useState<{ warehouseId?: number; safetyStock: number }[]>([{ warehouseId: undefined, safetyStock: 0 }]);
   const queryClient = useQueryClient();
 
   const { data: warehouses } = useQuery({
@@ -44,8 +43,9 @@ export default function Products() {
   const saveMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => {
       const payload: Record<string, unknown> = { ...values };
-      if (configsLoaded) {
-        (payload as any).warehouseConfigs = warehouseConfigs.filter(wc => wc.warehouseId);
+      const validConfigs = warehouseConfigs.filter(wc => wc.warehouseId);
+      if (validConfigs.length > 0) {
+        (payload as any).warehouseConfigs = validConfigs;
       }
       return editing
         ? apiClient.put(`/products/${editing!.id}`, payload)
@@ -72,8 +72,7 @@ export default function Products() {
     setEditing(null);
     form.resetFields();
     setImageFileList([]);
-    setWarehouseConfigs([]);
-    setConfigsLoaded(true);
+    setWarehouseConfigs([{ warehouseId: undefined, safetyStock: 0 }]);
     setOpen(true);
   };
 
@@ -91,10 +90,10 @@ export default function Products() {
     // 加载已有仓库安全库存配置
     try {
       const pws = await apiClient.get('/product-warehouses', { params: { productId: p.id } }).then(r => r.data as ProductWarehouse[]);
-      setWarehouseConfigs(pws.map(pw => ({ warehouseId: pw.warehouseId, safetyStock: pw.safetyStock })));
-      setConfigsLoaded(true);
+      const configs = pws.map(pw => ({ warehouseId: pw.warehouseId, safetyStock: pw.safetyStock }));
+      setWarehouseConfigs(configs.length > 0 ? configs : [{ warehouseId: undefined, safetyStock: 0 }]);
     } catch {
-      setConfigsLoaded(false);
+      setWarehouseConfigs([{ warehouseId: undefined, safetyStock: 0 }]);
     }
     setOpen(true);
   };
