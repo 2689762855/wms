@@ -11,6 +11,7 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
   const locationId = req.query.locationId ? parseInt(req.query.locationId as string) : undefined;
   const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
   const keyword = (req.query.keyword as string) || '';
+  const batchNo = (req.query.batchNo as string) || '';
 
   // 非超管只能看自己仓库/客户的数据
   let tenantWhIds: number[] | undefined;
@@ -39,6 +40,9 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
   if (productId) where.productId = productId;
   if (keyword) {
     where.product = { name: { contains: keyword } };
+  }
+  if (batchNo) {
+    where.batchNo = { contains: batchNo };
   }
 
   const data = await prisma.inventory.findMany({

@@ -19,7 +19,7 @@ export default function ContractDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: () => apiClient.delete(`/contracts/${id}`),
-    onSuccess: () => { message.success('已删除'); navigate('/contracts'); },
+    onSuccess: () => { message.success('已删除'); queryClient.invalidateQueries({ queryKey: ['contracts'] }); navigate('/contracts'); },
     onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
   });
 
@@ -92,7 +92,7 @@ export default function ContractDetail() {
       </Space>
 
       <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="客户">{contract.customer?.realName || contract.customer?.username}</Descriptions.Item>
+        <Descriptions.Item label="客户">{contract.businessCustomer?.realName || contract.customer?.realName || contract.customer?.username}</Descriptions.Item>
         <Descriptions.Item label="状态">{(() => { const m: Record<string, { color: string; label: string }> = { active: { color: 'processing', label: '进行中' }, completed: { color: 'success', label: '已完成' }, cancelled: { color: 'default', label: '已取消' } }; return <Tag color={m[contract.status]?.color}>{m[contract.status]?.label || contract.status}</Tag>; })()}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{contract.createdAt?.substring(0, 10)}</Descriptions.Item>
       </Descriptions>
@@ -100,9 +100,9 @@ export default function ContractDetail() {
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<EditOutlined />} disabled={hasReceived} onClick={() => { form.setFieldsValue({ contractNo: contract.contractNo }); setEditOpen(true); }}
           title={hasReceived ? '已有入库记录，无法编辑' : ''}>编辑合同号</Button>
-        <Popconfirm title="确定删除此合同？" onConfirm={() => deleteMutation.mutate()} disabled={hasReceived}>
-          <Button danger icon={<DeleteOutlined />} disabled={hasReceived}
-            title={hasReceived ? '已有入库记录，无法删除' : ''}>删除合同</Button>
+        <Popconfirm title="确定删除此合同？" onConfirm={() => deleteMutation.mutate()} disabled={hasReceived || contract.status === 'completed'}>
+          <Button danger icon={<DeleteOutlined />} disabled={hasReceived || contract.status === 'completed'}
+            title={hasReceived ? '已有入库记录，无法删除' : contract.status === 'completed' ? '已完成合同不可删除' : ''}>删除合同</Button>
         </Popconfirm>
         <Button type="primary" onClick={() => navigate(`/contracts/${id}/reconciliation`)}>对账</Button>
         <Select value={contract.status} style={{ width: 120 }} onChange={(v) => statusMutation.mutate(v)}

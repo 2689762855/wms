@@ -46,7 +46,7 @@ export default function AppUpdateModal({ open, serverVersion, forceUpdate, onDis
       }
       zIndex={1050}
     >
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Text strong>版本 {serverVersion.versionName}</Text>
         {serverVersion.changelog && (
           <Paragraph style={{ whiteSpace: 'pre-line', marginBottom: 0 }}>

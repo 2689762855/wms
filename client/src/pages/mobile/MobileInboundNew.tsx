@@ -63,6 +63,9 @@ export default function MobileInboundNew() {
       setStep('done');
       queryClient.invalidateQueries({ queryKey: ['inbound'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
     onError: (err: any) => {
       message.error(err.response?.data?.error || '入库失败');
@@ -173,7 +176,7 @@ export default function MobileInboundNew() {
 
           {cart.length > 0 && (
             <Card title={`已添加 (${cart.length} 项)`} style={{ borderRadius: 8, marginBottom: 12 }}>
-              <Space direction="vertical" style={{ width: '100%' }} size={8}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={8}>
                 {cart.map(item => (
                   <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1 }}>
@@ -194,7 +197,7 @@ export default function MobileInboundNew() {
           )}
 
           <Card title="步骤 3：确认入库" style={{ borderRadius: 8, marginBottom: 12 }}>
-            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <Space orientation="vertical" style={{ width: '100%' }} size={12}>
               <div>
                 <Typography.Text type="secondary">供应商</Typography.Text>
                 <Input placeholder="供应商名称" value={supplier} onChange={e => setSupplier(e.target.value)} size="large" />

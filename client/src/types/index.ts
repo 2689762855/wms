@@ -6,9 +6,6 @@ export interface User {
   phone?: string;
   warehouseId?: number | null;
   warehouse?: { id: number; name: string } | null;
-  customerId?: number | null;
-  status?: string;
-  maxWarehouses?: number;
   warehouses?: { id: number; name: string }[];
   createdAt: string;
   createdBy?: { id: number; realName?: string | null; username: string } | null;
@@ -128,6 +125,9 @@ export interface InboundItem {
   locationId?: number | null;
   location?: Location | null;
   expiryDate?: string | null;
+  contractId?: number | null;
+  contract?: { id: number; contractNo: string } | null;
+  batchNo?: string | null;
 }
 
 export interface OutboundOrder {
@@ -140,6 +140,8 @@ export interface OutboundOrder {
   status: 'draft' | 'confirmed';
   locationId?: number | null;
   location?: Location | null;
+  containerId?: number | null;
+  container?: { id: number; containerNo: string; status: string } | null;
   note?: string;
   createdAt: string;
   items: OutboundItem[];
@@ -153,6 +155,9 @@ export interface OutboundItem {
   quantity: number;
   locationId?: number | null;
   location?: Location | null;
+  contractId?: number | null;
+  contract?: { id: number; contractNo: string; unitPrice?: number } | null;
+  batchNo?: string | null;
 }
 
 export interface TransferOrder {

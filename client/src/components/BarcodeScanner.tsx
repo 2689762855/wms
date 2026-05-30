@@ -70,7 +70,7 @@ export default function BarcodeScanner({ onScan }: Props) {
   };
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }}>
+    <Space orientation="vertical" style={{ width: '100%' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <Input
           placeholder="手动输入条码"

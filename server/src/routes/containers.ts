@@ -13,10 +13,12 @@ containersRouter.get('/', async (req: AuthRequest, res: Response) => {
   const keyword = (req.query.keyword as string) || '';
   const status = req.query.status as string;
   const customerId = req.query.customerId ? parseInt(req.query.customerId as string) : undefined;
+  const businessCustomerId = req.query.businessCustomerId ? parseInt(req.query.businessCustomerId as string) : undefined;
 
   const where: Record<string, unknown> = {};
   if (keyword) where.containerNo = { contains: keyword };
   if (status) where.status = status;
+  if (businessCustomerId) where.businessCustomerId = businessCustomerId;
   if (customerId) where.customerId = customerId;
   if (req.customerId) where.customerId = req.customerId;
 
@@ -25,6 +27,7 @@ containersRouter.get('/', async (req: AuthRequest, res: Response) => {
       where,
       include: {
         customer: { select: { id: true, username: true, realName: true } },
+        
         items: {
           include: {
             product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
@@ -37,7 +40,15 @@ containersRouter.get('/', async (req: AuthRequest, res: Response) => {
     }),
     prisma.container.count({ where }),
   ]);
-  res.json({ data, total, page, pageSize });
+  // 附加 businessCustomer 数据
+  const bizIds = [...new Set(data.map(c => c.businessCustomerId).filter(Boolean))] as number[];
+  const bizMap = new Map<number, { id: number; realName: string }>();
+  if (bizIds.length > 0) {
+    const bizList = await prisma.businessCustomer.findMany({ where: { id: { in: bizIds } }, select: { id: true, realName: true } });
+    bizList.forEach(b => bizMap.set(b.id, b));
+  }
+  const result = data.map(c => ({ ...c, businessCustomer: bizMap.get(c.businessCustomerId) || null }));
+  res.json({ data: result, total, page, pageSize });
 });
 
 // 货柜详情
@@ -57,23 +68,24 @@ containersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response)
   });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
   if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
-  res.json(container);
+  const biz = container.businessCustomerId
+    ? await prisma.businessCustomer.findUnique({ where: { id: container.businessCustomerId }, select: { id: true, realName: true } })
+    : null;
+  res.json({ ...container, businessCustomer: biz });
 });
 
 // 创建货柜
 containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
-  const { containerNo, toYardTime, customerId, customerName, note } = req.body;
+  const { containerNo, toYardTime, customerName, note, contractId } = req.body;
   if (!containerNo) return res.status(400).json({ error: '柜号必填' });
-  let finalCustomerId = customerId || req.customerId;
-  if (!finalCustomerId && customerName) {
-    const bcrypt = require('bcryptjs');
-    const newCust = await prisma.customer.create({
-      data: { username: customerName + '_' + Date.now().toString(36), passwordHash: await bcrypt.hash('123456', 10), realName: customerName },
-    });
-    finalCustomerId = newCust.id;
-  }
-  if (!finalCustomerId) return res.status(400).json({ error: '请选择客户' });
+  if (!customerName) return res.status(400).json({ error: '请输入客户名称' });
 
+  const tenantId = req.customerId ?? 0;
+  let bizCust = await prisma.businessCustomer.upsert({
+    where: { realName_tenantId: { realName: customerName, tenantId } },
+    create: { realName: customerName, tenantId },
+    update: {},
+  });
   const existing = await prisma.container.findUnique({ where: { containerNo } });
   if (existing) return res.status(400).json({ error: '柜号已存在' });
 
@@ -81,7 +93,9 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
     data: {
       containerNo,
       toYardTime: toYardTime ? new Date(toYardTime) : null,
-      customerId: finalCustomerId,
+      customerId: tenantId,
+      businessCustomerId: bizCust.id,
+      contractId: contractId || null,
       note,
     },
     include: {
@@ -93,7 +107,7 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
       },
     },
   });
-  res.status(201).json(container);
+  res.status(201).json({ ...container, businessCustomer: { id: bizCust.id, realName: bizCust.realName } });
 });
 
 // 装柜：录入实装数
@@ -154,8 +168,8 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
   const returnLocations = req.body.returnLocations as Record<string, number> | undefined;
 
   const updated = await prisma.$transaction(async (tx) => {
-    // 按商品合并甩柜数量，统一归还
-    const returnMap = new Map<number, { warehouseId: number; qty: number; locationId?: number }>();
+    // 按商品+批次合并甩柜数量，统一归还
+    const returnMap = new Map<string, { warehouseId: number; qty: number; locationId?: number; batchNo: string | null }>();
     for (const item of container.items) {
       if (item.returnedQty > 0) {
         const outbound = await tx.outboundOrder.findUnique({
@@ -165,28 +179,40 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
         const warehouseId = outbound?.warehouseId;
         if (!warehouseId) continue;
 
-        const existing = returnMap.get(item.productId);
+        // 批次号：优先 containerItem，兜底查 outboundItem
+        let batchNo = item.batchNo || null;
+        if (!batchNo) {
+          const obItem = await tx.outboundItem.findFirst({
+            where: { outboundId: item.outboundId, productId: item.productId },
+            select: { batchNo: true },
+          });
+          batchNo = obItem?.batchNo || null;
+        }
+        const key = `${item.productId}_${batchNo || 'null'}`;
+        const existing = returnMap.get(key);
         if (existing) {
           existing.qty += item.returnedQty;
         } else {
           const userLocation = returnLocations?.[String(item.productId)];
-          returnMap.set(item.productId, {
+          returnMap.set(key, {
             warehouseId,
             qty: item.returnedQty,
             locationId: userLocation ? Number(userLocation) : undefined,
+            batchNo,
           });
         }
       }
     }
 
-    for (const [productId, data] of returnMap) {
-      const { warehouseId, qty, locationId: userLocId } = data;
+    for (const [key, data] of returnMap) {
+      const productId = parseInt(key.split('_')[0]);
+      const { warehouseId, qty, locationId: userLocId, batchNo } = data;
 
       // 优先用用户指定的库位
       let locationId = userLocId;
       if (!locationId) {
         const inv = await tx.inventory.findFirst({
-          where: { productId, warehouseId },
+          where: { productId, warehouseId, batchNo: batchNo ?? null },
           orderBy: { quantity: 'desc' },
         });
         if (inv) locationId = inv.locationId;
@@ -206,7 +232,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
 
       if (locationId) {
         const inv = await tx.inventory.findFirst({
-          where: { productId, warehouseId, locationId },
+          where: { productId, warehouseId, locationId, batchNo: batchNo ?? null },
         });
         if (inv) {
           await tx.inventory.update({
@@ -215,7 +241,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
           });
         } else {
           await tx.inventory.create({
-            data: { productId, warehouseId, locationId, quantity: qty },
+            data: { productId, warehouseId, locationId, quantity: qty, batchNo },
           });
         }
       }
@@ -309,10 +335,11 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
         if (!warehouseId) continue;
 
         // 优先用已记录的归还库位
+        const batchNo = firstItem.batchNo || null;
         let locationId = firstItem.returnLocationId;
         if (!locationId) {
           const inv = await tx.inventory.findFirst({
-            where: { productId: pid, warehouseId },
+            where: { productId: pid, warehouseId, batchNo: batchNo ?? null },
             orderBy: { quantity: 'desc' },
           });
           locationId = inv?.locationId ?? undefined;
@@ -325,7 +352,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
 
         if (locationId) {
           const inv = await tx.inventory.findFirst({
-            where: { productId: pid, warehouseId, locationId },
+            where: { productId: pid, warehouseId, locationId, batchNo: batchNo ?? null },
           });
           if (inv) {
             await tx.inventory.update({
@@ -334,7 +361,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
             });
           } else {
             await tx.inventory.create({
-              data: { productId: pid, warehouseId, locationId, quantity: diff },
+              data: { productId: pid, warehouseId, locationId, quantity: diff, batchNo },
             });
           }
         }
@@ -457,19 +484,27 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     { totalPlanned: 0, totalActual: 0, totalReturned: 0, totalAmount: 0 as number },
   );
 
+  // 模板设置从租户帐号读取，不是业务客户
+  const templateCustomer = req.customerId
+    ? await prisma.customer.findUnique({ where: { id: req.customerId }, select: { reportTemplate: true, templatePreset: true, excelPreset: true, exportTemplate: true } })
+    : container.customer;
+  const tpl = templateCustomer;
+  const bizCustomer = container.businessCustomerId
+    ? await prisma.businessCustomer.findUnique({ where: { id: container.businessCustomerId }, select: { realName: true } })
+    : null;
   res.json({
     containerNo: container.containerNo,
     toYardTime: container.toYardTime,
     sealTime: container.sealTime,
     status: container.status,
-    customerId: container.customerId,
-    customerName: container.customer?.realName || container.customer?.username || '',
-    templatePreset: container.customer?.templatePreset || null,
-    excelPreset: container.customer?.excelPreset || null,
-    exportTemplate: container.customer?.exportTemplate || null,
-    reportTemplate: container.customer?.templatePreset
-      ? (getPresetTemplate(container.customer.templatePreset) || container.customer?.reportTemplate || null)
-      : (container.customer?.reportTemplate || null),
+    customerId: req.customerId || container.customerId,  // 模板管理用租户 ID
+    customerName: bizCustomer?.realName || container.customer?.realName || container.customer?.username || '',
+    templatePreset: tpl?.templatePreset || null,
+    excelPreset: tpl?.excelPreset || null,
+    exportTemplate: tpl?.exportTemplate || null,
+    reportTemplate: tpl?.templatePreset
+      ? (getPresetTemplate(tpl.templatePreset) || tpl?.reportTemplate || null)
+      : (tpl?.reportTemplate || null),
     contractId: contractId || null,
     summary,
     totals,

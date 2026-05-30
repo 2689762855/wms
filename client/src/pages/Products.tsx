@@ -53,6 +53,9 @@ export default function Products() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
       message.success(editing ? '已保存' : '已创建');
       setOpen(false);
       form.resetFields();
@@ -64,6 +67,8 @@ export default function Products() {
     mutationFn: (id: number) => apiClient.delete(`/products/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
       message.success('已删除');
     },
   });
@@ -162,6 +167,9 @@ export default function Products() {
               message.success(`导入完成：新增 ${created} 个商品，入库 ${stockAdded} 条`);
               if (errors?.length) message.warning(errors.join('; '));
               queryClient.invalidateQueries({ queryKey: ['products'] });
+              queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+              queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
+              queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             }).catch(err => message.error(err.response?.data?.error || '导入失败'));
             return false;
           }}>
@@ -251,7 +259,7 @@ export default function Products() {
             </div>
           </div>
           <Form.Item label="仓库安全库存">
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               {warehouseConfigs.map((wc, idx) => (
                 <Space key={idx}>
                   <Select

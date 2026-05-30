@@ -57,7 +57,7 @@ const allowedOrigins = [
   'https://localhost',
   'capacitor://localhost',
   'http://localhost:5173',   // 本地开发
-  'http://192.168.31.225:5173', // 内网开发
+  'http://192.168.1.4:5173', // 内网开发
 ];
 app.use(cors({
   origin(origin, callback) {

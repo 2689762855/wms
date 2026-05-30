@@ -50,13 +50,12 @@ stockMoveRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
     await prisma.$transaction(async (tx) => {
       for (const item of items) {
         // 查找源库位库存
-        const fromInv = await tx.inventory.findUnique({
+        const fromInv = await tx.inventory.findFirst({
           where: {
-            productId_warehouseId_locationId: {
-              productId: item.productId,
-              warehouseId,
-              locationId: fromLocationId,
-            },
+            productId: item.productId,
+            warehouseId,
+            locationId: fromLocationId,
+            batchNo: null,
           },
         });
 
@@ -75,22 +74,29 @@ stockMoveRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
         });
 
         // 目标库位增库存 (upsert，原子操作)
-        const toInv = await tx.inventory.upsert({
+        let toInv = await tx.inventory.findFirst({
           where: {
-            productId_warehouseId_locationId: {
-              productId: item.productId,
-              warehouseId,
-              locationId: toLocationId,
-            },
-          },
-          update: { quantity: { increment: item.quantity } },
-          create: {
             productId: item.productId,
             warehouseId,
             locationId: toLocationId,
-            quantity: item.quantity,
+            batchNo: null,
           },
         });
+        if (toInv) {
+          toInv = await tx.inventory.update({
+            where: { id: toInv.id },
+            data: { quantity: { increment: item.quantity } },
+          });
+        } else {
+          toInv = await tx.inventory.create({
+            data: {
+              productId: item.productId,
+              warehouseId,
+              locationId: toLocationId,
+              quantity: item.quantity,
+            },
+          });
+        }
 
         // 记录日志（总量不变，只是库位间转移）
         const totalQty = (await tx.inventory.aggregate({

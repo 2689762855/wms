@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Select, Button, Card, Typography, Space, InputNumber, Input, message, Divider } from 'antd';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
 import { getCategoryPath } from '../utils/categoryTree';
@@ -17,6 +17,7 @@ interface ItemEntry {
 export default function TransferNew() {
   const { user: me } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemEntry[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -26,7 +27,7 @@ export default function TransferNew() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => apiClient.post('/transfer', data),
-    onSuccess: () => { message.success('调拨单已创建'); navigate('/transfer'); },
+    onSuccess: () => { message.success('调拨单已创建'); queryClient.invalidateQueries({ queryKey: ['transfer'] }); navigate('/transfer'); },
     onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
   });
 
@@ -92,7 +93,7 @@ export default function TransferNew() {
 
       <Divider />
 
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Typography.Text strong>商品明细</Typography.Text>
         {items.map((item, idx) => {
           const p = getProduct(item.productId);

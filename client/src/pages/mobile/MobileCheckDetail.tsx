@@ -152,7 +152,7 @@ export default function MobileCheckDetail() {
 
       {task.status === 'in_progress' && confirmedItems.length > 0 && (
         <Card title="数量已确认（可点按调整）" style={{ borderRadius: 8, marginBottom: 12 }} extra={<Tag color="green">无需重盘</Tag>}>
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
             {confirmedItems.map(item => renderItem(item, false))}
           </Space>
         </Card>
@@ -162,7 +162,7 @@ export default function MobileCheckDetail() {
         <Card title={task.status === 'anomaly' ? '异常详情' : (confirmedItems.length > 0 ? '需要重新盘点' : '录入实盘数量')}
           style={{ borderRadius: 8, marginBottom: 12 }}
           bodyStyle={task.status === 'anomaly' ? undefined : undefined}>
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
             {(task.status === 'anomaly' ? pendingItems : pendingItems.length > 0 ? pendingItems : task.items).map(item => renderItem(item, true))}
           </Space>
         </Card>
@@ -175,7 +175,7 @@ export default function MobileCheckDetail() {
       )}
 
       {task.status === 'anomaly' && isAdmin && (
-        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        <Space orientation="vertical" style={{ width: '100%' }} size={8}>
           <input placeholder="填写调整原因/备注" value={reviewNote}
             onChange={e => setReviewNote(e.target.value)}
             style={{ width: '100%', padding: '10px 12px', fontSize: 15, border: '1px solid #d9d9d9', borderRadius: 6 }} />

@@ -252,6 +252,11 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
 
     const existing = await prisma.customer.findFirst({ where: { username, deletedAt: null } });
     if (existing) return res.status(400).json({ error: '用户名已被注册' });
+    // 检查是否被软删除，恢复
+    const softDeleted = await prisma.customer.findFirst({ where: { username, deletedAt: { not: null } } });
+    if (softDeleted) {
+      await prisma.customer.update({ where: { id: softDeleted.id }, data: { deletedAt: null } });
+    }
     const userConflict = await prisma.user.findUnique({ where: { username } });
     if (userConflict) return res.status(400).json({ error: '用户名已被占用' });
 

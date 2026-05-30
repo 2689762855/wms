@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, Card, Typography, message, Tag, AutoComplete } from 'antd';
+import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, Card, Typography, message, Tag, Popconfirm, List } from 'antd';
 import { PlusOutlined, DeleteOutlined, EnterOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
-import { useAuth } from '../stores/AuthContext';
-import type { CustomerInfo } from '../types';
 import dayjs from 'dayjs';
 
 const statusMap: Record<string, { color: string; label: string }> = {
@@ -15,26 +13,45 @@ const statusMap: Record<string, { color: string; label: string }> = {
 };
 
 export default function Containers() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
-  const [customerFilter, setCustomerFilter] = useState<number | undefined>();
+  const [custMgrOpen, setCustMgrOpen] = useState(false);
+  const [newCustName, setNewCustName] = useState('');
+  const [bizCustFilter, setBizCustFilter] = useState<number | undefined>();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['containers', customerFilter],
-    queryFn: () => apiClient.get('/containers', { params: customerFilter ? { customerId: customerFilter } : {} }).then((r) => r.data),
+    queryKey: ['containers', bizCustFilter],
+    queryFn: () => apiClient.get('/containers', {
+      params: { ...(bizCustFilter ? { businessCustomerId: bizCustFilter } : {}) },
+    }).then((r) => r.data),
   });
 
-  const { data: customers } = useQuery<CustomerInfo[]>({
-    queryKey: ['customers'],
-    queryFn: () => apiClient.get('/customers').then((r) => r.data),
-    enabled: user?.role !== 'operator',
+  const { data: businessCustomers, refetch: refetchCustomers } = useQuery<{ id: number; realName: string }[]>({
+    queryKey: ['business-customers'],
+    queryFn: () => apiClient.get('/contracts/business-customers').then((r) => r.data),
   });
+
+  // 进行中的合同列表（排除已关联货柜的）
+  const { data: allContainers } = useQuery<any[]>({
+    queryKey: ['containers-all'],
+    queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then((r) => r.data.data),
+  });
+  const usedContractIds = new Set((allContainers || []).map((c: any) => c.contractId).filter(Boolean));
+
+  const { data: activeContracts } = useQuery<any[]>({
+    queryKey: ['contracts-active'],
+    queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 999 } }).then((r) => r.data.data),
+  });
+
+  const availableContracts = (activeContracts || []).filter((c: any) => !usedContractIds.has(c.id));
 
   const createMutation = useMutation({
-    mutationFn: (values: any) => apiClient.post('/containers', values),
+    mutationFn: (values: any) => {
+      if (values.toYardTime) values.toYardTime = values.toYardTime.toISOString();
+      return apiClient.post('/containers', values);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['containers'] });
       message.success('已创建');
@@ -49,9 +66,25 @@ export default function Containers() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['containers'] }); message.success('已删除'); },
   });
 
+  const createCustMutation = useMutation({
+    mutationFn: (realName: string) => apiClient.post('/contracts/business-customers', { realName }),
+    onSuccess: () => {
+      refetchCustomers();
+      message.success('客户已创建');
+      setNewCustName('');
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
+  });
+
+  const deleteCustMutation = useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/contracts/business-customers/${id}`),
+    onSuccess: () => { refetchCustomers(); message.success('已删除'); },
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
+  });
+
   const columns = [
     { title: '柜号', dataIndex: 'containerNo', key: 'containerNo', render: (v: string, r: any) => <a onClick={() => navigate(`/containers/${r.id}`)}>{v}</a> },
-    { title: '客户', dataIndex: ['customer', 'realName'], key: 'customer' },
+    { title: '客户', key: 'customer', render: (_: any, r: any) => r.businessCustomer?.realName || r.customer?.realName },
     { title: '状态', dataIndex: 'status', render: (v: string) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.label}</Tag> },
     { title: '商品数', key: 'items', render: (_: any, r: any) => new Set(r.items?.map((i: any) => i.productId)).size || 0 },
     { title: '到柜时间', dataIndex: 'toYardTime', render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
@@ -70,7 +103,9 @@ export default function Containers() {
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>货柜管理</Typography.Title>}
       extra={<Space>
-        <Select allowClear placeholder="客户筛选" style={{ width: 160 }} showSearch optionFilterProp="label" value={customerFilter} onChange={(v) => setCustomerFilter(v)} options={customers?.map((c) => ({ label: c.realName || c.username, value: c.id }))} />
+        <Select allowClear placeholder="客户筛选" style={{ width: 150 }} value={bizCustFilter} onChange={(v) => setBizCustFilter(v)} showSearch optionFilterProp="label"
+          options={businessCustomers?.map((c) => ({ label: c.realName, value: c.id }))} />
+        <Button onClick={() => setCustMgrOpen(true)}>客户管理</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建货柜</Button>
       </Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
@@ -81,18 +116,34 @@ export default function Containers() {
           <Form.Item name="containerNo" label="柜号" rules={[{ required: true }]}>
             <Input placeholder="如: TGHU1234567" />
           </Form.Item>
-          <Form.Item name="customerName" label="客户" rules={[{ required: true }]}>
-            <AutoComplete
-              placeholder="输入生意客户名，新客户自动创建"
-              filterOption={(input, option) => (option?.label as string || '').toLowerCase().includes(input.toLowerCase())}
-              options={customers?.map((c) => ({ label: c.realName || c.username, value: c.id }))}
-              defaultActiveFirstOption={false}
-              onChange={(_val, opt: any) => form.setFieldValue('customerId', opt?.value ?? null)}
-            >
-              <Input />
-            </AutoComplete>
+          <Form.Item name="contractId" label="关联合同（可选）">
+            <Select
+              allowClear
+              placeholder="选择进行中的合同，自动填入客户"
+              showSearch
+              optionFilterProp="label"
+              onChange={(contractId) => {
+                if (contractId) {
+                  const c = availableContracts?.find((ac: any) => ac.id === contractId);
+                  if (c) {
+                    form.setFieldsValue({ customerName: c.businessCustomer?.realName || c.customer?.realName });
+                  }
+                }
+              }}
+              options={availableContracts?.map((c: any) => ({
+                label: `${c.contractNo} (${c.businessCustomer?.realName || c.customer?.realName})`,
+                value: c.id,
+              }))}
+            />
           </Form.Item>
-          <Form.Item name="customerId" hidden><Input /></Form.Item>
+          <Form.Item name="customerName" label="客户" rules={[{ required: true }]}>
+            <Select
+              showSearch
+              placeholder="选择生意客户名（先去客户管理创建）"
+              optionFilterProp="label"
+              options={businessCustomers?.map((c) => ({ label: c.realName, value: c.realName }))}
+            />
+          </Form.Item>
           <Form.Item name="toYardTime" label="到柜时间">
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
@@ -100,6 +151,27 @@ export default function Containers() {
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal title="客户管理" open={custMgrOpen} onCancel={() => setCustMgrOpen(false)} footer={null} width={400}>
+        <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+          <Input placeholder="新客户名称" value={newCustName} onChange={(e) => setNewCustName(e.target.value)}
+            onPressEnter={() => newCustName && createCustMutation.mutate(newCustName)} />
+          <Button type="primary" onClick={() => newCustName && createCustMutation.mutate(newCustName)}>新建</Button>
+        </Space.Compact>
+        <List
+          dataSource={businessCustomers}
+          renderItem={(item) => (
+            <List.Item actions={[
+              <Popconfirm title="确定删除？" onConfirm={() => deleteCustMutation.mutate(item.id)}>
+                <Button size="small" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            ]}>
+              {item.realName}
+            </List.Item>
+          )}
+          locale={{ emptyText: '暂无客户' }}
+        />
       </Modal>
     </Card>
   );

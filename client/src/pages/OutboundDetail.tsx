@@ -15,12 +15,23 @@ export default function OutboundDetail() {
     queryFn: () => apiClient.get(`/outbound/${id}`).then(res => res.data),
   });
 
+  // 加载装柜明细
+  const { data: containerItems } = useQuery({
+    queryKey: ['container-items', order?.containerId, id],
+    queryFn: () => apiClient.get(`/containers/${order.containerId}`).then(res => res.data?.items || []),
+    enabled: !!order?.containerId,
+  });
+
   const confirmMutation = useMutation({
     mutationFn: () => apiClient.put(`/outbound/${id}/confirm`),
     onSuccess: () => {
       message.success('出库已确认，库存已更新');
       queryClient.invalidateQueries({ queryKey: ['outbound'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['reports-in-out'] });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
     onError: (err: any) => message.error(err.response?.data?.error || '确认失败'),
   });
@@ -30,6 +41,8 @@ export default function OutboundDetail() {
     onSuccess: () => {
       message.success('已删除');
       queryClient.invalidateQueries({ queryKey: ['outbound'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
       navigate('/outbound');
     },
     onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
@@ -40,7 +53,17 @@ export default function OutboundDetail() {
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
     { title: '出库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
-    { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
+    { title: '出库', dataIndex: 'quantity', key: 'quantity', width: 60 },
+    ...(containerItems?.length ? [
+      { title: '实装', key: 'actual', width: 60, render: (_: any, r: any) => {
+        const ci = containerItems.find((ci: any) => ci.productId === r.productId);
+        return ci ? <span style={{ color: '#1677ff' }}>{ci.actualQty}</span> : '-';
+      }},
+      { title: '甩柜', key: 'returned', width: 60, render: (_: any, r: any) => {
+        const ci = containerItems.find((ci: any) => ci.productId === r.productId);
+        return ci?.returnedQty ? <Tag color="orange">{ci.returnedQty}</Tag> : '-';
+      }},
+    ] : []),
     { title: '合同单价', key: 'unitPrice', width: 90,
       render: (_: any, r: any) => {
         const price = getContractPrice(r.productId);
@@ -50,7 +73,10 @@ export default function OutboundDetail() {
     { title: '金额', key: 'amount', width: 90,
       render: (_: any, r: any) => {
         const price = getContractPrice(r.productId);
-        return price ? `¥${(price * r.quantity).toFixed(2)}` : <span style={{color:'#ccc'}}>—</span>;
+        if (!price) return <span style={{color:'#ccc'}}>—</span>;
+        const ci = containerItems?.find((ci: any) => ci.productId === r.productId);
+        const netQty = ci ? (ci.actualQty || 0) : r.quantity;
+        return `¥${(price * netQty).toFixed(2)}`;
       },
     },
   ];

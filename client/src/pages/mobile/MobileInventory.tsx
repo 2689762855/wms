@@ -58,7 +58,7 @@ export default function MobileInventory() {
         <Empty description="暂无库存数据" style={{ padding: 20 }} />
       )}
 
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
         {Array.from(grouped.entries()).map(([id, { product, locations }]) => (
           <Card key={id} size="small" style={{ borderRadius: 8 }}>
             <Space size={8} align="start">
@@ -78,7 +78,7 @@ export default function MobileInventory() {
             <div style={{
               marginTop: 8, padding: 8, background: '#fafafa', borderRadius: 6,
             }}>
-              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                 {locations.map((loc, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography.Text style={{ fontSize: 13 }}>

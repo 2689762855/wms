@@ -23,7 +23,7 @@ export default function MobileInboundList() {
         <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>暂无入库记录</div>
       )}
 
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
         {orders?.map(order => (
           <Card key={order.id} size="small" style={{ borderRadius: 8, cursor: 'pointer' }}
             onClick={() => navigate(`/m/inbound/${order.id}`)}>

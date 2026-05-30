@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, message, Divider, Tag } from 'antd';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ProductSelector from '../components/ProductSelector';
@@ -19,6 +19,7 @@ interface ItemEntry {
 
 export default function OutboundNew() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemEntry[]>([]);
@@ -33,10 +34,10 @@ export default function OutboundNew() {
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: products } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(r => r.data.data) });
 
-  // 可选合同列表（active 状态）
+  // 可选合同列表（进行中+已完成，排除已出完和已取消）
   const { data: contracts } = useQuery({
     queryKey: ['contracts-active'],
-    queryFn: () => apiClient.get('/contracts', { params: { status: 'completed', pageSize: 999, excludeShipped: true } }).then(r => r.data.data),
+    queryFn: () => apiClient.get('/contracts', { params: { pageSize: 999, excludeShipped: true } }).then(r => r.data.data),
   });
 
   // 选中合同后获取其商品列表
@@ -74,7 +75,7 @@ export default function OutboundNew() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => apiClient.post('/outbound', data),
-    onSuccess: (res) => { message.success('出库单已创建'); navigate(`/outbound/${res.data.id}`); },
+    onSuccess: (res) => { message.success('出库单已创建'); queryClient.invalidateQueries({ queryKey: ['outbound'] }); navigate(`/outbound/${res.data.id}`); },
     onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
   });
 
@@ -130,7 +131,11 @@ export default function OutboundNew() {
               placeholder="选择货柜，出库商品关联到货柜"
               value={selectedContainerId}
               onChange={(v) => setSelectedContainerId(v ?? null)}
-              options={containersData?.data?.filter((c: any) => c.status === 'pending' || c.status === 'loading').map((c: any) => ({
+              options={containersData?.data?.filter((c: any) => {
+                if (c.status !== 'pending' && c.status !== 'loading') return false;
+                if (selectedContractId && c.contractId !== selectedContractId) return false;
+                return true;
+              }).map((c: any) => ({
                 label: `${c.containerNo} (${c.customer?.realName || c.customer?.username}) [${c.status}]`,
                 value: c.id,
               }))}
@@ -142,7 +147,14 @@ export default function OutboundNew() {
               placeholder="选择合同，按批次定价"
               value={selectedContractId}
               onChange={(v) => setSelectedContractId(v ?? null)}
-              options={(contracts || []).map((c: any) => ({
+              options={(contracts || []).filter((c: any) => {
+                // 合同已被其他货柜关联 → 排除（除非就是当前选中的货柜）
+                const otherContainer = containersData?.data?.find((ct: any) =>
+                  ct.id !== selectedContainerId && ct.contractId === c.id
+                );
+                if (otherContainer) return false;
+                return true;
+              }).map((c: any) => ({
                 label: `${c.contractNo} (${c.customer?.realName || c.customer?.username})`,
                 value: c.id,
               }))}
@@ -175,7 +187,7 @@ export default function OutboundNew() {
 
       <Divider />
 
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <BarcodeScanner onScan={onScan} />
 
         <Typography.Text strong>商品明细 {selectedContainerId && <Tag color="blue">关联货柜</Tag>}</Typography.Text>

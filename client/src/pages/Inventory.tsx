@@ -93,6 +93,7 @@ function LocationDetail({ productId, warehouseId }: { productId: number; warehou
         columns={[
           { title: '库位名称', dataIndex: ['location', 'name'], key: 'loc', render: (v: string | undefined) => v || <span style={{ color: '#ff7a00' }}>⚠ 无库位</span> },
           { title: '库位编码', dataIndex: ['location', 'code'], key: 'code', render: (v: string | undefined) => v || '-' },
+          { title: '批次号', dataIndex: 'batchNo', key: 'bn', render: (v: string | null) => v ? <Tag>{v}</Tag> : '-' },
           { title: '数量', dataIndex: 'quantity', key: 'qty', render: (v: number) => <strong>{v}</strong> },
           { title: '', key: 'action', width: 100, render: (_: unknown, r: InventoryItem) =>
             !r.location && (
@@ -131,13 +132,14 @@ function LocationDetail({ productId, warehouseId }: { productId: number; warehou
 export default function Inventory() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [keyword, setKeyword] = useState('');
+  const [batchNo, setBatchNo] = useState('');
   const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories').then(r => r.data) });
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', warehouseId, keyword],
-    queryFn: () => apiClient.get('/inventory', { params: { warehouseId, keyword } }).then(r => r.data),
+    queryKey: ['inventory', warehouseId, keyword, batchNo],
+    queryFn: () => apiClient.get('/inventory', { params: { warehouseId, keyword, batchNo } }).then(r => r.data),
   });
 
   const { data: productWarehouses } = useQuery({
@@ -159,16 +161,17 @@ export default function Inventory() {
     productWarehouses?.forEach((pw: ProductWarehouse) => {
       pwMap.set(`${pw.productId}-${pw.warehouseId}`, pw.safetyStock);
     });
-    const map = new Map<string, InventoryItem & { totalQty: number; locationCount: number; perWarehouseSafetyStock?: number }>();
+    const map = new Map<string, InventoryItem & { totalQty: number; locationCount: number; perWarehouseSafetyStock?: number; batchNos: Set<string> }>();
     for (const item of data) {
       const key = `${item.productId}-${item.warehouseId}`;
       const existing = map.get(key);
       if (existing) {
         existing.totalQty += item.quantity;
         existing.locationCount += 1;
+        if (item.batchNo) existing.batchNos.add(item.batchNo);
         if (item.updatedAt > existing.updatedAt) existing.updatedAt = item.updatedAt;
       } else {
-        map.set(key, { ...item, totalQty: item.quantity, locationCount: 1, perWarehouseSafetyStock: pwMap.get(key) });
+        map.set(key, { ...item, totalQty: item.quantity, locationCount: 1, perWarehouseSafetyStock: pwMap.get(key), batchNos: new Set(item.batchNo ? [item.batchNo] : []) });
       }
     }
     return Array.from(map.values()).filter(item => item.totalQty > 0);
@@ -189,6 +192,10 @@ export default function Inventory() {
       );
     } },
     { title: '规格', dataIndex: ['product', 'spec'], key: 'spec' },
+    { title: '批次号', dataIndex: 'batchNo', key: 'batchNo', render: (_: any, r: any) => {
+      if (r.batchNos?.size > 1) return <Tag color="orange">多批次({r.batchNos.size})</Tag>;
+      return r.batchNo ? <Tag>{r.batchNo}</Tag> : '-';
+    }},
     { title: '仓库', dataIndex: ['warehouse', 'name'], key: 'warehouse' },
     {
       title: '库存数量', key: 'quantity', sorter: (a: { totalQty: number }, b: { totalQty: number }) => a.totalQty - b.totalQty,
@@ -219,6 +226,7 @@ export default function Inventory() {
           {warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}
         </Select>
         <Input.Search placeholder="搜索商品名称" allowClear onSearch={setKeyword} style={{ width: 220 }} />
+        <Input.Search placeholder="搜索批次号" allowClear onSearch={setBatchNo} style={{ width: 180 }} />
       </Space>
       <Table rowKey={(r: { productId: number; warehouseId: number }) => `${r.productId}-${r.warehouseId}`} columns={columns} dataSource={grouped} loading={isLoading}
         pagination={{ pageSize: 50, showTotal: (t) => `共 ${t} 条` }}

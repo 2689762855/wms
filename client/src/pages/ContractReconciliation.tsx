@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Button, Space, Typography, Tag, Descriptions, Spin, Collapse } from 'antd';
-import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
@@ -84,7 +84,7 @@ export default function ContractReconciliation() {
       </Space>
 
       <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="客户">{contract.customer?.realName || contract.customer?.username}</Descriptions.Item>
+        <Descriptions.Item label="客户">{contract.businessCustomer?.realName || contract.customer?.realName || contract.customer?.username}</Descriptions.Item>
         <Descriptions.Item label="合同状态">
           {contract.status === 'active' ? <Tag color="processing">进行中</Tag>
             : contract.status === 'completed' ? <Tag color="success">已完成</Tag>

@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag } from 'antd';
 import dayjs from 'dayjs';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ProductSelector from '../components/ProductSelector';
@@ -20,6 +20,7 @@ interface ItemEntry {
 
 export default function InboundNew() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemEntry[]>([]);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
@@ -53,6 +54,7 @@ export default function InboundNew() {
     mutationFn: (data: Record<string, unknown>) => apiClient.post('/inbound', data),
     onSuccess: (res) => {
       message.success('入库单已创建');
+      queryClient.invalidateQueries({ queryKey: ['inbound'] });
       navigate(`/inbound/${res.data.id}`);
     },
     onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
@@ -115,7 +117,12 @@ export default function InboundNew() {
               placeholder="选择合同，自动关联入库数量"
               value={selectedContractId}
               onChange={(v) => setSelectedContractId(v ?? null)}
-              options={contractsData?.data?.filter((c: any) => c.status === 'active').map((c: any) => ({
+              options={contractsData?.data?.filter((c: any) => {
+                if (c.status !== 'active') return false;
+                // 全部商品已入库完毕 → 不显示
+                if (c.items?.length && c.items.every((ci: any) => ci.receivedQty >= ci.plannedQty)) return false;
+                return true;
+              }).map((c: any) => ({
                 label: `${c.contractNo} (${c.customer?.realName || c.customer?.username})`,
                 value: c.id,
               }))}
@@ -155,7 +162,7 @@ export default function InboundNew() {
 
       <Divider />
 
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Typography.Text strong>扫码录入</Typography.Text>
         <BarcodeScanner onScan={onScan} />
         {scannedProduct && <Typography.Text type="secondary">最近扫描: {scannedProduct.name} ({scannedProduct.sku})</Typography.Text>}

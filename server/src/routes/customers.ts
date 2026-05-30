@@ -79,6 +79,10 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
       expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     }
 
+    // 清理软删除的旧记录
+    const softDeleted = await prisma.customer.findFirst({ where: { username, deletedAt: { not: null } } });
+    if (softDeleted) await prisma.customer.update({ where: { id: softDeleted.id }, data: { deletedAt: null } });
+
     const customer = await prisma.customer.create({
       data: {
         username,

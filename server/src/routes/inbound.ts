@@ -134,31 +134,49 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
   await prisma.$transaction(async (tx) => {
     for (const item of order.items) {
       // 先查变动前全库位总量
-      const batchNo = await genBatchNo(tx, (item as any).contractId);
+      const batchNo = await genBatchNo(tx, item.contractId);
       const totalBefore = (await tx.inventory.aggregate({
         where: { productId: item.productId, warehouseId: order.warehouseId },
         _sum: { quantity: true },
       }))._sum.quantity || 0;
 
-      const locId = (item as any).locationId ?? order.locationId ?? null;
-      await tx.inventory.upsert({
-        where: {
-          productId_warehouseId_locationId_batchNo: {
+      const locId = item.locationId ?? order.locationId ?? null;
+      if (batchNo) {
+        await tx.inventory.upsert({
+          where: {
+            productId_warehouseId_locationId_batchNo: {
+              productId: item.productId,
+              warehouseId: order.warehouseId,
+              locationId: locId,
+              batchNo: batchNo,
+            },
+          },
+          create: {
             productId: item.productId,
             warehouseId: order.warehouseId,
             locationId: locId,
             batchNo: batchNo,
+            quantity: item.quantity,
           },
-        },
-        create: {
-          productId: item.productId,
-          warehouseId: order.warehouseId,
-          locationId: locId,
-          batchNo: batchNo,
-          quantity: item.quantity,
-        },
-        update: { quantity: { increment: item.quantity } },
-      });
+          update: { quantity: { increment: item.quantity } },
+        });
+      } else {
+        const existing = await tx.inventory.findFirst({
+          where: { productId: item.productId, warehouseId: order.warehouseId, locationId: locId, batchNo: null },
+        });
+        if (existing) {
+          await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: item.quantity } } });
+        } else {
+          await tx.inventory.create({
+            data: { productId: item.productId, warehouseId: order.warehouseId, locationId: locId, quantity: item.quantity },
+          });
+        }
+      }
+
+      // 回写批次号到入库明细
+      if (batchNo) {
+        await tx.inboundItem.update({ where: { id: item.id }, data: { batchNo } });
+      }
 
       await tx.stockLog.create({
         data: {
@@ -173,9 +191,9 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
       });
 
       // 关联合同：增量更新已入库数量
-      if ((item as any).contractId) {
+      if (item.contractId) {
         const ci = await tx.contractItem.findUnique({
-          where: { contractId_productId: { contractId: (item as any).contractId, productId: item.productId } },
+          where: { contractId_productId: { contractId: item.contractId, productId: item.productId } },
         });
         if (ci) {
           const newReceived = ci.receivedQty + item.quantity;
@@ -183,16 +201,7 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
             where: { id: ci.id },
             data: { receivedQty: newReceived },
           });
-          // 超量预警：received > planned
-          if (newReceived > ci.plannedQty) {
-            console.log(`[合同预警] ${ci.productId} 已入库 ${newReceived}/${ci.plannedQty}`);
-          }
-
-          // 检查合同是否全部完成
-          const allItems = await tx.contractItem.findMany({ where: { contractId: ci.contractId } });
-          if (allItems.length > 0 && allItems.every(it => it.receivedQty >= it.plannedQty)) {
-            await tx.contract.update({ where: { id: ci.contractId }, data: { status: 'completed' } });
-          }
+          // 超量预警：received > planned（前端对账页可见）
         }
       }
     }

@@ -175,6 +175,7 @@ model InboundItem {
   expiryDate DateTime?
   contractId  Int?
   contract    Contract?  @relation(fields: [contractId], references: [id])
+  batchNo     String?
 
   @@index([inboundId])
 }
@@ -368,18 +369,20 @@ model Setting {
 }
 
 model Contract {
-  id          Int       @id @default(autoincrement())
-  contractNo  String    @unique
-  customerId  Int
-  customer    Customer  @relation(fields: [customerId], references: [id])
-  status      String    @default("active") // active, completed, cancelled
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  items        ContractItem[]
-  inboundItems  InboundItem[]
-  outboundItems OutboundItem[]
+  id                 Int              @id @default(autoincrement())
+  contractNo         String           @unique
+  customerId         Int
+  customer           Customer         @relation(fields: [customerId], references: [id])
+  businessCustomerId Int
+  status             String           @default("active") // active, completed, cancelled
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  items              ContractItem[]
+  inboundItems       InboundItem[]
+  outboundItems      OutboundItem[]
 
   @@index([customerId])
+  @@index([businessCustomerId])
   @@index([status])
 }
 
@@ -397,20 +400,23 @@ model ContractItem {
 }
 
 model Container {
-  id           Int       @id @default(autoincrement())
-  containerNo  String    @unique
-  toYardTime   DateTime?
-  sealTime     DateTime?
-  status       String    @default("pending")
-  note         String?
-  customerId   Int
-  customer     Customer  @relation(fields: [customerId], references: [id])
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  items        ContainerItem[]
-  outbounds    OutboundOrder[]
+  id                 Int              @id @default(autoincrement())
+  containerNo        String           @unique
+  toYardTime         DateTime?
+  sealTime           DateTime?
+  status             String           @default("pending")
+  note               String?
+  customerId         Int
+  customer           Customer         @relation(fields: [customerId], references: [id])
+  businessCustomerId Int
+  contractId         Int?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  items              ContainerItem[]
+  outbounds          OutboundOrder[]
 
   @@index([customerId])
+  @@index([businessCustomerId])
   @@index([status])
 }
 
@@ -432,4 +438,14 @@ model ContainerItem {
 
   @@index([outboundId])
   @@index([containerId])
+}
+
+model BusinessCustomer {
+  id        Int      @id @default(autoincrement())
+  realName  String
+  tenantId  Int
+  createdAt DateTime @default(now())
+
+  @@unique([realName, tenantId])
+  @@index([tenantId])
 }

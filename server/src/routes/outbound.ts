@@ -113,8 +113,8 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
 
   await prisma.$transaction(async (tx) => {
     for (const item of order.items) {
-      const locId = (item as any).locationId ?? order.locationId ?? null;
-      const batchNo = (item as any).batchNo ?? undefined;
+      const locId = item.locationId ?? order.locationId ?? null;
+      const batchNo = item.batchNo ?? undefined;
       const inv = await tx.inventory.findFirst({
         where: {
           productId: item.productId,
@@ -122,10 +122,32 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
           locationId: locId,
           ...(batchNo ? { batchNo } : {}),
         },
-        orderBy: batchNo ? undefined : { batchNo: 'asc' as any },
+        orderBy: batchNo ? undefined : { batchNo: 'asc' as const },
       });
       if (!inv || inv.quantity < item.quantity) {
         throw new Error(`库存不足: productId=${item.productId}, 当前库存=${inv?.quantity || 0}, 出库=${item.quantity}`);
+      }
+
+      // 批次锁定：合同的商品被货柜关联了 → 锁定，未关联货柜 → 不锁
+      if (inv.batchNo) {
+        const batchInbound = await tx.inboundItem.findFirst({
+          where: { batchNo: inv.batchNo, contractId: { not: null } },
+          select: { contractId: true },
+        });
+        if (batchInbound) {
+          const outboundContractId = item.contractId || null;
+          if (batchInbound.contractId !== outboundContractId) {
+            // 检查该合同是否有关联的货柜（通过出库单）
+            const hasContainer = await tx.container.findFirst({
+              where: {
+                outbounds: { some: { items: { some: { contractId: batchInbound.contractId } } } },
+              },
+            });
+            if (hasContainer) {
+              throw new Error(`批次 ${inv.batchNo} 属于合同 #${batchInbound.contractId}（已被货柜关联），不能用于合同 #${outboundContractId || '无'}`);
+            }
+          }
+        }
       }
 
       // 先查变动前全库位总量
@@ -167,7 +189,8 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
               plannedQty: item.quantity,
               actualQty: item.quantity,
               returnedQty: 0,
-              locationId: (item as any).locationId ?? null,
+              locationId: item.locationId ?? null,
+              batchNo: item.batchNo ?? null,
             },
           });
         }
@@ -177,6 +200,23 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
       }
     }
   });
+
+  // 检查关联合同是否全部出完（按 shippedQty 判完成）
+  const contractIds = [...new Set(order.items.map(i => i.contractId).filter(Boolean))] as number[];
+  for (const cid of contractIds) {
+    const contract = await prisma.contract.findUnique({ where: { id: cid }, include: { items: true } });
+    if (!contract || contract.status === 'completed') continue;
+    // 计算每个商品的已出数量
+    const outboundItems = await prisma.outboundItem.findMany({ where: { contractId: cid } });
+    const shippedMap = new Map<number, number>();
+    for (const oi of outboundItems) {
+      shippedMap.set(oi.productId, (shippedMap.get(oi.productId) || 0) + oi.quantity);
+    }
+    const allShipped = contract.items.every(ci => (shippedMap.get(ci.productId) || 0) >= ci.plannedQty);
+    if (allShipped) {
+      await prisma.contract.update({ where: { id: cid }, data: { status: 'completed' } });
+    }
+  }
 
   const updated = await prisma.outboundOrder.findUnique({
     where: { id },

@@ -246,7 +246,7 @@ checkTasksRouter.put('/:id/resolve', validateId, adminWrite, async (req: AuthReq
       for (const item of task.items) {
         if (!item.diffQty || item.diffQty === 0) continue;
         const inv = await tx.inventory.findFirst({
-          where: { productId: item.productId, warehouseId: task.warehouseId, locationId: task.locationId ?? null },
+          where: { productId: item.productId, warehouseId: task.warehouseId, locationId: task.locationId ?? null, batchNo: null },
         });
         const totalBefore = (await tx.inventory.aggregate({
           where: { productId: item.productId, warehouseId: task.warehouseId },
@@ -307,7 +307,7 @@ checkTasksRouter.put('/:id/reopen', validateId, adminWrite, async (req: AuthRequ
       // 回滚盘点时对库存的调整
       if (item.diffQty && item.diffQty !== 0) {
         const inv = await tx.inventory.findFirst({
-          where: { productId: item.productId, warehouseId: task.warehouseId, locationId: task.locationId ?? null },
+          where: { productId: item.productId, warehouseId: task.warehouseId, locationId: task.locationId ?? null, batchNo: null },
         });
         if (inv) {
           const beforeQty = (await tx.inventory.aggregate({

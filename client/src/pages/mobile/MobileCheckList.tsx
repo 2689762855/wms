@@ -40,7 +40,7 @@ export default function MobileCheckList() {
         <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>暂无盘点任务，请在电脑端创建</div>
       )}
 
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
         {tasks?.map(task => (
           <Card key={task.id} size="small" style={{ borderRadius: 8, cursor: task.status === 'completed' ? 'default' : 'pointer' }}
             onClick={() => { if (task.status !== 'completed') navigate(`/m/check/${task.id}`); }}>

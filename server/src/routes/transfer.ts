@@ -3,6 +3,52 @@ import prisma from '../utils/prisma';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
+// 执行调拨库存转移（confirm 和 approve 共用）
+async function executeTransfer(
+  tx: any,
+  order: { id: number; fromWarehouseId: number; toWarehouseId: number; items: { productId: number; quantity: number; locationId?: number | null }[] },
+  targetLocationId: number,
+) {
+  for (const item of order.items) {
+    const fromWhere: Record<string, unknown> = { productId: item.productId, warehouseId: order.fromWarehouseId, quantity: { gt: 0 } };
+    if (item.locationId) fromWhere.locationId = item.locationId;
+    const fromInvs = await tx.inventory.findMany({ where: fromWhere });
+    const totalQty = fromInvs.reduce((s: number, inv: { quantity: number }) => s + inv.quantity, 0);
+    if (totalQty < item.quantity) {
+      throw new Error(`库存不足: productId=${item.productId}, 库存=${totalQty}, 需要=${item.quantity}`);
+    }
+    let remaining = item.quantity;
+    for (const inv of fromInvs) {
+      if (remaining <= 0) break;
+      const deduct = Math.min(inv.quantity, remaining);
+      const fromTotal = (await tx.inventory.aggregate({
+        where: { productId: item.productId, warehouseId: order.fromWarehouseId },
+        _sum: { quantity: true },
+      }))._sum.quantity || 0;
+      await tx.inventory.update({ where: { id: inv.id }, data: { quantity: { decrement: deduct } } });
+      await tx.stockLog.create({
+        data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: fromTotal, afterQty: fromTotal - deduct, type: 'transfer_out', refId: order.id },
+      });
+      remaining -= deduct;
+    }
+    const toInv = await tx.inventory.findFirst({
+      where: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, batchNo: null },
+    });
+    if (toInv) {
+      await tx.inventory.update({ where: { id: toInv.id }, data: { quantity: { increment: item.quantity } } });
+    } else {
+      await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: item.quantity } });
+    }
+    const toTotalBefore = (await tx.inventory.aggregate({
+      where: { productId: item.productId, warehouseId: order.toWarehouseId },
+      _sum: { quantity: true },
+    }))._sum.quantity || 0;
+    await tx.stockLog.create({
+      data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toTotalBefore, afterQty: toTotalBefore + item.quantity, type: 'transfer_in', refId: order.id },
+    });
+  }
+}
+
 export const transferRouter = Router();
 transferRouter.use(authenticate);
 
@@ -137,48 +183,7 @@ transferRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
   }
 
   await prisma.$transaction(async (tx) => {
-    for (const item of order.items) {
-      const fromWhere: Record<string, unknown> = { productId: item.productId, warehouseId: order.fromWarehouseId, quantity: { gt: 0 } };
-      if (item.locationId) fromWhere.locationId = item.locationId;
-      const fromInvs = await tx.inventory.findMany({ where: fromWhere });
-      const totalQty = fromInvs.reduce((s, inv) => s + inv.quantity, 0);
-      if (totalQty < item.quantity) {
-        throw new Error(`库存不足: productId=${item.productId}, 库存=${totalQty}, 需要=${item.quantity}`);
-      }
-      let remaining = item.quantity;
-      for (const inv of fromInvs) {
-        if (remaining <= 0) break;
-        const deduct = Math.min(inv.quantity, remaining);
-        const fromTotal = (await tx.inventory.aggregate({
-          where: { productId: item.productId, warehouseId: order.fromWarehouseId },
-          _sum: { quantity: true },
-        }))._sum.quantity || 0;
-        await tx.inventory.update({
-          where: { id: inv.id },
-          data: { quantity: { decrement: deduct } },
-        });
-        await tx.stockLog.create({
-          data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: fromTotal, afterQty: fromTotal - deduct, type: 'transfer_out', refId: order.id },
-        });
-        remaining -= deduct;
-      }
-      const toInv = await tx.inventory.findFirst({
-        where: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null },
-      });
-      const toBeforeQty = toInv?.quantity || 0;
-      if (toInv) {
-        await tx.inventory.update({ where: { id: toInv.id }, data: { quantity: { increment: item.quantity } } });
-      } else {
-        await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: item.quantity } });
-      }
-      const toTotalBefore = (await tx.inventory.aggregate({
-        where: { productId: item.productId, warehouseId: order.toWarehouseId },
-        _sum: { quantity: true },
-      }))._sum.quantity || 0;
-      await tx.stockLog.create({
-        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toTotalBefore, afterQty: toTotalBefore + item.quantity, type: 'transfer_in', refId: order.id },
-      });
-    }
+    await executeTransfer(tx, order, targetLocationId);
     await tx.transferOrder.update({ where: { id }, data: { status: 'approved', reviewedAt: new Date() } });
   });
 
@@ -258,49 +263,7 @@ transferRouter.put('/:id/approve', validateId, adminWrite, async (req: AuthReque
   }
 
   await prisma.$transaction(async (tx) => {
-    for (const item of order.items) {
-      const fromWhere: Record<string, unknown> = { productId: item.productId, warehouseId: order.fromWarehouseId, quantity: { gt: 0 } };
-      if (item.locationId) fromWhere.locationId = item.locationId;
-      const fromInvs = await tx.inventory.findMany({ where: fromWhere });
-      const totalQty = fromInvs.reduce((s, inv) => s + inv.quantity, 0);
-      if (totalQty < item.quantity) {
-        throw new Error(`库存不足: productId=${item.productId}, 库存=${totalQty}, 需要=${item.quantity}`);
-      }
-      let remaining = item.quantity;
-      for (const inv of fromInvs) {
-        if (remaining <= 0) break;
-        const deduct = Math.min(inv.quantity, remaining);
-        const fromTotal = (await tx.inventory.aggregate({
-          where: { productId: item.productId, warehouseId: order.fromWarehouseId },
-          _sum: { quantity: true },
-        }))._sum.quantity || 0;
-        await tx.inventory.update({
-          where: { id: inv.id },
-          data: { quantity: { decrement: deduct } },
-        });
-        await tx.stockLog.create({
-          data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: fromTotal, afterQty: fromTotal - deduct, type: 'transfer_out', refId: order.id },
-        });
-        remaining -= deduct;
-      }
-      const toInv = await tx.inventory.findFirst({
-        where: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null },
-      });
-      const toBeforeQty = toInv?.quantity || 0;
-      if (toInv) {
-        await tx.inventory.update({ where: { id: toInv.id }, data: { quantity: { increment: item.quantity } } });
-      } else {
-        await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: item.quantity } });
-      }
-      const toTotalBefore = (await tx.inventory.aggregate({
-        where: { productId: item.productId, warehouseId: order.toWarehouseId },
-        _sum: { quantity: true },
-      }))._sum.quantity || 0;
-      await tx.stockLog.create({
-        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toTotalBefore, afterQty: toTotalBefore + item.quantity, type: 'transfer_in', refId: order.id },
-      });
-    }
-
+    await executeTransfer(tx, order, targetLocationId);
     const updateData: Record<string, unknown> = { status: 'approved', reviewedAt: new Date() };
     if (req.userRole !== 'tenant_admin') updateData.reviewedById = req.userId;
     await tx.transferOrder.update({ where: { id }, data: updateData });

@@ -6,7 +6,7 @@ const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 export default function About() {
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>关于我们</Typography.Title>}>
-      <Space direction="vertical" size="large" style={{ padding: '24px 0' }}>
+      <Space orientation="vertical" size="large" style={{ padding: '24px 0' }}>
         <div>
           <Typography.Title level={5}>库存管理系统 (WMS)</Typography.Title>
           <Typography.Text type="secondary">全栈仓库管理系统 · React + Express + Prisma + SQLite</Typography.Text>

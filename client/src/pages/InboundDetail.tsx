@@ -21,6 +21,10 @@ export default function InboundDetail() {
       message.success('入库已确认，库存已更新');
       queryClient.invalidateQueries({ queryKey: ['inbound'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['reports-in-out'] });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
     onError: (err: any) => message.error(err.response?.data?.error || '确认失败'),
   });
@@ -30,6 +34,8 @@ export default function InboundDetail() {
     onSuccess: () => {
       message.success('已删除');
       queryClient.invalidateQueries({ queryKey: ['inbound'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
       navigate('/inbound');
     },
     onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
@@ -41,6 +47,7 @@ export default function InboundDetail() {
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
     { title: '入库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
     { title: '保质期至', key: 'expiryDate', width: 110, render: (_: unknown, r: any) => r.expiryDate ? dayjs(r.expiryDate).format('YYYY-MM-DD') : '-' },
+    { title: '批次号', dataIndex: 'batchNo', key: 'batchNo', width: 140, render: (v: string | null) => v ? <Tag color="blue">{v}</Tag> : '-' },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
     { title: '单价', dataIndex: 'unitPrice', key: 'unitPrice', width: 80, render: (v: number) => v ? `¥${v.toFixed(2)}` : '-' },
     { title: '小计', key: 'total', width: 80, render: (_: unknown, r: { quantity: number; unitPrice?: number }) => r.unitPrice ? `¥${(r.quantity * r.unitPrice).toFixed(2)}` : '-' },

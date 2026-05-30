@@ -66,7 +66,7 @@ export default function CheckTaskDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: () => apiClient.delete(`/check-tasks/${id}`),
-    onSuccess: () => { message.success('已取消'); navigate('/check-tasks'); },
+    onSuccess: () => { message.success('已取消'); queryClient.invalidateQueries({ queryKey: ['check-tasks'] }); navigate('/check-tasks'); },
     onError: (err: any) => message.error(err.response?.data?.error || '取消失败'),
   });
 

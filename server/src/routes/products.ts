@@ -158,8 +158,8 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
             const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
             location = await prisma.location.create({ data: { name: locName, warehouseId, code } });
           }
-          const inv = await prisma.inventory.findUnique({
-            where: { productId_warehouseId_locationId: { productId: newProduct.id, warehouseId, locationId: location.id } },
+          const inv = await prisma.inventory.findFirst({
+            where: { productId: newProduct.id, warehouseId, locationId: location.id, batchNo: null },
           });
           if (inv) {
             await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity + qty } });

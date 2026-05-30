@@ -25,6 +25,14 @@ export default function ContainerDetail() {
   });
 
   // 获取仓库库位列表（用于甩柜归还选择）
+  // 关联合同（直接从货柜的 contractId 获取 + 出库单兜底）
+  const linkedContractId = container?.contractId;
+  const { data: linkedContract } = useQuery({
+    queryKey: ['container-linked-contract', linkedContractId],
+    queryFn: () => apiClient.get(`/contracts/${linkedContractId}`).then(r => r.data),
+    enabled: !!linkedContractId,
+  });
+
   const firstItem = container?.items?.[0];
   const { data: warehouseLocations } = useQuery({
     queryKey: ['container-return-locations', firstItem?.outboundId],
@@ -211,7 +219,8 @@ export default function ContainerDetail() {
       </Space>
 
       <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="客户">{container.customer?.realName || container.customer?.username}</Descriptions.Item>
+        <Descriptions.Item label="客户">{container.businessCustomer?.realName || container.customer?.realName || container.customer?.username}</Descriptions.Item>
+        <Descriptions.Item label="关联合同">{linkedContract ? <Tag color="blue"><a onClick={() => navigate(`/contracts/${linkedContract.id}`)} style={{cursor:'pointer'}}>{linkedContract.contractNo}</a></Tag> : '-'}</Descriptions.Item>
         <Descriptions.Item label="到柜时间">{container.toYardTime ? dayjs(container.toYardTime).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
         <Descriptions.Item label="封柜时间">{container.sealTime ? dayjs(container.sealTime).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
         <Descriptions.Item label="备注">{container.note || '-'}</Descriptions.Item>

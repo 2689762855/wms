@@ -136,7 +136,7 @@ export default function Customers() {
     <div>
       <Typography.Title level={4}>客户管理</Typography.Title>
       <Card size="small" style={{ marginBottom: 12 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <Space>
             <TeamOutlined />
             <Typography.Text type="secondary">新客户自动获得 90 天免费试用 · 续费按年收费 · 到期前 7 天提醒 · 到期后自动暂停</Typography.Text>

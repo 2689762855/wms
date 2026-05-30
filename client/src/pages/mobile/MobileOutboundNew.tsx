@@ -60,6 +60,9 @@ export default function MobileOutboundNew() {
       setStep('done');
       queryClient.invalidateQueries({ queryKey: ['outbound'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
     onError: (err: any) => {
       message.error(err.response?.data?.error || err.message || '出库失败');
@@ -165,7 +168,7 @@ export default function MobileOutboundNew() {
 
           {locationInventory && locationInventory.length > 0 && (
             <Card title={`库位库存 (${locationInventory.length} 项)`} style={{ borderRadius: 8, marginBottom: 12 }}>
-              <Space direction="vertical" style={{ width: '100%' }} size={8}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={8}>
                 {locationInventory.map(inv => {
                   const pick = picks.find(p => p.productId === inv.productId);
                   return (
@@ -210,7 +213,7 @@ export default function MobileOutboundNew() {
           )}
 
           <Card title="步骤 3：确认出库" style={{ borderRadius: 8, marginBottom: 12 }}>
-            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <Space orientation="vertical" style={{ width: '100%' }} size={12}>
               <div>
                 <Typography.Text type="secondary">领用人</Typography.Text>
                 <Input placeholder="领用人/部门" value={receiver} onChange={e => setReceiver(e.target.value)} size="large" />

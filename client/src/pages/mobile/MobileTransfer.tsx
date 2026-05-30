@@ -40,6 +40,8 @@ export default function MobileTransfer() {
       setStep('done');
       queryClient.invalidateQueries({ queryKey: ['location-inventory-transfer'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
     },
     onError: (err: any) => message.error(err.response?.data?.error || err.message || '转移失败'),
   });
@@ -135,7 +137,7 @@ export default function MobileTransfer() {
 
           {fromInventory && fromInventory.length > 0 && (
             <Card title={`库位库存 (${fromInventory.length} 项)`} style={{ borderRadius: 8, marginBottom: 12 }}>
-              <Space direction="vertical" style={{ width: '100%' }} size={8}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={8}>
                 {fromInventory.map(inv => {
                   const pick = picks.find(p => p.productId === inv.productId);
                   return (
@@ -200,7 +202,7 @@ export default function MobileTransfer() {
             <div style={{ marginBottom: 8 }}>
               <Tag color="orange">{fromLocation.name}</Tag> → <Tag color="green">{toLocation ? toLocation.name : '未选择'}</Tag>
             </div>
-            <Space direction="vertical" style={{ width: '100%' }} size={4}>
+            <Space orientation="vertical" style={{ width: '100%' }} size={4}>
               {activePicks.map(p => (
                 <div key={p.productId} style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>{p.product.name} <Typography.Text type="secondary">{p.product.sku}</Typography.Text></span>
