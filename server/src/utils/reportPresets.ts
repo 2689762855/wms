@@ -7,7 +7,7 @@ export interface Preset {
 export const reportPresets: Preset[] = [
   {
     key: 'manifest',
-    name: '柜货配载清单',
+    name: '排柜配载清单',
     template: `<style>
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
 th, td { border: 1px solid #000; padding: 6px; text-align: center; }
@@ -17,10 +17,10 @@ th { background: #e8e8e8; font-weight: bold; }
 .print-header p { margin: 2px 0; font-size: 12px; color: #555; }
 </style>
 <div class="print-header">
-  <h2>柜货配载清单 / CONTAINER LOADING MANIFEST</h2>
+  <h2>排柜配载清单 / CONTAINER LOADING MANIFEST</h2>
 </div>
 <table>
-  <tr><td style="width:15%;">柜号 / Container No</td><td style="width:35%;">{{containerNo}}</td><td style="width:15%;">封条号 / Seal No</td><td style="width:35%;">________</td></tr>
+  <tr><td style="width:15%;">排柜编号</td><td style="width:35%;">{{containerNo}}</td><td style="width:15%;">车辆货柜号</td><td style="width:35%;">{{actualContainerNo}}</td></tr>
   <tr><td>客户 / Customer</td><td>{{customerName}}</td><td>装柜日期 / Loading Date</td><td>{{sealDate}}</td></tr>
   <tr><td>到柜时间 / Arrival</td><td colspan="3">{{toYardTime}}</td></tr>
 </table>
@@ -58,7 +58,8 @@ th { background: #e8e8e8; }
 </div>
 <table class="info-table" style="margin-bottom:8px;">
   <tr><td style="width:15%;">发票号 / Invoice No:</td><td style="width:35%;">________</td><td style="width:15%;">日期 / Date:</td><td style="width:35%;">{{sealDate}}</td></tr>
-  <tr><td>合同号 / Contract No:</td><td>________</td><td>柜号 / Container No:</td><td>{{containerNo}}</td></tr>
+  <tr><td>合同号 / Contract No:</td><td>________</td><td>排柜编号:</td><td>{{containerNo}}</td></tr>
+  <tr><td>车辆货柜号 / Container No:</td><td colspan="3">{{actualContainerNo}}</td></tr>
   <tr><td>客户 / Customer:</td><td colspan="3">{{customerName}}</td></tr>
 </table>
 <table>
@@ -93,7 +94,8 @@ th { background: #f0f0f0; font-weight: bold; }
 <div class="print-header"><h2>出货明细单</h2></div>
 <div style="margin-bottom:10px;font-size:13px;">
   <span>客户：<strong>{{customerName}}</strong></span>&nbsp;&nbsp;&nbsp;&nbsp;
-  <span>货柜号：<strong>{{containerNo}}</strong></span>&nbsp;&nbsp;&nbsp;&nbsp;
+  <span>排柜编号：<strong>{{containerNo}}</strong></span>&nbsp;&nbsp;&nbsp;&nbsp;
+  <span>车辆货柜号：<strong>{{actualContainerNo}}</strong></span>&nbsp;&nbsp;&nbsp;&nbsp;
   <span>封柜日期：{{sealDate}}</span>&nbsp;&nbsp;&nbsp;&nbsp;
   <span>到柜时间：{{toYardTime}}</span>
 </div>

@@ -193,6 +193,7 @@ model OutboundOrder {
   location    Location? @relation(fields: [locationId], references: [id])
   containerId Int?
   container   Container? @relation(fields: [containerId], references: [id])
+  containerNo String?   // 排柜编号（文本匹配用）
   note        String?
   createdAt   DateTime @default(now())
 
@@ -266,8 +267,9 @@ model StockLog {
   changeQty   Int      // 变动数量（正=入库，负=出库）
   beforeQty   Int
   afterQty    Int
-  type        String   // inbound, outbound, transfer_in, transfer_out, check_adjust
+  type        String   // inbound, outbound, transfer_in, transfer_out, check_adjust, container_return, container_adjust
   refId       Int?     // 关联单据 ID
+  refNo       String?  // 关联单据编号（如排柜编号、单号）
   createdAt   DateTime @default(now())
 
   @@index([productId])
@@ -403,9 +405,10 @@ model ContractItem {
 model Container {
   id                 Int              @id @default(autoincrement())
   containerNo        String           @unique
+  actualContainerNo  String?          // 真实车辆货柜号，封柜时填写
   toYardTime         DateTime?
   sealTime           DateTime?
-  status             String           @default("pending")
+  status             String           @default("pending") // pending, loading, sealed, cancelled
   note               String?
   customerId         Int
   customer           Customer         @relation(fields: [customerId], references: [id])

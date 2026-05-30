@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions, Select, DatePicker } from 'antd';
-import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined, EditOutlined } from '@ant-design/icons';
+import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions, Select, DatePicker, Popconfirm, Input, Form } from 'antd';
+import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined, EditOutlined, CloseCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
@@ -10,6 +10,7 @@ const statusMap: Record<string, { color: string; label: string }> = {
   pending: { color: 'default', label: '待装柜' },
   loading: { color: 'processing', label: '装柜中' },
   sealed: { color: 'success', label: '已封柜' },
+  cancelled: { color: 'error', label: '已作废' },
 };
 
 export default function ContainerDetail() {
@@ -22,6 +23,40 @@ export default function ContainerDetail() {
   const [sealTime, setSealTime] = useState<string | null>(null);
   const [sealTimeEditOpen, setSealTimeEditOpen] = useState(false);
   const [editSealTime, setEditSealTime] = useState<string | null>(null);
+  const [actualContainerNo, setActualContainerNo] = useState('');
+  const [skuModalOpen, setSkuModalOpen] = useState(false);
+  const [skuProductId, setSkuProductId] = useState<number | undefined>();
+  const [skuQty, setSkuQty] = useState(1);
+  const [skuContractId, setSkuContractId] = useState<number | undefined>();
+
+  const { data: products } = useQuery<any[]>({
+    queryKey: ['products-all'],
+    queryFn: () => apiClient.get('/products', { params: { pageSize: 999 } }).then(r => r.data.data),
+  });
+
+  const addSkuMutation = useMutation({
+    mutationFn: () => apiClient.post(`/containers/${id}/items`, { productId: skuProductId, quantity: skuQty, contractId: skuContractId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['container', id] });
+      queryClient.invalidateQueries({ queryKey: ['containers'] });
+      message.success('已添加');
+      setSkuModalOpen(false);
+      setSkuProductId(undefined);
+      setSkuQty(1);
+      setSkuContractId(undefined);
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '添加失败'),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => apiClient.put(`/containers/${id}/cancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['container', id] });
+      queryClient.invalidateQueries({ queryKey: ['containers'] });
+      message.success('已作废');
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '操作失败'),
+  });
 
   const sealTimeMutation = useMutation({
     mutationFn: (st: string) => apiClient.put(`/containers/${id}/seal-time`, { sealTime: st }),
@@ -108,9 +143,9 @@ export default function ContainerDetail() {
   });
 
   const sealMutation = useMutation({
-    mutationFn: async (vars: { items: any[]; returnLocs: Record<string, number>; sealTime?: string }) => {
+    mutationFn: async (vars: { items: any[]; returnLocs: Record<string, number>; sealTime?: string; actualContainerNo?: string }) => {
       await apiClient.put(`/containers/${id}/load`, { items: vars.items });
-      await apiClient.put(`/containers/${id}/seal`, { returnLocations: vars.returnLocs, sealTime: vars.sealTime });
+      await apiClient.put(`/containers/${id}/seal`, { returnLocations: vars.returnLocs, sealTime: vars.sealTime, actualContainerNo: vars.actualContainerNo });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['container', id] });
@@ -231,7 +266,7 @@ export default function ContainerDetail() {
     <div>
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/containers')}>返回</Button>
-        <Typography.Title level={4} style={{ margin: 0 }}>货柜 {container.containerNo}</Typography.Title>
+        <Typography.Title level={4} style={{ margin: 0 }}>排柜 {container.containerNo}</Typography.Title>
         <Tag color={statusMap[container.status]?.color}>{statusMap[container.status]?.label}</Tag>
       </Space>
 
@@ -251,15 +286,20 @@ export default function ContainerDetail() {
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setEditSealTime(container.sealTime); setSealTimeEditOpen(true); }} style={{ marginLeft: 4, padding: 0 }} />
           )}
         </Descriptions.Item>
+        <Descriptions.Item label="车辆货柜号">{container.actualContainerNo || '-'}</Descriptions.Item>
         <Descriptions.Item label="备注">{container.note || '-'}</Descriptions.Item>
       </Descriptions>
 
-      {container.status !== 'sealed' && (
+      {(container.status === 'pending' || container.status === 'loading') && (
         <Space style={{ marginBottom: 16 }}>
           <Button type="primary" icon={<InboxOutlined />} onClick={handleLoad} loading={loadMutation.isPending}>保存装柜数据</Button>
           {container.status === 'loading' && (
             <Button type="primary" danger icon={<LockOutlined />} onClick={handleSeal} loading={sealMutation.isPending}>封柜</Button>
           )}
+          <Button icon={<PlusOutlined />} onClick={() => setSkuModalOpen(true)}>新增SKU</Button>
+          <Popconfirm title="确定作废此排柜？" onConfirm={() => cancelMutation.mutate()}>
+            <Button danger icon={<CloseCircleOutlined />} loading={cancelMutation.isPending}>作废</Button>
+          </Popconfirm>
         </Space>
       )}
 
@@ -313,6 +353,27 @@ export default function ContainerDetail() {
         />
       </Card>
 
+      <Modal title="新增SKU" open={skuModalOpen} onCancel={() => setSkuModalOpen(false)}
+        onOk={() => skuProductId && addSkuMutation.mutate()} confirmLoading={addSkuMutation.isPending}
+        okButtonProps={{ disabled: !skuProductId }}
+      >
+        <Form layout="vertical">
+          <Form.Item label="商品" required>
+            <Select style={{ width: '100%' }} placeholder="选择商品" showSearch optionFilterProp="label"
+              value={skuProductId} onChange={(v) => setSkuProductId(v)}
+              options={products?.map((p: any) => ({ label: `${p.sku} | ${p.name}`, value: p.id }))} />
+          </Form.Item>
+          <Form.Item label="数量" required>
+            <InputNumber min={1} value={skuQty} onChange={(v) => setSkuQty(v || 1)} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="关联合同（可选）">
+            <Select allowClear placeholder="选择合同" style={{ width: '100%' }}
+              value={skuContractId} onChange={(v) => setSkuContractId(v)}
+              options={linkedContracts.map((cc: any) => ({ label: cc.contract?.contractNo, value: cc.contractId }))} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       <Modal title="修改封柜时间" open={sealTimeEditOpen} onCancel={() => setSealTimeEditOpen(false)}
         onOk={() => { if (editSealTime) sealTimeMutation.mutate(editSealTime); }}
         confirmLoading={sealTimeMutation.isPending}
@@ -332,14 +393,18 @@ export default function ContainerDetail() {
           for (const [k, v] of Object.entries(returnLocations)) {
             if (v != null) returnLocs[k] = v;
           }
-          sealMutation.mutate({ items: rawItems, returnLocs, sealTime: sealTime || undefined });
+          sealMutation.mutate({ items: rawItems, returnLocs, sealTime: sealTime || undefined, actualContainerNo: actualContainerNo || undefined });
           setSealModalOpen(false);
+          setActualContainerNo('');
         }}
         confirmLoading={sealMutation.isPending}
       >
         <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
           <Descriptions.Item label="封柜时间">
             <DatePicker showTime value={sealTime ? dayjs(sealTime) : null} onChange={(d) => setSealTime(d?.toISOString() || null)} style={{ width: '100%' }} placeholder="默认当前时间" />
+          </Descriptions.Item>
+          <Descriptions.Item label="车辆货柜号">
+            <Input placeholder="如: TGHU1234567" value={actualContainerNo} onChange={e => setActualContainerNo(e.target.value)} />
           </Descriptions.Item>
         </Descriptions>
         {mergedItems.some((m: any) => m.returnedQty > 0) && (

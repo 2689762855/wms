@@ -1,5 +1,5 @@
 export const presetOptions = [
-  { key: 'manifest', name: '柜货配载清单' },
+  { key: 'manifest', name: '排柜配载清单' },
   { key: 'packing-list', name: '中英文装箱单' },
   { key: 'shipping-detail', name: '出货明细单' },
 ];

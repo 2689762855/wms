@@ -18,7 +18,8 @@ export default function InventoryLogs() {
     transfer_in: { color: 'blue', label: '调拨入库' },
     transfer_out: { color: 'orange', label: '调拨出库' },
     check_adjust: { color: 'purple', label: '盘点调整' },
-    container_return: { color: 'orange', label: '装柜退回' },
+    container_return: { color: 'orange', label: '排柜退回' },
+    container_adjust: { color: 'purple', label: '排柜调整' },
   };
 
   const columns = [
@@ -30,6 +31,7 @@ export default function InventoryLogs() {
     { title: '变动数量', dataIndex: 'changeQty', key: 'changeQty', render: (v: number) => <span style={{ color: v > 0 ? 'green' : 'red' }}>{v > 0 ? `+${v}` : v}</span> },
     { title: '变动前', dataIndex: 'beforeQty', key: 'beforeQty' },
     { title: '变动后', dataIndex: 'afterQty', key: 'afterQty' },
+    { title: '排柜编号', dataIndex: 'refNo', key: 'refNo', render: (v: string) => v || '-' },
     { title: '时间', dataIndex: 'createdAt', key: 'createdAt', render: (t: string) => dayjs(t).format('YYYY-MM-DD HH:mm:ss') },
   ];
 

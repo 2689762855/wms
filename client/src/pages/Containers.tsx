@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, Card, Typography, message, Tag, Popconfirm, List } from 'antd';
+import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, Card, Typography, message, Tag, Popconfirm, List, InputNumber } from 'antd';
 import { PlusOutlined, DeleteOutlined, EnterOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ const statusMap: Record<string, { color: string; label: string }> = {
   pending: { color: 'default', label: '待装柜' },
   loading: { color: 'processing', label: '装柜中' },
   sealed: { color: 'success', label: '已封柜' },
+  cancelled: { color: 'error', label: '已作废' },
 };
 
 export default function Containers() {
@@ -20,6 +21,12 @@ export default function Containers() {
   const [custMgrOpen, setCustMgrOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [bizCustFilter, setBizCustFilter] = useState<number | undefined>();
+  const [extraItems, setExtraItems] = useState<{ productId?: number; plannedQty: number }[]>([]);
+
+  const { data: products } = useQuery<any[]>({
+    queryKey: ['products-all'],
+    queryFn: () => apiClient.get('/products', { params: { pageSize: 999 } }).then(r => r.data.data),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['containers', bizCustFilter],
@@ -38,16 +45,26 @@ export default function Containers() {
     queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 999 } }).then((r) => r.data.data),
   });
 
+  // 未关联排柜的出库单（已确认但无 containerId）
+  const { data: unlinkedOutbounds } = useQuery<any[]>({
+    queryKey: ['outbounds-unlinked'],
+    queryFn: () => apiClient.get('/outbound', { params: { unlinkedOnly: true, pageSize: 999, status: 'confirmed' } }).then(r => r.data.data),
+  });
+
   const createMutation = useMutation({
     mutationFn: (values: any) => {
       if (values.toYardTime) values.toYardTime = values.toYardTime.toISOString();
-      return apiClient.post('/containers', values);
+      const validExtras = extraItems.filter(ei => ei.productId && ei.plannedQty > 0);
+      return apiClient.post('/containers', { ...values, items: validExtras.length > 0 ? validExtras : undefined });
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['containers'] });
-      message.success('已创建');
+      queryClient.invalidateQueries({ queryKey: ['outbound'] });
+      const linked = res.data?.linkedOutbounds || 0;
+      message.success(linked > 0 ? `已创建，自动关联 ${linked} 个出库单` : '已创建');
       setOpen(false);
       form.resetFields();
+      setExtraItems([]);
     },
     onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
   });
@@ -75,7 +92,7 @@ export default function Containers() {
   });
 
   const columns = [
-    { title: '柜号', dataIndex: 'containerNo', key: 'containerNo', render: (v: string, r: any) => <a onClick={() => navigate(`/containers/${r.id}`)}>{v}</a> },
+    { title: '排柜编号', dataIndex: 'containerNo', key: 'containerNo', render: (v: string, r: any) => <a onClick={() => navigate(`/containers/${r.id}`)}>{v}</a> },
     { title: '客户', key: 'customer', render: (_: any, r: any) => r.businessCustomer?.realName || r.customer?.realName },
     { title: '状态', dataIndex: 'status', render: (v: string) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.label}</Tag> },
     { title: '关联合同', key: 'contracts', render: (_: any, r: any) => (r.contracts || []).map((cc: any) => <Tag key={cc.contractId} color="blue">{cc.contract?.contractNo}</Tag>) },
@@ -93,33 +110,23 @@ export default function Containers() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>货柜管理</Typography.Title>}
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>排柜管理</Typography.Title>}
       extra={<Space>
         <Select allowClear placeholder="客户筛选" style={{ width: 150 }} value={bizCustFilter} onChange={(v) => setBizCustFilter(v)} showSearch optionFilterProp="label"
           options={businessCustomers?.map((c) => ({ label: c.realName, value: c.id }))} />
         <Button onClick={() => setCustMgrOpen(true)}>客户管理</Button>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建货柜</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建排柜</Button>
       </Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
         pagination={{ total: data?.total, pageSize: 20, showSizeChanger: false }} />
 
-      <Modal title="新建货柜" open={open} onOk={() => form.submit()} onCancel={() => setOpen(false)}>
+      <Modal title="新建排柜" open={open} onOk={() => form.submit()} onCancel={() => setOpen(false)}>
         <Form form={form} layout="vertical" onFinish={(v) => createMutation.mutate(v)}>
-          <Form.Item name="containerNo" label="柜号" rules={[{ required: true }]}>
-            <Input placeholder="如: TGHU1234567" />
+          <Form.Item name="containerNo" label="排柜编号" rules={[{ required: true }]}>
+            <Input placeholder="如: PL-20260530-001" />
           </Form.Item>
-          <Form.Item name="contractIds" label="关联合同（可选，可多选）">
-            <Select
-              allowClear
-              mode="multiple"
-              placeholder="选择进行中的合同"
-              showSearch
-              optionFilterProp="label"
-              options={activeContracts?.map((c: any) => ({
-                label: `${c.contractNo} (${c.businessCustomer?.realName || c.customer?.realName})`,
-                value: c.id,
-              }))}
-            />
+          <Form.Item name="actualContainerNo" label="车辆货柜号（可选）">
+            <Input placeholder="装柜后填写真实货柜号" />
           </Form.Item>
           <Form.Item name="customerName" label="客户" rules={[{ required: true }]}>
             <Select
@@ -135,6 +142,19 @@ export default function Containers() {
           <Form.Item name="note" label="备注">
             <Input.TextArea rows={2} />
           </Form.Item>
+          <Typography.Text strong>追加商品（特殊情况，可选）</Typography.Text>
+          <div style={{ marginTop: 8 }}>
+            {extraItems.map((ei, idx) => (
+              <Space key={idx} style={{ display: 'flex', marginBottom: 4 }}>
+                <Select style={{ width: 280 }} placeholder="选商品" showSearch optionFilterProp="label"
+                  value={ei.productId} onChange={(v) => { const next=[...extraItems];next[idx]={...next[idx],productId:v};setExtraItems(next); }}
+                  options={products?.map((p:any)=>({label:`${p.sku} | ${p.name}`,value:p.id}))} />
+                <InputNumber min={1} placeholder="数量" value={ei.plannedQty} onChange={(v)=>{const next=[...extraItems];next[idx]={...next[idx],plannedQty:v||0};setExtraItems(next);}} />
+                <Button size="small" danger onClick={()=>setExtraItems(extraItems.filter((_,i)=>i!==idx))}>删</Button>
+              </Space>
+            ))}
+            <Button type="dashed" size="small" onClick={()=>setExtraItems([...extraItems,{productId:undefined,plannedQty:0}])} block>+ 添加商品</Button>
+          </div>
         </Form>
       </Modal>
 

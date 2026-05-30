@@ -77,7 +77,7 @@ containersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response)
 
 // 创建货柜
 containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
-  const { containerNo, toYardTime, customerName, note, contractIds } = req.body;
+  const { containerNo, toYardTime, customerName, note, contractIds, actualContainerNo, items: extraItems } = req.body;
   if (!containerNo) return res.status(400).json({ error: '柜号必填' });
   if (!customerName) return res.status(400).json({ error: '请输入客户名称' });
 
@@ -97,8 +97,12 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
       customerId: tenantId,
       businessCustomerId: bizCust.id,
       note,
+      actualContainerNo: actualContainerNo || null,
       ...(contractIds?.length > 0 ? {
         contracts: { create: contractIds.map((cid: number) => ({ contractId: cid })) },
+      } : {}),
+      ...(extraItems?.length > 0 ? {
+        items: { create: extraItems.map((ei: any) => ({ productId: ei.productId, plannedQty: ei.plannedQty || 0, actualQty: ei.actualQty || ei.plannedQty || 0, returnedQty: 0, outboundId: 0 })) },
       } : {}),
     },
     include: {
@@ -111,7 +115,48 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
       },
     },
   });
-  res.status(201).json({ ...container, businessCustomer: { id: bizCust.id, realName: bizCust.realName } });
+  // 自动匹配排柜编号相同的出库单
+  const matchedOutbounds = await prisma.outboundOrder.findMany({
+    where: { containerNo, containerId: null, status: 'confirmed' },
+    include: { items: true },
+  });
+  let linkedCount = 0;
+  for (const ob of matchedOutbounds) {
+    await prisma.outboundOrder.update({ where: { id: ob.id }, data: { containerId: container.id } });
+    for (const item of ob.items) {
+      await prisma.containerItem.create({
+        data: { containerId: container.id, outboundId: ob.id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo },
+      });
+      const ocIds = [...new Set(ob.items.map(i => i.contractId).filter(Boolean))] as number[];
+      for (const cid of ocIds) {
+        await prisma.containerContract.upsert({ where: { containerId_contractId: { containerId: container.id, contractId: cid } }, create: { containerId: container.id, contractId: cid }, update: {} }).catch(() => {});
+      }
+    }
+    linkedCount++;
+  }
+
+  res.status(201).json({ ...container, businessCustomer: { id: bizCust.id, realName: bizCust.realName }, linkedOutbounds: linkedCount });
+});
+
+// 新增 SKU 到排柜（可选合同）
+containersRouter.post('/:id/items', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  const { productId, quantity, contractId } = req.body;
+  if (!productId || !quantity) return res.status(400).json({ error: '请选择商品和数量' });
+  const container = await prisma.container.findUnique({ where: { id } });
+  if (!container) return res.status(404).json({ error: '排柜不存在' });
+  if (container.status === 'sealed' || container.status === 'cancelled') return res.status(400).json({ error: '排柜状态不允许操作' });
+  const item = await prisma.containerItem.create({
+    data: { containerId: id, outboundId: 0, productId, plannedQty: quantity, actualQty: quantity, returnedQty: 0 },
+  });
+  if (contractId) {
+    await prisma.containerContract.upsert({
+      where: { containerId_contractId: { containerId: id, contractId } },
+      create: { containerId: id, contractId },
+      update: {},
+    });
+  }
+  res.status(201).json(item);
 });
 
 // 装柜：录入实装数
@@ -128,21 +173,22 @@ containersRouter.put('/:id/load', validateId, adminWrite, async (req: AuthReques
   if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
   if (container.status !== 'pending' && container.status !== 'loading') return res.status(400).json({ error: '货柜状态不允许装柜' });
 
-  // 删除旧明细，重新写入
-  await prisma.containerItem.deleteMany({ where: { containerId: id } });
+  // 更新已有条目 + 插入新条目（按 outboundId+productId 识别，不删旧数据）
   for (const item of items) {
     const returnedQty = Math.max(0, (item.plannedQty || 0) - (item.actualQty || 0));
-    await prisma.containerItem.create({
-      data: {
-        containerId: id,
-        outboundId: item.outboundId,
-        productId: item.productId,
-        plannedQty: item.plannedQty || 0,
-        actualQty: item.actualQty || 0,
-        returnedQty,
-        locationId: item.locationId || null,
-      },
+    const existing = await prisma.containerItem.findFirst({
+      where: { containerId: id, outboundId: item.outboundId, productId: item.productId },
     });
+    if (existing) {
+      await prisma.containerItem.update({
+        where: { id: existing.id },
+        data: { plannedQty: item.plannedQty || 0, actualQty: item.actualQty || 0, returnedQty, locationId: item.locationId || null },
+      });
+    } else {
+      await prisma.containerItem.create({
+        data: { containerId: id, outboundId: item.outboundId, productId: item.productId, plannedQty: item.plannedQty || 0, actualQty: item.actualQty || 0, returnedQty, locationId: item.locationId || null },
+      });
+    }
   }
 
   await prisma.container.update({ where: { id }, data: { status: 'loading' } });
@@ -171,6 +217,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
 
   const returnLocations = req.body.returnLocations as Record<string, number> | undefined;
   const sealTime = req.body.sealTime ? new Date(req.body.sealTime) : new Date();
+  const actualContainerNo = req.body.actualContainerNo || undefined;
 
   const updated = await prisma.$transaction(async (tx) => {
     // 按商品+批次合并甩柜数量，统一归还
@@ -260,6 +307,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
           afterQty: totalBefore + qty,
           type: 'container_return',
           refId: id,
+          refNo: container.containerNo,
         },
       });
 
@@ -274,7 +322,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
 
     return await tx.container.update({
       where: { id },
-      data: { status: 'sealed', sealTime },
+      data: { status: 'sealed', sealTime, actualContainerNo },
       include: {
         items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } } } },
       },
@@ -292,6 +340,19 @@ containersRouter.put('/:id/seal-time', validateId, adminWrite, async (req: AuthR
   const container = await prisma.container.findUnique({ where: { id } });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
   const updated = await prisma.container.update({ where: { id }, data: { sealTime: new Date(sealTime) } });
+  res.json(updated);
+});
+
+// 作废排柜（仅 pending/loading 可作废，释放排柜号）
+containersRouter.put('/:id/cancel', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  const container = await prisma.container.findUnique({ where: { id } });
+  if (!container) return res.status(404).json({ error: '排柜不存在' });
+  if (container.status === 'sealed') return res.status(400).json({ error: '已封柜的排柜不可作废' });
+  if (container.status === 'cancelled') return res.status(400).json({ error: '已作废' });
+  // 释放排柜号：原号加后缀 _cancelled_timestamp
+  const newNo = container.containerNo + '_cancelled_' + Date.now().toString(36);
+  const updated = await prisma.container.update({ where: { id }, data: { status: 'cancelled', containerNo: newNo } });
   res.json(updated);
 });
 
@@ -392,6 +453,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
             afterQty: totalBefore + diff,
             type: 'container_adjust',
             refId: id,
+            refNo: container.containerNo,
           },
         });
       }
@@ -508,6 +570,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     : null;
   res.json({
     containerNo: container.containerNo,
+    actualContainerNo: container.actualContainerNo || '',
     toYardTime: container.toYardTime,
     sealTime: container.sealTime,
     status: container.status,

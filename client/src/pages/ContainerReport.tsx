@@ -274,7 +274,7 @@ export default function ContainerReport() {
       <Modal title={`编辑报表模板 - ${data.customerName}`} open={editOpen} onOk={() => saveMutation.mutate(editText)} onCancel={() => setEditOpen(false)} width={800} okText="保存" cancelText="取消">
         <Input.TextArea value={editText} onChange={e => setEditText(e.target.value)} rows={25} style={{ fontFamily: 'monospace', fontSize: 12 }} placeholder="粘贴 HTML 模板..." />
         <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-          可用变量：{`{{containerNo}} {{customerName}} {{sealDate}} {{sealTime}} {{toYardTime}} {{totalPlanned}} {{totalActual}} {{totalReturned}}`}<br />
+          可用变量：{`{{containerNo}} {{actualContainerNo}} {{customerName}} {{sealDate}} {{sealTime}} {{toYardTime}} {{totalPlanned}} {{totalActual}} {{totalReturned}}`}<br />
           循环行：{`{{#rows}}...{{/rows}}`} 内可用 {`{{index}} {{sku}} {{name}} {{plannedQty}} {{actualQty}} {{returnedQty}} {{spec}} {{unit}}`}
         </div>
       </Modal>

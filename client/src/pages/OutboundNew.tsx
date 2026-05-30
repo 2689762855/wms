@@ -25,7 +25,8 @@ export default function OutboundNew() {
   const [items, setItems] = useState<ItemEntry[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedContainerId, setSelectedContainerId] = useState<number | null>(null);
-  const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
+  const [selectedContractIds, setSelectedContractIds] = useState<number[]>([]);
+  const [containerNoText, setContainerNoText] = useState('');
 
   useEffect(() => {
     if (user?.realName) form.setFieldValue('receiver', user.realName);
@@ -40,23 +41,35 @@ export default function OutboundNew() {
     queryFn: () => apiClient.get('/contracts', { params: { pageSize: 999, excludeShipped: true } }).then(r => r.data.data),
   });
 
-  // 选中合同后获取其商品列表
-  const { data: contractItems } = useQuery({
-    queryKey: ['contract', selectedContractId, 'items'],
-    queryFn: () => apiClient.get(`/contracts/${selectedContractId}`).then(r => r.data.items),
-    enabled: !!selectedContractId,
+  // 选中多合同后获取所有商品
+  const { data: multiContractItems } = useQuery({
+    queryKey: ['contracts', selectedContractIds, 'items'],
+    queryFn: async () => {
+      if (selectedContractIds.length === 0) return [];
+      const results = await Promise.all(selectedContractIds.map(cid => apiClient.get(`/contracts/${cid}`).then(r => r.data)));
+      return results;
+    },
+    enabled: selectedContractIds.length > 0,
   });
 
-  // 选合同后自动填入商品
+  // 选合同后自动填入商品（与已有商品合并去重）
   useEffect(() => {
-    if (contractItems && contractItems.length > 0 && selectedContractId) {
-      setItems(contractItems.map((ci: any) => ({
-        productId: ci.productId,
-        quantity: ci.plannedQty || 1,
-        contractId: selectedContractId,
-      })));
+    if (multiContractItems && multiContractItems.length > 0) {
+      setItems(prev => {
+        const existingPids = new Set(prev.map(i => i.productId));
+        const newItems: ItemEntry[] = [];
+        multiContractItems.forEach((ct: any) => {
+          (ct.items || []).forEach((ci: any) => {
+            if (!existingPids.has(ci.productId)) {
+              newItems.push({ productId: ci.productId, quantity: ci.plannedQty || 1, contractId: ct.id });
+              existingPids.add(ci.productId);
+            }
+          });
+        });
+        return newItems.length > 0 ? [...prev, ...newItems] : prev;
+      });
     }
-  }, [contractItems, selectedContractId]);
+  }, [multiContractItems]);
   const { data: containersData } = useQuery({ queryKey: ['containers'], queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data) });
 
   const { data: selectedContainer } = useQuery({
@@ -64,6 +77,42 @@ export default function OutboundNew() {
     queryFn: () => apiClient.get(`/containers/${selectedContainerId}`).then(r => r.data),
     enabled: !!selectedContainerId,
   });
+
+  // 选中排柜后获取其关联合同的商品
+  const containerContractIds = (selectedContainer?.contracts || []).map((cc: any) => cc.contractId);
+  const { data: containerContractItems } = useQuery({
+    queryKey: ['container-contract-items', containerContractIds],
+    queryFn: async () => {
+      if (containerContractIds.length === 0) return [];
+      const results = await Promise.all(containerContractIds.map((cid: number) => apiClient.get(`/contracts/${cid}`).then(r => r.data)));
+      return results;
+    },
+    enabled: containerContractIds.length > 0,
+  });
+
+  // 选排柜后自动填入合同商品（减去已装柜数量）
+  const containerLoadedMap = new Map<number, number>();
+  (selectedContainer?.items || []).forEach((ci: any) => {
+    containerLoadedMap.set(ci.productId, (containerLoadedMap.get(ci.productId) || 0) + (ci.plannedQty || 0));
+  });
+  useEffect(() => {
+    if (containerContractItems && containerContractItems.length > 0 && selectedContainerId) {
+      const autoItems: ItemEntry[] = [];
+      containerContractItems.forEach((ct: any) => {
+        (ct.items || []).forEach((ci: any) => {
+          const loaded = containerLoadedMap.get(ci.productId) || 0;
+          const remaining = ci.plannedQty - loaded;
+          if (remaining > 0) {
+            autoItems.push({ productId: ci.productId, quantity: remaining, contractId: ct.id });
+          }
+        });
+      });
+      if (autoItems.length > 0) {
+        setItems(autoItems);
+        message.info(`已从排柜关联合同自动填入 ${autoItems.length} 个商品`);
+      }
+    }
+  }, [containerContractItems, selectedContainerId]);
 
   const selectedWarehouseId: number | undefined = Form.useWatch('warehouseId', form);
 
@@ -80,7 +129,7 @@ export default function OutboundNew() {
   });
 
   const addItem = (productId: number) => {
-    setItems([...items, { productId, quantity: 1, contractId: selectedContractId }]);
+    setItems([...items, { productId, quantity: 1, contractId: selectedContractIds[0] || null }]);
   };
 
   const updateItem = (idx: number, field: keyof ItemEntry, value: number | null) => {
@@ -97,7 +146,7 @@ export default function OutboundNew() {
 
   const onProductsSelected = (selected: Product[]) => {
     for (const p of selected) {
-      setItems(prev => [...prev, { productId: p.id, quantity: 1, contractId: selectedContractId }]);
+      setItems(prev => [...prev, { productId: p.id, quantity: 1, contractId: selectedContractIds[0] || null }]);
     }
     if (selected.length) message.success(`已添加 ${selected.length} 个商品`);
     setSelectorOpen(false);
@@ -118,44 +167,32 @@ export default function OutboundNew() {
 
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>新建出库单</Typography.Title>}>
-      <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate({ ...values, items, containerId: selectedContainerId })}>
+      <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate({ ...values, items, containerId: selectedContainerId, containerNo: containerNoText || undefined })}>
         <Space size="large" wrap style={{ width: '100%' }}>
           <Form.Item name="warehouseId" label="出库仓库" rules={[{ required: true }]} style={{ minWidth: 180 }}>
             <Select placeholder="选择仓库">{warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}</Select>
           </Form.Item>
           <Form.Item name="receiver" label="领用人/部门"><Input style={{ width: 180 }} /></Form.Item>
           <Form.Item name="note" label="备注"><Input style={{ width: 260 }} /></Form.Item>
-          <Form.Item label="关联货柜（可选）" style={{ minWidth: 240 }}>
-            <Select
-              allowClear
-              placeholder="选择货柜，出库商品关联到货柜"
-              value={selectedContainerId}
-              onChange={(v) => setSelectedContainerId(v ?? null)}
-              options={containersData?.data?.filter((c: any) => {
-                if (c.status !== 'pending' && c.status !== 'loading') return false;
-                if (selectedContractId && c.contractId !== selectedContractId) return false;
-                return true;
-              }).map((c: any) => ({
-                label: `${c.containerNo} (${c.customer?.realName || c.customer?.username}) [${c.status}]`,
-                value: c.id,
-              }))}
-            />
+          <Form.Item label="排柜编号（可选）" style={{ minWidth: 180 }}>
+            <Input placeholder="输入排柜编号，货柜新建时匹配" value={containerNoText} onChange={(e) => {
+              const no = e.target.value;
+              setContainerNoText(no);
+              if (!no) { setSelectedContainerId(null); return; }
+              const match = containersData?.data?.find((c: any) => c.containerNo === no && (c.status === 'pending' || c.status === 'loading'));
+              setSelectedContainerId(match?.id ?? null);
+            }} />
+            {selectedContainerId && <Tag color="blue" style={{ marginTop: 4 }}>已匹配排柜 {selectedContainer?.containerNo}</Tag>}
           </Form.Item>
-          <Form.Item label="关联合同批次（可选）" style={{ minWidth: 240 }}>
+          <Form.Item label="关联合同（可选，可多选）" style={{ minWidth: 280 }}>
             <Select
               allowClear
-              placeholder="选择合同，按批次定价"
-              value={selectedContractId}
-              onChange={(v) => setSelectedContractId(v ?? null)}
-              options={(contracts || []).filter((c: any) => {
-                // 合同已被其他货柜关联 → 排除（除非就是当前选中的货柜）
-                const otherContainer = containersData?.data?.find((ct: any) =>
-                  ct.id !== selectedContainerId && ct.contractId === c.id
-                );
-                if (otherContainer) return false;
-                return true;
-              }).map((c: any) => ({
-                label: `${c.contractNo} (${c.customer?.realName || c.customer?.username})`,
+              mode="multiple"
+              placeholder="选择合同，自动填入商品"
+              value={selectedContractIds}
+              onChange={(v) => setSelectedContractIds(v || [])}
+              options={(contracts || []).map((c: any) => ({
+                label: `${c.contractNo} (${c.businessCustomer?.realName || c.customer?.realName})`,
                 value: c.id,
               }))}
             />

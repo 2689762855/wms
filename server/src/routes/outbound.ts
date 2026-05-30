@@ -10,6 +10,8 @@ outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
   const page = parseInt((req.query.page as string) || '1');
   const pageSize = Math.min(parseInt((req.query.pageSize as string) || '20'), 100);
   const where: Record<string, unknown> = {};
+  const unlinkedOnly = req.query.unlinkedOnly === 'true';
+  if (unlinkedOnly) where.containerId = null;
   if (req.userRole !== 'super_admin') {
     if (req.userRole === 'tenant_admin') {
       const queryWid = parseInt(req.query.warehouseId as string);
@@ -54,7 +56,7 @@ outboundRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
 });
 
 outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
-  const { warehouseId, receiver, note, items, locationId, containerId } = req.body;
+  const { warehouseId, receiver, note, items, locationId, containerId, containerNo } = req.body;
   if (!warehouseId || !items?.length) return res.status(400).json({ error: '仓库和明细必填' });
   if (receiver && receiver.length > 200) return res.status(400).json({ error: '收货人不能超过 200 字符' });
   if (note && note.length > 1000) return res.status(400).json({ error: '备注不能超过 1000 字符' });
@@ -82,6 +84,7 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
       locationId: locationId || null,
       containerId: containerId || null,
+      containerNo: containerNo || null,
       items: {
         create: items.map((i: { productId: number; quantity: number; locationId?: number | null; contractId?: number | null; batchNo?: string | null }) => ({
           productId: i.productId,
@@ -106,6 +109,42 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
     }
   }
   res.status(201).json(order);
+});
+
+// 关联出库单到排柜
+outboundRouter.put('/:id/link-container', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  const { containerId } = req.body;
+  if (!containerId) return res.status(400).json({ error: '请指定排柜' });
+  const order = await prisma.outboundOrder.findUnique({ where: { id } });
+  if (!order) return res.status(404).json({ error: '出库单不存在' });
+  if (order.status !== 'confirmed') return res.status(400).json({ error: '仅已确认的出库单可关联排柜' });
+  const container = await prisma.container.findUnique({ where: { id: containerId } });
+  if (!container) return res.status(404).json({ error: '排柜不存在' });
+  if (container.status === 'sealed' || container.status === 'cancelled') return res.status(400).json({ error: '排柜状态不允许关联' });
+
+  await prisma.outboundOrder.update({ where: { id }, data: { containerId } });
+  // 自动创建 containerItems
+  const items = await prisma.outboundItem.findMany({ where: { outboundId: id }, include: { product: { select: { name: true } } } });
+  for (const item of items) {
+    await prisma.containerItem.upsert({
+      where: { id: -1 }, // force create (no unique constraint)
+      create: { containerId, outboundId: id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo },
+      update: {},
+    }).catch(async () => {
+      // upsert failed (no unique), try findFirst + create
+      const exist = await prisma.containerItem.findFirst({ where: { containerId, outboundId: id, productId: item.productId } });
+      if (!exist) {
+        await prisma.containerItem.create({ data: { containerId, outboundId: id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo } });
+      }
+    });
+  }
+  // 同步容器合同
+  const ocIds = [...new Set(items.map(i => i.contractId).filter(Boolean))] as number[];
+  for (const cid of ocIds) {
+    await prisma.containerContract.upsert({ where: { containerId_contractId: { containerId, contractId: cid } }, create: { containerId, contractId: cid }, update: {} }).catch(() => {});
+  }
+  res.json({ message: '已关联' });
 });
 
 outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Response) => {
