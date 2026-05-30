@@ -21,7 +21,7 @@ checkTasksRouter.get('/', async (req: AuthRequest, res: Response) => {
     include: {
       warehouse: true,
       operator: { select: { id: true, realName: true } },
-      subTasks: { select: { id: true, status: true, location: { select: { name: true } }, items: { select: { diffQty: true } } } },
+      subTasks: { select: { id: true, status: true, reviewNote: true, location: { select: { name: true } }, items: { select: { diffQty: true } } } },
     },
     orderBy: { createdAt: 'desc' },
   });

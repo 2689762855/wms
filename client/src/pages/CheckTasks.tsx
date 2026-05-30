@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Modal, Form, Select, Input, Tag, Card, Typography, Space, Popconfirm, message } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { useAuth } from '../stores/AuthContext';
@@ -53,7 +53,8 @@ export default function CheckTasks() {
     { title: '状态', key: 'status', render: (_: unknown, r: CheckTask) => {
       const subs = r.subTasks || [];
       const allSubDone = subs.length > 0 && subs.every(s => s.status === 'completed');
-      if (r.status === 'completed') return <Tag color="green">已完成</Tag>;
+      const hasAnomalySubs = subs.some(s => s.reviewNote || (s.items || []).some((i: any) => i.diffQty));
+      if (r.status === 'completed') return <Tag color="green">已完成{hasAnomalySubs && <ExclamationCircleOutlined style={{ color: '#faad14', marginLeft: 4 }} />}</Tag>;
       if (r.status === 'anomaly') return <Tag color="orange">异常</Tag>;
       if (allSubDone) return <Tag color="blue">待最终确定</Tag>;
       return <Tag color="processing">进行中</Tag>;

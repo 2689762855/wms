@@ -41,6 +41,8 @@ if (!isProduction && !process.env.JWT_ADMIN_SECRET) {
 }
 
 const app = express();
+// Cloudflare CDN → nginx → Express：信任第一层代理的 X-Forwarded-For
+app.set('trust proxy', 1);
 
 app.use(helmet({
   crossOriginResourcePolicy: false,

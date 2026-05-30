@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions, Select } from 'antd';
-import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined } from '@ant-design/icons';
+import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions, Select, DatePicker } from 'antd';
+import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined, EditOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
@@ -18,6 +18,20 @@ export default function ContainerDetail() {
   const queryClient = useQueryClient();
   const [actualQs, setActualQs] = useState<Record<string, number>>({});
   const [returnLocations, setReturnLocations] = useState<Record<string, number | null>>({});
+  const [sealModalOpen, setSealModalOpen] = useState(false);
+  const [sealTime, setSealTime] = useState<string | null>(null);
+  const [sealTimeEditOpen, setSealTimeEditOpen] = useState(false);
+  const [editSealTime, setEditSealTime] = useState<string | null>(null);
+
+  const sealTimeMutation = useMutation({
+    mutationFn: (st: string) => apiClient.put(`/containers/${id}/seal-time`, { sealTime: st }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['container', id] });
+      message.success('封柜时间已更新');
+      setSealTimeEditOpen(false);
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '更新失败'),
+  });
 
   const { data: container, isLoading } = useQuery({
     queryKey: ['container', id],
@@ -25,12 +39,17 @@ export default function ContainerDetail() {
   });
 
   // 获取仓库库位列表（用于甩柜归还选择）
-  // 关联合同（直接从货柜的 contractId 获取 + 出库单兜底）
-  const linkedContractId = container?.contractId;
-  const { data: linkedContract } = useQuery({
-    queryKey: ['container-linked-contract', linkedContractId],
-    queryFn: () => apiClient.get(`/contracts/${linkedContractId}`).then(r => r.data),
-    enabled: !!linkedContractId,
+  const linkedContracts = container?.contracts || [];
+  const contractIds = linkedContracts.map((cc: any) => cc.contractId);
+
+  const { data: contractDetails } = useQuery({
+    queryKey: ['container-contracts', contractIds],
+    queryFn: async () => {
+      if (contractIds.length === 0) return [];
+      const results = await Promise.all(contractIds.map((cid: number) => apiClient.get(`/contracts/${cid}`).then(r => r.data)));
+      return results;
+    },
+    enabled: contractIds.length > 0,
   });
 
   const firstItem = container?.items?.[0];
@@ -72,6 +91,7 @@ export default function ContainerDetail() {
         product: data.product,
         plannedQty: data.plannedQty,
         actualQty: totalActual,
+        rawActualQty: data.rawActualQty,
         returnedQty: Math.max(0, data.plannedQty - totalActual),
         locationId: data.locationId,
       };
@@ -88,9 +108,9 @@ export default function ContainerDetail() {
   });
 
   const sealMutation = useMutation({
-    mutationFn: async (vars: { items: any[]; returnLocs: Record<string, number> }) => {
+    mutationFn: async (vars: { items: any[]; returnLocs: Record<string, number>; sealTime?: string }) => {
       await apiClient.put(`/containers/${id}/load`, { items: vars.items });
-      await apiClient.put(`/containers/${id}/seal`, { returnLocations: vars.returnLocs });
+      await apiClient.put(`/containers/${id}/seal`, { returnLocations: vars.returnLocs, sealTime: vars.sealTime });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['container', id] });
@@ -101,8 +121,8 @@ export default function ContainerDetail() {
   });
 
   const adjustMutation = useMutation({
-    mutationFn: (items: { productId: number; actualQty: number }[]) =>
-      apiClient.put(`/containers/${id}/adjust`, { items }),
+    mutationFn: (vars: { items: { productId: number; actualQty: number }[]; returnLocations?: Record<string, number | null> }) =>
+      apiClient.put(`/containers/${id}/adjust`, vars),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['container', id] });
       queryClient.invalidateQueries({ queryKey: ['containers'] });
@@ -144,11 +164,8 @@ export default function ContainerDetail() {
       if (v != null) returnLocs[k] = v;
     }
     const hasReturn = mergedItems.some((m: any) => m.returnedQty > 0);
-    Modal.confirm({
-      title: '确认封柜？',
-      content: hasReturn ? '有甩柜商品，请确认归还库位已选择。封柜后不可修改。' : '封柜后将按实装数记录流水。封柜后不可修改。',
-      onOk: () => sealMutation.mutate({ items, returnLocs }),
-    });
+    setSealTime(null);
+    setSealModalOpen(true);
   };
 
   const printReport = () => { window.open(`/containers/${id}/report`, '_blank'); };
@@ -185,12 +202,12 @@ export default function ContainerDetail() {
     {
       title: '甩柜归还库位', key: 'returnLoc', width: 160,
       render: (_: any, r: any) => {
-        if (container?.status === 'sealed') {
-          // 已封柜：显示实际归还库位
+        if (r.returnedQty <= 0) return <span>-</span>;
+        if (container?.status === 'sealed' && !(actualQs[`${r.productId}`] != null && actualQs[`${r.productId}`] !== r.rawActualQty)) {
+          // 已封柜且未修改数量：显示实际归还库位
           const returnLoc = container.items?.find((i: any) => i.productId === r.productId && i.returnLocation)?.returnLocation;
           return returnLoc ? <Tag>{returnLoc.name}</Tag> : <span>-</span>;
         }
-        if (r.returnedQty <= 0) return <span>-</span>;
         return (
           <Select
             allowClear
@@ -220,9 +237,20 @@ export default function ContainerDetail() {
 
       <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
         <Descriptions.Item label="客户">{container.businessCustomer?.realName || container.customer?.realName || container.customer?.username}</Descriptions.Item>
-        <Descriptions.Item label="关联合同">{linkedContract ? <Tag color="blue"><a onClick={() => navigate(`/contracts/${linkedContract.id}`)} style={{cursor:'pointer'}}>{linkedContract.contractNo}</a></Tag> : '-'}</Descriptions.Item>
+        <Descriptions.Item label="关联合同">
+          {linkedContracts.length > 0
+            ? linkedContracts.map((cc: any) => (
+                <Tag key={cc.contractId} color="blue" style={{ cursor: 'pointer' }} onClick={() => navigate(`/contracts/${cc.contractId}`)}>{cc.contract?.contractNo}</Tag>
+              ))
+            : '-'}
+        </Descriptions.Item>
         <Descriptions.Item label="到柜时间">{container.toYardTime ? dayjs(container.toYardTime).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
-        <Descriptions.Item label="封柜时间">{container.sealTime ? dayjs(container.sealTime).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
+        <Descriptions.Item label="封柜时间">
+          {container.sealTime ? dayjs(container.sealTime).format('YYYY-MM-DD HH:mm') : '-'}
+          {container.status === 'sealed' && (
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setEditSealTime(container.sealTime); setSealTimeEditOpen(true); }} style={{ marginLeft: 4, padding: 0 }} />
+          )}
+        </Descriptions.Item>
         <Descriptions.Item label="备注">{container.note || '-'}</Descriptions.Item>
       </Descriptions>
 
@@ -244,14 +272,20 @@ export default function ContainerDetail() {
               const adjItems = mergedItems
                 .filter((m: any) => {
                   const key = `${m.productId}`;
-                  return actualQs[key] != null && actualQs[key] !== m.actualQty;
+                  return actualQs[key] != null && actualQs[key] !== m.rawActualQty;
                 })
                 .map((m: any) => ({ productId: m.productId, actualQty: actualQs[`${m.productId}`] }));
               if (adjItems.length === 0) { message.info('无变更'); return; }
+              const hasReturn = adjItems.some((i: any) => i.actualQty < (container?.items?.filter((ci: any) => ci.productId === i.productId).reduce((s: number, ci: any) => s + ci.plannedQty, 0) || 0));
+              const returnLocs: Record<string, number> = {};
+              for (const [k, v] of Object.entries(returnLocations)) {
+                if (v != null) returnLocs[k] = v;
+              }
+              if (hasReturn && Object.keys(returnLocs).length === 0) { message.warning('有甩柜商品，请选择归还库位'); return; }
               Modal.confirm({
                 title: '确认调整装柜数量？',
                 content: `将修改 ${adjItems.length} 个商品的实装数，系统会自动调整库存。`,
-                onOk: () => adjustMutation.mutate(adjItems),
+                onOk: () => adjustMutation.mutate({ items: adjItems, returnLocations: returnLocs }),
               });
             }}
             loading={adjustMutation.isPending}
@@ -277,6 +311,41 @@ export default function ContainerDetail() {
             );
           }}
         />
-      </Card>    </div>
+      </Card>
+
+      <Modal title="修改封柜时间" open={sealTimeEditOpen} onCancel={() => setSealTimeEditOpen(false)}
+        onOk={() => { if (editSealTime) sealTimeMutation.mutate(editSealTime); }}
+        confirmLoading={sealTimeMutation.isPending}
+      >
+        <DatePicker showTime value={editSealTime ? dayjs(editSealTime) : null} onChange={(d) => setEditSealTime(d?.toISOString() || null)} style={{ width: '100%' }} />
+      </Modal>
+
+      <Modal title="确认封柜" open={sealModalOpen} onCancel={() => setSealModalOpen(false)}
+        onOk={() => {
+          const rawItems = (container.items || []).map((i: any) => {
+            const merged = mergedItems.find(m => m.productId === i.productId);
+            if (!merged) return { outboundId: i.outboundId, productId: i.productId, plannedQty: i.plannedQty, actualQty: i.actualQty ?? 0, locationId: i.locationId };
+            const ratio = merged.plannedQty > 0 ? i.plannedQty / merged.plannedQty : 0;
+            return { outboundId: i.outboundId, productId: i.productId, plannedQty: i.plannedQty, actualQty: Math.round(merged.actualQty * ratio), locationId: i.locationId };
+          });
+          const returnLocs: Record<string, number> = {};
+          for (const [k, v] of Object.entries(returnLocations)) {
+            if (v != null) returnLocs[k] = v;
+          }
+          sealMutation.mutate({ items: rawItems, returnLocs, sealTime: sealTime || undefined });
+          setSealModalOpen(false);
+        }}
+        confirmLoading={sealMutation.isPending}
+      >
+        <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
+          <Descriptions.Item label="封柜时间">
+            <DatePicker showTime value={sealTime ? dayjs(sealTime) : null} onChange={(d) => setSealTime(d?.toISOString() || null)} style={{ width: '100%' }} placeholder="默认当前时间" />
+          </Descriptions.Item>
+        </Descriptions>
+        {mergedItems.some((m: any) => m.returnedQty > 0) && (
+          <Typography.Text type="warning">有甩柜商品，请确认归还库位已选择。封柜后不可修改。</Typography.Text>
+        )}
+      </Modal>
+    </div>
   );
 }

@@ -373,13 +373,14 @@ model Contract {
   contractNo         String           @unique
   customerId         Int
   customer           Customer         @relation(fields: [customerId], references: [id])
-  businessCustomerId Int
+  businessCustomerId Int              @default(0)
   status             String           @default("active") // active, completed, cancelled
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   items              ContractItem[]
   inboundItems       InboundItem[]
   outboundItems      OutboundItem[]
+  containerContracts ContainerContract[]
 
   @@index([customerId])
   @@index([businessCustomerId])
@@ -408,16 +409,27 @@ model Container {
   note               String?
   customerId         Int
   customer           Customer         @relation(fields: [customerId], references: [id])
-  businessCustomerId Int
-  contractId         Int?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  businessCustomerId Int               @default(0)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   items              ContainerItem[]
   outbounds          OutboundOrder[]
+  contracts          ContainerContract[]
 
   @@index([customerId])
   @@index([businessCustomerId])
   @@index([status])
+}
+
+model ContainerContract {
+  id          Int       @id @default(autoincrement())
+  containerId Int
+  container   Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
+  contractId  Int
+  contract    Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([containerId, contractId])
+  @@index([contractId])
 }
 
 model ContainerItem {

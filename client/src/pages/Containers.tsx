@@ -33,19 +33,10 @@ export default function Containers() {
     queryFn: () => apiClient.get('/contracts/business-customers').then((r) => r.data),
   });
 
-  // 进行中的合同列表（排除已关联货柜的）
-  const { data: allContainers } = useQuery<any[]>({
-    queryKey: ['containers-all'],
-    queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then((r) => r.data.data),
-  });
-  const usedContractIds = new Set((allContainers || []).map((c: any) => c.contractId).filter(Boolean));
-
   const { data: activeContracts } = useQuery<any[]>({
     queryKey: ['contracts-active'],
     queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 999 } }).then((r) => r.data.data),
   });
-
-  const availableContracts = (activeContracts || []).filter((c: any) => !usedContractIds.has(c.id));
 
   const createMutation = useMutation({
     mutationFn: (values: any) => {
@@ -87,7 +78,7 @@ export default function Containers() {
     { title: '柜号', dataIndex: 'containerNo', key: 'containerNo', render: (v: string, r: any) => <a onClick={() => navigate(`/containers/${r.id}`)}>{v}</a> },
     { title: '客户', key: 'customer', render: (_: any, r: any) => r.businessCustomer?.realName || r.customer?.realName },
     { title: '状态', dataIndex: 'status', render: (v: string) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.label}</Tag> },
-    { title: '商品数', key: 'items', render: (_: any, r: any) => new Set(r.items?.map((i: any) => i.productId)).size || 0 },
+    { title: '关联合同', key: 'contracts', render: (_: any, r: any) => (r.contracts || []).map((cc: any) => <Tag key={cc.contractId} color="blue">{cc.contract?.contractNo}</Tag>) },
     { title: '到柜时间', dataIndex: 'toYardTime', render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
     { title: '封柜时间', dataIndex: 'sealTime', render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
     { title: '创建时间', dataIndex: 'createdAt', render: (v: string) => v?.substring(0, 10) },
@@ -117,21 +108,14 @@ export default function Containers() {
           <Form.Item name="containerNo" label="柜号" rules={[{ required: true }]}>
             <Input placeholder="如: TGHU1234567" />
           </Form.Item>
-          <Form.Item name="contractId" label="关联合同（可选）">
+          <Form.Item name="contractIds" label="关联合同（可选，可多选）">
             <Select
               allowClear
-              placeholder="选择进行中的合同，自动填入客户"
+              mode="multiple"
+              placeholder="选择进行中的合同"
               showSearch
               optionFilterProp="label"
-              onChange={(contractId) => {
-                if (contractId) {
-                  const c = availableContracts?.find((ac: any) => ac.id === contractId);
-                  if (c) {
-                    form.setFieldsValue({ customerName: c.businessCustomer?.realName || c.customer?.realName });
-                  }
-                }
-              }}
-              options={availableContracts?.map((c: any) => ({
+              options={activeContracts?.map((c: any) => ({
                 label: `${c.contractNo} (${c.businessCustomer?.realName || c.customer?.realName})`,
                 value: c.id,
               }))}

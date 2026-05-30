@@ -94,6 +94,17 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
     },
     include: { items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
   });
+  // 同步容器合同关联
+  if (containerId) {
+    const ocIds = [...new Set(items.filter((i: any) => i.contractId).map((i: any) => i.contractId))] as number[];
+    for (const cid of ocIds) {
+      await prisma.containerContract.upsert({
+        where: { containerId_contractId: { containerId, contractId: cid } },
+        create: { containerId, contractId: cid },
+        update: {},
+      }).catch(() => {});
+    }
+  }
   res.status(201).json(order);
 });
 
@@ -111,95 +122,140 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
     }
   }
 
+  try {
   await prisma.$transaction(async (tx) => {
+    // 收集需要创建的 containerItems（供后续货柜关联使用）
+    const containerEntries: { productId: number; quantity: number; batchNo: string | null; contractId: number | null; locationId: number | null }[] = [];
+
     for (const item of order.items) {
       const locId = item.locationId ?? order.locationId ?? null;
-      const batchNo = item.batchNo ?? undefined;
-      const inv = await tx.inventory.findFirst({
-        where: {
-          productId: item.productId,
-          warehouseId: order.warehouseId,
-          locationId: locId,
-          ...(batchNo ? { batchNo } : {}),
-        },
-        orderBy: batchNo ? undefined : { batchNo: 'asc' as const },
-      });
-      if (!inv || inv.quantity < item.quantity) {
-        throw new Error(`库存不足: productId=${item.productId}, 当前库存=${inv?.quantity || 0}, 出库=${item.quantity}`);
-      }
+      const specifiedBatch = item.batchNo ?? undefined;
+      let remaining = item.quantity;
 
-      // 批次锁定：合同的商品被货柜关联了 → 锁定，未关联货柜 → 不锁
-      if (inv.batchNo) {
-        const batchInbound = await tx.inboundItem.findFirst({
-          where: { batchNo: inv.batchNo, contractId: { not: null } },
-          select: { contractId: true },
-        });
-        if (batchInbound) {
-          const outboundContractId = item.contractId || null;
-          if (batchInbound.contractId !== outboundContractId) {
-            // 检查该合同是否有关联的货柜（通过出库单）
-            const hasContainer = await tx.container.findFirst({
-              where: {
-                outbounds: { some: { items: { some: { contractId: batchInbound.contractId } } } },
-              },
-            });
-            if (hasContainer) {
-              throw new Error(`批次 ${inv.batchNo} 属于合同 #${batchInbound.contractId}（已被货柜关联），不能用于合同 #${outboundContractId || '无'}`);
-            }
-          }
-        }
-      }
-
-      // 先查变动前全库位总量
+      // 查变动前全库位总量
       const totalBefore = (await tx.inventory.aggregate({
         where: { productId: item.productId, warehouseId: order.warehouseId },
         _sum: { quantity: true },
       }))._sum.quantity || 0;
 
-      await tx.inventory.update({
-        where: { id: inv.id },
-        data: { quantity: { decrement: item.quantity } },
-      });
+      if (totalBefore < item.quantity) {
+        throw new Error(`库存不足: productId=${item.productId}, 当前总库存=${totalBefore}, 出库=${item.quantity}`);
+      }
 
-      await tx.stockLog.create({
-        data: {
+      // FIFO 分配：从指定批次或所有批次按 batchNo 升序逐个消耗
+      const skippedBatches = new Set<string>();
+      while (remaining > 0) {
+        const where: Record<string, unknown> = {
           productId: item.productId,
           warehouseId: order.warehouseId,
-          changeQty: -item.quantity,
-          beforeQty: totalBefore,
-          afterQty: totalBefore - item.quantity,
-          type: 'outbound',
-          refId: order.id,
-        },
-      });
+          locationId: locId || undefined,
+          quantity: { gt: 0 },
+          ...(specifiedBatch ? { batchNo: specifiedBatch } : {}),
+        };
+        if (skippedBatches.size > 0) where.batchNo = { notIn: [...skippedBatches] };
+        const inv = await tx.inventory.findFirst({
+          where,
+          orderBy: specifiedBatch ? undefined : { batchNo: 'asc' as const },
+        });
+        if (!inv) {
+          const msg = specifiedBatch
+            ? `库存不足: productId=${item.productId}, 指定批次 ${specifiedBatch} 库存不够`
+            : `库存不足: productId=${item.productId}, 已分配 ${item.quantity - remaining}, 还需 ${remaining}`;
+          throw new Error(msg);
+        }
+
+        // 批次锁定检查：跨合同时跳过被货柜锁定的批次
+        if (inv.batchNo && !specifiedBatch) {
+          const batchInbound = await tx.inboundItem.findFirst({
+            where: { batchNo: inv.batchNo, contractId: { not: null } },
+            select: { contractId: true },
+          });
+          if (batchInbound) {
+            const outboundContractId = item.contractId || null;
+            if (batchInbound.contractId !== outboundContractId) {
+              const hasContainer = await tx.container.findFirst({
+                where: { outbounds: { some: { items: { some: { contractId: batchInbound.contractId } } } } },
+              });
+              if (hasContainer) {
+                skippedBatches.add(inv.batchNo!);
+                continue;
+              }
+            }
+          }
+        }
+
+        // 消耗这个批次
+        const take = Math.min(remaining, inv.quantity);
+        await tx.inventory.update({
+          where: { id: inv.id },
+          data: { quantity: { decrement: take } },
+        });
+        await tx.stockLog.create({
+          data: {
+            productId: item.productId,
+            warehouseId: order.warehouseId,
+            changeQty: -take,
+            beforeQty: totalBefore,
+            afterQty: totalBefore - item.quantity,
+            type: 'outbound',
+            refId: order.id,
+          },
+        });
+
+        // 记录 container 条目（按批次拆分）
+        containerEntries.push({
+          productId: item.productId,
+          quantity: take,
+          batchNo: inv.batchNo || null,
+          contractId: item.contractId ?? null,
+          locationId: inv.locationId,
+        });
+
+        remaining -= take;
+      }
     }
 
     await tx.outboundOrder.update({ where: { id }, data: { status: 'confirmed' } });
 
-    // 如果关联了货柜，自动填入货柜明细
+    // 如果关联了货柜，按批次拆分条目填入货柜明细
     if (order.containerId) {
       const container = await tx.container.findUnique({ where: { id: order.containerId } });
       if (container && (container.status === 'pending' || container.status === 'loading')) {
-        for (const item of order.items) {
+        for (const ce of containerEntries) {
           await tx.containerItem.create({
             data: {
               containerId: order.containerId,
               outboundId: id,
-              productId: item.productId,
-              plannedQty: item.quantity,
-              actualQty: item.quantity,
+              productId: ce.productId,
+              plannedQty: ce.quantity,
+              actualQty: ce.quantity,
               returnedQty: 0,
-              locationId: item.locationId ?? null,
-              batchNo: item.batchNo ?? null,
+              locationId: ce.locationId,
+              batchNo: ce.batchNo,
             },
           });
         }
         if (container.status === 'pending') {
           await tx.container.update({ where: { id: order.containerId }, data: { status: 'loading' } });
         }
+        // 同步容器合同关联
+        const ocIds = [...new Set(containerEntries.map(e => e.contractId).filter(Boolean))] as number[];
+        for (const cid of ocIds) {
+          await tx.containerContract.upsert({
+            where: { containerId_contractId: { containerId: order.containerId, contractId: cid } },
+            create: { containerId: order.containerId, contractId: cid },
+            update: {},
+          });
+        }
       }
     }
   });
+  } catch (err: any) {
+    if (err.message?.startsWith('库存不足') || err.message?.startsWith('批次')) {
+      return res.status(400).json({ error: err.message });
+    }
+    throw err;
+  }
 
   // 检查关联合同是否全部出完（按 shippedQty 判完成）
   const contractIds = [...new Set(order.items.map(i => i.contractId).filter(Boolean))] as number[];

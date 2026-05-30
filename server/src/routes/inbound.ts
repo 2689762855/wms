@@ -3,13 +3,14 @@ import prisma from '../utils/prisma';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
-// 生成批次号：合同号截取 + 当前日期
+// 生成批次号：合同号截取 + 当前日期 + contractId 确保唯一
 async function genBatchNo(tx: any, contractId?: number): Promise<string | null> {
   if (!contractId) return null;
   const c = await tx.contract.findUnique({ where: { id: contractId }, select: { contractNo: true } });
   if (!c) return null;
   const d = new Date();
-  return c.contractNo.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + '-' +
+  const prefix = c.contractNo.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'CN';
+  return prefix + '-' + contractId + '-' +
     d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
 }
 
