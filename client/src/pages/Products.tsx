@@ -66,6 +66,7 @@ export default function Products() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.delete(`/products/${id}`),
     onSuccess: () => {
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
       queryClient.invalidateQueries({ queryKey: ['stock-summary'] });

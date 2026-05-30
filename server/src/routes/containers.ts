@@ -53,7 +53,7 @@ containersRouter.get('/', async (req: AuthRequest, res: Response) => {
 
 // 货柜详情
 containersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const container = await prisma.container.findUnique({
     where: { id },
     include: {
@@ -112,7 +112,7 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
 
 // 装柜：录入实装数
 containersRouter.put('/:id/load', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const { items } = req.body;
 
   if (!items || !Array.isArray(items)) {
@@ -155,7 +155,7 @@ containersRouter.put('/:id/load', validateId, adminWrite, async (req: AuthReques
 // 封柜：记录实装流水 + 甩柜归还库存
 // 注意：出库确认时已扣库存，此处不再重复扣减
 containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
 
   const container = await prisma.container.findUnique({
     where: { id },
@@ -215,7 +215,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
           where: { productId, warehouseId, batchNo: batchNo ?? null },
           orderBy: { quantity: 'desc' },
         });
-        if (inv) locationId = inv.locationId;
+        if (inv) locationId = inv.locationId ?? undefined;
         if (!locationId) {
           const obItem = await tx.outboundItem.findFirst({
             where: { outboundId: { in: container.items.map(i => i.outboundId) }, productId },
@@ -281,7 +281,7 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
 
 // 调整装柜数量（支持封柜后修正，海外仓反馈偏差时使用）
 containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const { items } = req.body; // [{ productId, actualQty }]
 
   if (!items || !Array.isArray(items)) {
@@ -342,7 +342,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
             where: { productId: pid, warehouseId, batchNo: batchNo ?? null },
             orderBy: { quantity: 'desc' },
           });
-          locationId = inv?.locationId ?? undefined;
+          locationId = inv?.locationId ?? null;
         }
 
         const totalBefore = (await tx.inventory.aggregate({
@@ -398,7 +398,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
 
 // 删除货柜（仅 pending 状态可删）
 containersRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const container = await prisma.container.findUnique({ where: { id } });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
   if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
@@ -409,7 +409,7 @@ containersRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest,
 
 // 装柜报表
 containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const container = await prisma.container.findUnique({
     where: { id },
     include: {
@@ -462,7 +462,7 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
       merged.set(pid, {
         sku: item.product.sku,
         name: item.product.name,
-        spec: item.product.spec,
+        spec: item.product.spec || '',
         unit: item.product.unit,
         plannedQty: item.plannedQty,
         actualQty: item.actualQty || 0,

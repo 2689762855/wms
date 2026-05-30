@@ -39,7 +39,7 @@ customersRouter.get('/', async (req: AuthRequest, res: Response) => {
 
 // 客户详情
 customersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const customer = await prisma.customer.findFirst({
     where: { id, deletedAt: null },
     include: {
@@ -121,7 +121,7 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
 // 编辑客户（状态、仓库数量、追加仓库）
 customersRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const customer = await prisma.customer.findFirst({ where: { id, deletedAt: null } });
     if (!customer) return res.status(404).json({ error: '客户不存在' });
 
@@ -171,7 +171,7 @@ customersRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) 
 
 // 软删除客户（保留 7 天数据，超管可恢复）
 customersRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   try {
     const customer = await prisma.customer.findFirst({ where: { id, deletedAt: null } });
     if (!customer) return res.status(404).json({ error: '客户不存在' });
@@ -188,7 +188,7 @@ customersRouter.delete('/:id', validateId, async (req: AuthRequest, res: Respons
 
 // 恢复软删除的客户
 customersRouter.put('/:id/restore', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   try {
     const customer = await prisma.customer.findFirst({ where: { id, deletedAt: { not: null } } });
     if (!customer) return res.status(404).json({ error: '客户不存在或未删除' });
@@ -205,7 +205,7 @@ customersRouter.put('/:id/restore', validateId, async (req: AuthRequest, res: Re
 
 // 续费：从当前到期日或今天起延长
 customersRouter.put('/:id/renew', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const { days } = req.body; // 默认 365 天（一年）
   const extendDays = days && days > 0 ? days : 365;
 
@@ -227,7 +227,7 @@ customersRouter.put('/:id/renew', validateId, async (req: AuthRequest, res: Resp
 
 // 更新客户报表模板（admin + 客户自己）
 customerTemplateRouter.put('/:id/template', adminWrite, validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '只能编辑自己的模板' });
   }
@@ -239,7 +239,7 @@ customerTemplateRouter.put('/:id/template', adminWrite, validateId, async (req: 
 
 // 获取客户报表模板（仅 admin 可看他人模板，客户只能看自己的）
 customerTemplateRouter.get('/:id/template', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '无权查看此模板' });
   }
@@ -250,7 +250,7 @@ customerTemplateRouter.get('/:id/template', async (req: AuthRequest, res: Respon
 
 // 选择预设模板（admin + 客户自己）
 customerTemplateRouter.put('/:id/template-preset', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '只能切换自己的模板' });
   }
@@ -262,7 +262,7 @@ customerTemplateRouter.put('/:id/template-preset', async (req: AuthRequest, res:
 
 // 选择 Excel 导出预设（admin + 客户自己）
 customerTemplateRouter.put('/:id/excel-preset', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '只能切换自己的模板' });
   }
@@ -274,7 +274,7 @@ customerTemplateRouter.put('/:id/excel-preset', async (req: AuthRequest, res: Re
 
 // 更新 Excel 导出模板（admin + 客户自己）
 customerTemplateRouter.put('/:id/export-template', adminWrite, validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '只能编辑自己的模板' });
   }

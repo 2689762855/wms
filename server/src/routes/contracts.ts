@@ -127,7 +127,7 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
 
 // 合同详情
 contractsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const contract = await prisma.contract.findUnique({
     where: { id },
     include: {
@@ -189,7 +189,7 @@ contractsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
 
 // 编辑合同
 contractsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const { contractNo, items } = req.body;
 
   if (contractNo) {
@@ -227,7 +227,7 @@ contractsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) 
 
 // 删除合同（已有入库记录的不可删）
 contractsRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const contract = await prisma.contract.findUnique({ where: { id }, select: { status: true } });
   if (contract?.status === 'completed') return res.status(400).json({ error: '已完成的合同不可删除' });
   const items = await prisma.contractItem.findMany({ where: { contractId: id, receivedQty: { gt: 0 } } });
@@ -238,7 +238,7 @@ contractsRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Respons
 
 // 更新合同状态
 contractsRouter.patch('/:id/status', adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const { status } = req.body;
   if (!['active', 'completed', 'cancelled'].includes(status)) {
     return res.status(400).json({ error: '无效状态' });
@@ -252,7 +252,7 @@ contractsRouter.patch('/:id/status', adminWrite, async (req: AuthRequest, res: R
 
 // 合同对账：收发存汇总
 contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const contract = await prisma.contract.findUnique({
     where: { id },
     include: {
@@ -301,7 +301,7 @@ contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Respons
   for (const ci of contract.items) {
     productMap.set(ci.productId, {
       sku: ci.product.sku, name: ci.product.name,
-      spec: ci.product.spec, unit: ci.product.unit,
+      spec: ci.product.spec || '', unit: ci.product.unit,
       plannedQty: ci.plannedQty, receivedQty: ci.receivedQty,
       unitPrice: ci.unitPrice ?? undefined,
       shippedQty: 0, returnedQty: 0,

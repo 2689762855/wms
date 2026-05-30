@@ -8,7 +8,7 @@ locationsRouter.use(authenticate);
 // 按扫码 code 查询库位
 locationsRouter.get('/code/:code', async (req: AuthRequest, res: Response) => {
   const location = await prisma.location.findUnique({
-    where: { code: req.params.code },
+    where: { code: req.params.code as string },
     include: { warehouse: true },
   });
   if (!location) return res.status(404).json({ error: '未找到该库位，请检查二维码是否正确' });
@@ -23,7 +23,7 @@ locationsRouter.get('/code/:code', async (req: AuthRequest, res: Response) => {
 
 // 库位下的库存列表
 locationsRouter.get('/:id/inventory', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   // 校验库位归属
   if (req.customerId) {
     const loc = await prisma.location.findUnique({ where: { id }, include: { warehouse: { select: { customerId: true } } } });
@@ -104,6 +104,8 @@ locationsRouter.delete('/:id', validateId, authenticate, adminWrite, async (req:
   if (req.customerId && existing.warehouse.customerId !== req.customerId) {
     return res.status(403).json({ error: '无权操作此库位' });
   }
+  const stockCount = await prisma.inventory.count({ where: { locationId: id, quantity: { gt: 0 } } });
+  if (stockCount > 0) return res.status(400).json({ error: '该库位下还有库存，请先转移后再删除' });
   await prisma.location.delete({ where: { id } });
   res.json({ message: '已删除' });
 });

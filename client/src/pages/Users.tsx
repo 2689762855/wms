@@ -42,6 +42,7 @@ export default function Users() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.delete(`/users/${id}`),
     onSuccess: () => {
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
       queryClient.invalidateQueries({ queryKey: ['users'] });
       message.success('已删除');
     },

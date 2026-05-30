@@ -30,6 +30,16 @@ import { errorHandler } from './middleware/errorHandler';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// 安全检查：生产环境必须设置 JWT 密钥，否则拒绝启动
+if (isProduction && !process.env.JWT_ADMIN_SECRET) {
+  console.error('[安全] FATAL: NODE_ENV=production 但未设置 JWT_ADMIN_SECRET 环境变量');
+  console.error('[安全] 请运行: export JWT_ADMIN_SECRET=$(openssl rand -hex 32)');
+  process.exit(1);
+}
+if (!isProduction && !process.env.JWT_ADMIN_SECRET) {
+  console.warn('[安全] 警告：使用开发模式默认 JWT 密钥，生产部署前务必设置 JWT_ADMIN_SECRET');
+}
+
 const app = express();
 
 app.use(helmet({
@@ -111,6 +121,11 @@ app.use('/api/contracts', contractsRouter);
 app.use('/api/containers', containersRouter);
 app.use('/api/app', appRouter);
 
+// API 404 处理：返回 JSON 而非 HTML（必须在 SPA fallback 之前）
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: '接口不存在' });
+});
+
 // 生产环境：托管前端静态文件
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -136,7 +151,7 @@ app.use((_req, res, next) => {
 // Error handling
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`库存管理系统已启动: http://localhost:${PORT}`);
 });

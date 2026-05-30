@@ -134,13 +134,13 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
   await prisma.$transaction(async (tx) => {
     for (const item of order.items) {
       // 先查变动前全库位总量
-      const batchNo = await genBatchNo(tx, item.contractId);
+      const batchNo = await genBatchNo(tx, item.contractId ?? undefined);
       const totalBefore = (await tx.inventory.aggregate({
         where: { productId: item.productId, warehouseId: order.warehouseId },
         _sum: { quantity: true },
       }))._sum.quantity || 0;
 
-      const locId = item.locationId ?? order.locationId ?? null;
+      const locId = (item.locationId ?? order.locationId) as number;
       if (batchNo) {
         await tx.inventory.upsert({
           where: {

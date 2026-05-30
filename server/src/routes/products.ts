@@ -19,7 +19,14 @@ const imageStorage = multer.diskStorage({
     cb(null, `product-${Date.now()}-${Math.random().toString(36).substring(2, 6)}${ext}`);
   },
 });
-const uploadImage = multer({ storage: imageStorage, limits: { fileSize: 2 * 1024 * 1024 } });
+const uploadImage = multer({
+  storage: imageStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    if (file.mimetype.startsWith('image/')) return cb(null, true);
+    cb(null, false);
+  },
+});
 
 // 商品列表（分页、搜索、分类筛选）
 productsRouter.get('/', async (req: AuthRequest, res: Response) => {
@@ -65,7 +72,7 @@ productsRouter.get('/template', (_req: AuthRequest, res: Response) => {
 // 批量导入商品（必须在 /:id 之前）
 // 上传商品图片
 productsRouter.post('/upload-image', adminWrite, uploadImage.single('image'), async (req: AuthRequest, res: Response) => {
-  if (!req.file) return res.status(400).json({ error: '请选择图片文件' });
+  if (!req.file) return res.status(400).json({ error: '请选择图片文件（仅支持 jpg/png/gif/webp 格式）' });
   const imageUrl = `/uploads/products/${req.file.filename}`;
   res.json({ imageUrl });
 });
@@ -193,6 +200,9 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
   if (name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
   if (barcode && barcode.length > 100) return res.status(400).json({ error: '条码不能超过 100 字符' });
+  if (safetyStock != null && safetyStock < 0) return res.status(400).json({ error: '安全库存不能为负数' });
+  if (costPrice != null && costPrice < 0) return res.status(400).json({ error: '成本价不能为负数' });
+  if (salePrice != null && salePrice < 0) return res.status(400).json({ error: '售价不能为负数' });
 
   // 自动生成 SKU（原子序号，防并发重复）
   const sku = await nextOrderNo('SKU');
@@ -241,6 +251,9 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
   if (name && name.length > 200) return res.status(400).json({ error: '商品名称不能超过 200 字符' });
   if (spec && spec.length > 500) return res.status(400).json({ error: '规格不能超过 500 字符' });
   if (barcode && barcode.length > 100) return res.status(400).json({ error: '条码不能超过 100 字符' });
+  if (safetyStock != null && safetyStock < 0) return res.status(400).json({ error: '安全库存不能为负数' });
+  if (costPrice != null && costPrice < 0) return res.status(400).json({ error: '成本价不能为负数' });
+  if (salePrice != null && salePrice < 0) return res.status(400).json({ error: '售价不能为负数' });
   const updateData: Record<string, unknown> = { name, spec, unit, barcode, categoryId, safetyStock, costPrice, salePrice };
   if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
   if (expiryDate !== undefined) updateData.expiryDate = expiryDate ? new Date(expiryDate) : null;

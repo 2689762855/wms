@@ -46,7 +46,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     req.userId = payload.userId;
     req.userRole = payload.role;
     req.userWarehouseId = payload.warehouseId;
-    req.customerId = payload.customerId;
+    req.customerId = payload.customerId ?? undefined;
 
     if (payload.role === 'tenant_admin' && payload.customerId) {
       const customer = await prisma.customer.findFirst({

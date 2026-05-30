@@ -41,6 +41,7 @@ export default function WarehouseLocations() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.delete(`/locations/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['locations', warehouseId] }); message.success('已删除'); },
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
   });
 
   useEffect(() => {

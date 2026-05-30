@@ -39,6 +39,7 @@ export default function OutboundDetail() {
   const deleteMutation = useMutation({
     mutationFn: () => apiClient.delete(`/outbound/${id}`),
     onSuccess: () => {
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
       message.success('已删除');
       queryClient.invalidateQueries({ queryKey: ['outbound'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-all'] });

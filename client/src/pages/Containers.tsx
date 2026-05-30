@@ -64,6 +64,7 @@ export default function Containers() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.delete(`/containers/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['containers'] }); message.success('已删除'); },
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
   });
 
   const createCustMutation = useMutation({
