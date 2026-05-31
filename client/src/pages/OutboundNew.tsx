@@ -54,9 +54,9 @@ export default function OutboundNew() {
 
   const warehouseInventoryRef = useRef<InventoryItem[] | undefined>();
 
-  // 选合同后自动填入商品（按批次库存，含库位）
+  // 选合同后自动填入商品（按批次库存，含库位；选排柜时跳过，由排柜逻辑接管）
   useEffect(() => {
-    if (multiContractItems && multiContractItems.length > 0) {
+    if (!selectedContainerId && multiContractItems && multiContractItems.length > 0) {
       setItems(prev => {
         const existingKeys = new Set(prev.map(i => `${i.productId}_${i.batchNo || 'null'}_${i.locationId || 0}`));
         const newItems: ItemEntry[] = [];

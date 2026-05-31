@@ -36,6 +36,10 @@ contractsRouter.post('/business-customers', adminWrite, async (req: AuthRequest,
 // 删除业务客户
 contractsRouter.delete('/business-customers/:id', adminWrite, validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
+  if (req.customerId) {
+    const bc = await prisma.businessCustomer.findUnique({ where: { id }, select: { tenantId: true } });
+    if (!bc || bc.tenantId !== req.customerId) return res.status(403).json({ error: '无权操作' });
+  }
   await prisma.businessCustomer.delete({ where: { id } });
   res.json({ message: '已删除' });
 });
@@ -89,28 +93,19 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
     data = rawData.filter(c =>
       c.items.some(ci => (shippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
     );
-    // 全量计数：查所有合同的出库情况
-    const allContracts = await prisma.contract.findMany({ where, select: { id: true } });
-    if (allContracts.length > 0) {
-      const allIds = allContracts.map(c => c.id);
-      const allObItems = await prisma.outboundItem.findMany({
-        where: { contractId: { in: allIds } },
-        select: { contractId: true, productId: true, quantity: true },
-      });
-      const allShippedMap = new Map<string, number>();
-      for (const ob of allObItems) {
-        const k = `${ob.contractId}_${ob.productId}`;
-        allShippedMap.set(k, (allShippedMap.get(k) || 0) + ob.quantity);
-      }
-      // 需要合同 items 来判断 plannedQty
-      const allWithItems = await prisma.contract.findMany({
-        where: { id: { in: allIds } },
-        select: { id: true, items: { select: { productId: true, plannedQty: true } } },
-      });
-      total = allWithItems.filter(c =>
-        c.items.some(ci => (allShippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
-      ).length;
+    // 全量计数：一次事务内并行查询所有合同和出库记录
+    const [allContracts, allObItems] = await prisma.$transaction([
+      prisma.contract.findMany({ where, select: { id: true, items: { select: { productId: true, plannedQty: true } } } }),
+      prisma.outboundItem.findMany({ where: { contractId: { not: null } }, select: { contractId: true, productId: true, quantity: true } }),
+    ]);
+    const allShippedMap = new Map<string, number>();
+    for (const ob of allObItems) {
+      const k = `${ob.contractId}_${ob.productId}`;
+      allShippedMap.set(k, (allShippedMap.get(k) || 0) + ob.quantity);
     }
+    total = allContracts.filter(c =>
+      c.items.some(ci => (allShippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
+    ).length;
   } else {
     total = await prisma.contract.count({ where });
   }
@@ -207,15 +202,17 @@ contractsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) 
     const hasReceived = existingItems.some(i => i.receivedQty > 0);
     if (hasReceived) return res.status(400).json({ error: '合同已有入库记录，无法修改商品明细' });
 
-    await prisma.contractItem.deleteMany({ where: { contractId: id } });
-    await prisma.contractItem.createMany({
-      data: items.map((i: { productId: number; plannedQty: number; unitPrice?: number }) => ({
-        contractId: id,
-        productId: i.productId,
-        plannedQty: i.plannedQty || 0,
-        unitPrice: i.unitPrice ?? undefined,
-      })),
-    });
+    await prisma.$transaction([
+      prisma.contractItem.deleteMany({ where: { contractId: id } }),
+      prisma.contractItem.createMany({
+        data: items.map((i: { productId: number; plannedQty: number; unitPrice?: number }) => ({
+          contractId: id,
+          productId: i.productId,
+          plannedQty: i.plannedQty || 0,
+          unitPrice: i.unitPrice ?? undefined,
+        })),
+      }),
+    ]);
   }
 
   const contract = await prisma.contract.update({
@@ -233,8 +230,10 @@ contractsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) 
 // 删除合同（已有入库记录的不可删）
 contractsRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
-  const contract = await prisma.contract.findUnique({ where: { id }, select: { status: true } });
-  if (contract?.status === 'completed') return res.status(400).json({ error: '已完成的合同不可删除' });
+  const contract = await prisma.contract.findUnique({ where: { id }, select: { customerId: true, status: true } });
+  if (!contract) return res.status(404).json({ error: '合同不存在' });
+  if (req.customerId && contract.customerId !== req.customerId) return res.status(403).json({ error: '无权操作' });
+  if (contract.status === 'completed') return res.status(400).json({ error: '已完成的合同不可删除' });
   const items = await prisma.contractItem.findMany({ where: { contractId: id, receivedQty: { gt: 0 } } });
   if (items.length > 0) return res.status(400).json({ error: '合同已有入库记录，无法删除' });
   await prisma.contract.delete({ where: { id } });
@@ -248,6 +247,9 @@ contractsRouter.patch('/:id/status', adminWrite, async (req: AuthRequest, res: R
   if (!['active', 'completed', 'cancelled'].includes(status)) {
     return res.status(400).json({ error: '无效状态' });
   }
+  const existing = await prisma.contract.findUnique({ where: { id }, select: { customerId: true } });
+  if (!existing) return res.status(404).json({ error: '合同不存在' });
+  if (req.customerId && existing.customerId !== req.customerId) return res.status(403).json({ error: '无权操作' });
   const contract = await prisma.contract.update({
     where: { id },
     data: { status },

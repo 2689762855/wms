@@ -565,14 +565,24 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   });
   const allContractIds = obContractIds.map(o => o.contractId!);
 
-  let contractPriceMap: Map<number, number> = new Map();
+  // 出库条目→合同映射（用于按合同取单价）
+  const itemContracts = await prisma.outboundItem.findMany({
+    where: { outboundId: { in: outboundIds }, contractId: { not: null } },
+    select: { outboundId: true, productId: true, contractId: true },
+  });
+  const itemContractMap = new Map<number, number>();
+  for (const ic of itemContracts) {
+    itemContractMap.set(ic.productId, ic.contractId);
+  }
+
+  let contractPriceMap: Map<string, number> = new Map();
   if (allContractIds.length > 0) {
     const contractItems = await prisma.contractItem.findMany({
       where: { contractId: { in: allContractIds } },
       select: { contractId: true, productId: true, unitPrice: true },
     });
     for (const ci of contractItems) {
-      if (ci.unitPrice != null) contractPriceMap.set(ci.productId, ci.unitPrice);
+      if (ci.unitPrice != null) contractPriceMap.set(`${ci.contractId}_${ci.productId}`, ci.unitPrice);
     }
   }
 
@@ -580,7 +590,8 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   const merged = new Map<number, { sku: string; name: string; spec: string; unit: string; plannedQty: number; actualQty: number; returnedQty: number; unitPrice?: number }>();
   for (const item of container.items) {
     const pid = item.productId;
-    const price = contractPriceMap.get(pid);
+    const cid = itemContractMap.get(pid);
+    const price = cid ? contractPriceMap.get(`${cid}_${pid}`) : undefined;
     const existing = merged.get(pid);
     if (existing) {
       existing.plannedQty += item.plannedQty;
