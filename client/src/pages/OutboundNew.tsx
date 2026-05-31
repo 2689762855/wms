@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, message, Divider, Tag } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -52,17 +52,46 @@ export default function OutboundNew() {
     enabled: selectedContractIds.length > 0,
   });
 
-  // 选合同后自动填入商品（与已有商品合并去重）
+  const warehouseInventoryRef = useRef<InventoryItem[] | undefined>();
+
+  // 选合同后自动填入商品（按批次库存，含库位）
   useEffect(() => {
     if (multiContractItems && multiContractItems.length > 0) {
       setItems(prev => {
-        const existingPids = new Set(prev.map(i => i.productId));
+        const existingKeys = new Set(prev.map(i => `${i.productId}_${i.batchNo || 'null'}_${i.locationId || 0}`));
         const newItems: ItemEntry[] = [];
+        const inv = warehouseInventoryRef.current;
+
         multiContractItems.forEach((ct: any) => {
+          const ctBatchNos = new Set((ct.batchNos || []).filter(Boolean) as string[]);
           (ct.items || []).forEach((ci: any) => {
-            if (!existingPids.has(ci.productId)) {
-              newItems.push({ productId: ci.productId, quantity: ci.plannedQty || 1, contractId: ct.id });
-              existingPids.add(ci.productId);
+            if (inv && inv.length > 0) {
+              // 只添加该合同关联批次的库存（每个库位单独一条）
+              const batches = inv.filter(
+                (x: InventoryItem) => x.productId === ci.productId && x.quantity > 0 && x.batchNo && ctBatchNos.has(x.batchNo)
+              );
+              if (batches.length > 0) {
+                batches.forEach((b: InventoryItem) => {
+                  const key = `${ci.productId}_${b.batchNo || 'null'}_${b.locationId || 0}`;
+                  if (!existingKeys.has(key)) {
+                    newItems.push({
+                      productId: ci.productId,
+                      quantity: b.quantity,
+                      locationId: b.locationId,
+                      contractId: ct.id,
+                      batchNo: b.batchNo,
+                    });
+                    existingKeys.add(key);
+                  }
+                });
+              }
+            } else {
+              // 未选仓库，按合同计划量添加
+              const key = `${ci.productId}_null`;
+              if (!existingKeys.has(key)) {
+                newItems.push({ productId: ci.productId, quantity: ci.plannedQty || 1, contractId: ct.id });
+                existingKeys.add(key);
+              }
             }
           });
         });
@@ -70,6 +99,12 @@ export default function OutboundNew() {
       });
     }
   }, [multiContractItems]);
+
+  // 取消合同后自动删除该合同的商品
+  useEffect(() => {
+    setItems(prev => prev.filter(i => !i.contractId || selectedContractIds.includes(i.contractId)));
+  }, [selectedContractIds]);
+
   const { data: containersData } = useQuery({ queryKey: ['containers'], queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data) });
 
   const { data: selectedContainer } = useQuery({
@@ -91,16 +126,16 @@ export default function OutboundNew() {
   });
 
   // 选排柜后自动填入合同商品（减去已装柜数量）
-  const containerLoadedMap = new Map<number, number>();
-  (selectedContainer?.items || []).forEach((ci: any) => {
-    containerLoadedMap.set(ci.productId, (containerLoadedMap.get(ci.productId) || 0) + (ci.plannedQty || 0));
-  });
   useEffect(() => {
-    if (containerContractItems && containerContractItems.length > 0 && selectedContainerId) {
+    if (containerContractItems && containerContractItems.length > 0 && selectedContainerId && selectedContainer) {
+      const loadedMap = new Map<number, number>();
+      (selectedContainer.items || []).forEach((ci: any) => {
+        loadedMap.set(ci.productId, (loadedMap.get(ci.productId) || 0) + (ci.plannedQty || 0));
+      });
       const autoItems: ItemEntry[] = [];
       containerContractItems.forEach((ct: any) => {
         (ct.items || []).forEach((ci: any) => {
-          const loaded = containerLoadedMap.get(ci.productId) || 0;
+          const loaded = loadedMap.get(ci.productId) || 0;
           const remaining = ci.plannedQty - loaded;
           if (remaining > 0) {
             autoItems.push({ productId: ci.productId, quantity: remaining, contractId: ct.id });
@@ -112,7 +147,7 @@ export default function OutboundNew() {
         message.info(`已从排柜关联合同自动填入 ${autoItems.length} 个商品`);
       }
     }
-  }, [containerContractItems, selectedContainerId]);
+  }, [containerContractItems, selectedContainerId, selectedContainer]);
 
   const selectedWarehouseId: number | undefined = Form.useWatch('warehouseId', form);
 
@@ -121,6 +156,8 @@ export default function OutboundNew() {
     queryFn: () => apiClient.get('/inventory', { params: { warehouseId: selectedWarehouseId } }).then(r => r.data),
     enabled: !!selectedWarehouseId,
   });
+
+  useEffect(() => { warehouseInventoryRef.current = warehouseInventory; }, [warehouseInventory]);
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => apiClient.post('/outbound', data),

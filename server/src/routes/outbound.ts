@@ -296,16 +296,25 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
     throw err;
   }
 
-  // 检查关联合同是否全部出完（按 shippedQty 判完成）
+  // 检查关联合同是否全部出完（已出 - 甩柜退回 >= 计划）
   const contractIds = [...new Set(order.items.map(i => i.contractId).filter(Boolean))] as number[];
   for (const cid of contractIds) {
     const contract = await prisma.contract.findUnique({ where: { id: cid }, include: { items: true } });
     if (!contract || contract.status === 'completed') continue;
-    // 计算每个商品的已出数量
     const outboundItems = await prisma.outboundItem.findMany({ where: { contractId: cid } });
     const shippedMap = new Map<number, number>();
     for (const oi of outboundItems) {
       shippedMap.set(oi.productId, (shippedMap.get(oi.productId) || 0) + oi.quantity);
+    }
+    // 扣掉甩柜退回
+    const outboundIds = outboundItems.map(o => o.outboundId);
+    if (outboundIds.length > 0) {
+      const returnedItems = await prisma.containerItem.findMany({
+        where: { outboundId: { in: outboundIds }, returnedQty: { gt: 0 } },
+      });
+      for (const ri of returnedItems) {
+        shippedMap.set(ri.productId, (shippedMap.get(ri.productId) || 0) - ri.returnedQty);
+      }
     }
     const allShipped = contract.items.every(ci => (shippedMap.get(ci.productId) || 0) >= ci.plannedQty);
     if (allShipped) {

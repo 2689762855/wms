@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions, Select, DatePicker, Popconfirm, Input, Form } from 'antd';
-import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined, EditOutlined, CloseCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined, EditOutlined, CloseCircleOutlined, PlusOutlined, AuditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
@@ -28,6 +28,13 @@ export default function ContainerDetail() {
   const [skuProductId, setSkuProductId] = useState<number | undefined>();
   const [skuQty, setSkuQty] = useState(1);
   const [skuContractId, setSkuContractId] = useState<number | undefined>();
+  const [reconciliationOpen, setReconciliationOpen] = useState(false);
+
+  const { data: reconciliation } = useQuery({
+    queryKey: ['container-reconciliation', id],
+    queryFn: () => apiClient.get(`/containers/${id}/reconciliation`).then(r => r.data),
+    enabled: reconciliationOpen,
+  });
 
   const { data: products } = useQuery<any[]>({
     queryKey: ['products-all'],
@@ -58,6 +65,16 @@ export default function ContainerDetail() {
     onError: (err: any) => message.error(err.response?.data?.error || '操作失败'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => apiClient.delete(`/containers/${id}`),
+    onSuccess: () => {
+      message.success('已删除');
+      queryClient.invalidateQueries({ queryKey: ['containers'] });
+      navigate('/containers');
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
+  });
+
   const sealTimeMutation = useMutation({
     mutationFn: (st: string) => apiClient.put(`/containers/${id}/seal-time`, { sealTime: st }),
     onSuccess: () => {
@@ -75,17 +92,6 @@ export default function ContainerDetail() {
 
   // 获取仓库库位列表（用于甩柜归还选择）
   const linkedContracts = container?.contracts || [];
-  const contractIds = linkedContracts.map((cc: any) => cc.contractId);
-
-  const { data: contractDetails } = useQuery({
-    queryKey: ['container-contracts', contractIds],
-    queryFn: async () => {
-      if (contractIds.length === 0) return [];
-      const results = await Promise.all(contractIds.map((cid: number) => apiClient.get(`/contracts/${cid}`).then(r => r.data)));
-      return results;
-    },
-    enabled: contractIds.length > 0,
-  });
 
   const firstItem = container?.items?.[0];
   const { data: warehouseLocations } = useQuery({
@@ -303,9 +309,18 @@ export default function ContainerDetail() {
         </Space>
       )}
 
+      {container.status === 'cancelled' && (
+        <Space style={{ marginBottom: 16 }}>
+          <Popconfirm title="确定删除此排柜？" onConfirm={() => deleteMutation.mutate()}>
+            <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>删除</Button>
+          </Popconfirm>
+        </Space>
+      )}
+
       {container.status === 'sealed' && (
         <Space style={{ marginBottom: 16 }}>
           <Button icon={<PrinterOutlined />} onClick={printReport}>打印装柜报表</Button>
+          <Button icon={<AuditOutlined />} onClick={() => setReconciliationOpen(true)}>对账</Button>
           <Button
             type="primary"
             onClick={() => {
@@ -410,6 +425,30 @@ export default function ContainerDetail() {
         {mergedItems.some((m: any) => m.returnedQty > 0) && (
           <Typography.Text type="warning">有甩柜商品，请确认归还库位已选择。封柜后不可修改。</Typography.Text>
         )}
+      </Modal>
+
+      <Modal title={`排柜对账 - ${container.containerNo}`} open={reconciliationOpen} onCancel={() => setReconciliationOpen(false)}
+        footer={null} width={800}
+      >
+        {reconciliation?.contracts?.length > 0 ? reconciliation.contracts.map((ct: any) => (
+          <Card key={ct.contractId} size="small" title={<Space><Tag color="purple">{ct.contractNo}</Tag><Tag>{ct.totals.planned} 计划 / {ct.totals.actual} 实装 / {ct.totals.returned} 甩柜</Tag></Space>}
+            style={{ marginBottom: 12 }}
+          >
+            <Table rowKey="productId"
+              columns={[
+                { title: 'SKU', dataIndex: 'sku', width: 100 },
+                { title: '品名', dataIndex: 'name' },
+                { title: '规格', dataIndex: 'spec', width: 80 },
+                { title: '单位', dataIndex: 'unit', width: 50 },
+                { title: '计划', dataIndex: 'plannedQty', width: 60 },
+                { title: '实装', dataIndex: 'actualQty', width: 60 },
+                { title: '单价', dataIndex: 'unitPrice', width: 70, render: (v: number) => v ? `¥${v.toFixed(2)}` : <span style={{ color: '#ccc' }}>—</span> },
+                { title: '金额', key: 'amount', width: 80, render: (_: any, r: any) => r.unitPrice ? `¥${(r.unitPrice * r.actualQty).toFixed(2)}` : <span style={{ color: '#ccc' }}>—</span> },
+                { title: '甩柜', dataIndex: 'returnedQty', width: 60, render: (v: number) => v > 0 ? <Tag color="orange">{v}</Tag> : '-' },
+              ]}
+              dataSource={ct.items} pagination={false} size="small" />
+          </Card>
+        )) : <Typography.Text type="secondary">暂无对账数据</Typography.Text>}
       </Modal>
     </div>
   );

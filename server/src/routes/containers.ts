@@ -320,6 +320,33 @@ containersRouter.put('/:id/seal', validateId, adminWrite, async (req: AuthReques
       }
     }
 
+    // 有甩柜退还时，检查关联合同是否应恢复为进行中
+    if (returnMap.size > 0) {
+      const contractIds = [...new Set((await tx.outboundItem.findMany({
+        where: { outboundId: { in: container.items.map(i => i.outboundId) }, contractId: { not: null } },
+        select: { contractId: true },
+      })).map(o => o.contractId!))];
+      for (const cid of contractIds) {
+        const contract = await tx.contract.findUnique({ where: { id: cid }, include: { items: true } });
+        if (!contract) continue;
+        const obItems = await tx.outboundItem.findMany({ where: { contractId: cid } });
+        const shippedMap = new Map<number, number>();
+        for (const oi of obItems) shippedMap.set(oi.productId, (shippedMap.get(oi.productId) || 0) + oi.quantity);
+        const containerReturns = await tx.containerItem.findMany({
+          where: { outboundId: { in: obItems.map(o => o.outboundId) }, returnedQty: { gt: 0 } },
+        });
+        for (const ci of containerReturns) {
+          shippedMap.set(ci.productId, (shippedMap.get(ci.productId) || 0) - ci.returnedQty);
+        }
+        const fulfilled = contract.items.every(ci => (shippedMap.get(ci.productId) || 0) >= ci.plannedQty);
+        if (fulfilled && contract.status !== 'completed') {
+          await tx.contract.update({ where: { id: cid }, data: { status: 'completed' } });
+        } else if (!fulfilled && contract.status === 'completed') {
+          await tx.contract.update({ where: { id: cid }, data: { status: 'active' } });
+        }
+      }
+    }
+
     return await tx.container.update({
       where: { id },
       data: { status: 'sealed', sealTime, actualContainerNo },
@@ -433,11 +460,14 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
             where: { productId: pid, warehouseId, locationId, batchNo: batchNo ?? null },
           });
           if (inv) {
+            // 防止扣成负数：实际扣减量不超过现有库存
+            const actualDiff = diff < 0 ? Math.max(diff, -inv.quantity) : diff;
+            if (actualDiff === 0) continue;
             await tx.inventory.update({
               where: { id: inv.id },
-              data: { quantity: { increment: diff } },
+              data: { quantity: { increment: actualDiff } },
             });
-          } else {
+          } else if (diff > 0) {
             await tx.inventory.create({
               data: { productId: pid, warehouseId, locationId, quantity: diff, batchNo },
             });
@@ -456,6 +486,29 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
             refNo: container.containerNo,
           },
         });
+      }
+    }
+
+    // 甩柜数变化时，检查关联合同状态
+    const contractCheckIds = [...new Set((await tx.outboundItem.findMany({
+      where: { outboundId: { in: container.items.map(i => i.outboundId) }, contractId: { not: null } },
+      select: { contractId: true },
+    })).map(o => o.contractId!))];
+    for (const cid of contractCheckIds) {
+      const c = await tx.contract.findUnique({ where: { id: cid }, include: { items: true } });
+      if (!c) continue;
+      const obItems = await tx.outboundItem.findMany({ where: { contractId: cid } });
+      const shipMap = new Map<number, number>();
+      for (const oi of obItems) shipMap.set(oi.productId, (shipMap.get(oi.productId) || 0) + oi.quantity);
+      const retItems = await tx.containerItem.findMany({
+        where: { outboundId: { in: obItems.map(o => o.outboundId) }, returnedQty: { gt: 0 } },
+      });
+      for (const ri of retItems) shipMap.set(ri.productId, (shipMap.get(ri.productId) || 0) - ri.returnedQty);
+      const fulfilled = c.items.every(ci => (shipMap.get(ci.productId) || 0) >= ci.plannedQty);
+      if (fulfilled && c.status !== 'completed') {
+        await tx.contract.update({ where: { id: cid }, data: { status: 'completed' } });
+      } else if (!fulfilled && c.status === 'completed') {
+        await tx.contract.update({ where: { id: cid }, data: { status: 'active' } });
       }
     }
   });
@@ -481,7 +534,7 @@ containersRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest,
   const container = await prisma.container.findUnique({ where: { id } });
   if (!container) return res.status(404).json({ error: '货柜不存在' });
   if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
-  if (container.status !== 'pending') return res.status(400).json({ error: '仅待装柜状态可删除' });
+  if (container.status !== 'pending' && container.status !== 'cancelled') return res.status(400).json({ error: '仅待装柜或已作废状态可删除' });
   await prisma.container.delete({ where: { id } });
   res.json({ message: '已删除' });
 });
@@ -585,5 +638,103 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
     contractIds: allContractIds,
     summary,
     totals,
+  });
+});
+
+// 排柜对账
+containersRouter.get('/:id/reconciliation', validateId, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  const container = await prisma.container.findUnique({
+    where: { id },
+    include: {
+      contracts: { include: { contract: { select: { id: true, contractNo: true, status: true } } } },
+      items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
+    },
+  });
+  if (!container) return res.status(404).json({ error: '排柜不存在' });
+
+  // 出库单条目 → 合同
+  const outboundIds = [...new Set(container.items.map(i => i.outboundId))];
+  const obItems = outboundIds.length > 0
+    ? await prisma.outboundItem.findMany({
+        where: { outboundId: { in: outboundIds }, contractId: { not: null } },
+        select: { outboundId: true, productId: true, contractId: true },
+      })
+    : [];
+
+  // productId+outboundId → contractId 映射
+  const contractMap = new Map<string, number>();
+  for (const oi of obItems) {
+    contractMap.set(`${oi.outboundId}_${oi.productId}`, oi.contractId!);
+  }
+
+  // 合同单价
+  const allContractIds = [...new Set(obItems.map(o => o.contractId!).filter(Boolean))];
+  const contractItems = allContractIds.length > 0
+    ? await prisma.contractItem.findMany({
+        where: { contractId: { in: allContractIds } },
+        select: { contractId: true, productId: true, unitPrice: true },
+      })
+    : [];
+  const priceMap = new Map<string, number>();
+  for (const ci of contractItems) {
+    if (ci.unitPrice != null) priceMap.set(`${ci.contractId}_${ci.productId}`, ci.unitPrice);
+  }
+
+  // 按合同分组
+  const contractMap2 = new Map<number, {
+    contractId: number; contractNo: string; contractStatus: string;
+    items: Map<number, { productId: number; sku: string; name: string; spec: string; unit: string; plannedQty: number; actualQty: number; returnedQty: number; unitPrice?: number }>;
+  }>();
+
+  for (const ci of container.items) {
+    const cid = contractMap.get(`${ci.outboundId}_${ci.productId}`) || 0;
+    let group = contractMap2.get(cid);
+    if (!group) {
+      const cc = container.contracts.find(c => c.contractId === cid);
+      group = {
+        contractId: cid,
+        contractNo: cc?.contract?.contractNo || '无合同',
+        contractStatus: cc?.contract?.status || '',
+        items: new Map(),
+      };
+      contractMap2.set(cid, group);
+    }
+    const pid = ci.productId;
+    const existing = group.items.get(pid);
+    const up = priceMap.get(`${cid}_${pid}`);
+    if (existing) {
+      existing.plannedQty += ci.plannedQty;
+      existing.actualQty += (ci.actualQty || 0);
+      existing.returnedQty += Math.max(0, ci.returnedQty);
+    } else {
+      group.items.set(pid, {
+        productId: pid,
+        sku: ci.product?.sku || '',
+        name: ci.product?.name || '',
+        spec: ci.product?.spec || '',
+        unit: ci.product?.unit || '',
+        plannedQty: ci.plannedQty,
+        actualQty: ci.actualQty || 0,
+        returnedQty: Math.max(0, ci.returnedQty),
+        unitPrice: up ?? undefined,
+      });
+    }
+  }
+
+  const contracts = Array.from(contractMap2.values()).map(g => {
+    const items = Array.from(g.items.values());
+    const totals = items.reduce((a, i) => ({
+      planned: a.planned + i.plannedQty,
+      actual: a.actual + i.actualQty,
+      returned: a.returned + i.returnedQty,
+      amount: a.amount + (i.unitPrice || 0) * i.actualQty,
+    }), { planned: 0, actual: 0, returned: 0, amount: 0 });
+    return { contractId: g.contractId, contractNo: g.contractNo, contractStatus: g.contractStatus, items, totals };
+  });
+
+  res.json({
+    container: { id: container.id, containerNo: container.containerNo, status: container.status },
+    contracts,
   });
 });

@@ -141,7 +141,12 @@ contractsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
   const biz = contract.businessCustomerId
     ? await prisma.businessCustomer.findUnique({ where: { id: contract.businessCustomerId }, select: { id: true, realName: true } })
     : null;
-  res.json({ ...contract, businessCustomer: biz });
+  const inboundItems = await prisma.inboundItem.findMany({
+    where: { contractId: id },
+    select: { productId: true, batchNo: true },
+  });
+  const contractBatchNos = [...new Set(inboundItems.filter(i => i.batchNo).map(i => i.batchNo))];
+  res.json({ ...contract, businessCustomer: biz, batchNos: contractBatchNos });
 });
 
 // 创建合同
@@ -291,11 +296,26 @@ contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Respons
     orderBy: { container: { sealTime: 'desc' } },
   });
 
+  // 出库条目关联货柜实装量
+  const containerQtyMap = new Map<string, { actualQty: number; returnedQty: number }>();
+  for (const ci of containerItems) {
+    const key = `${ci.outboundId}_${ci.productId}`;
+    containerQtyMap.set(key, { actualQty: ci.actualQty || 0, returnedQty: ci.returnedQty || 0 });
+  }
+  const outboundItemsWithQty = outboundItems.map(oi => {
+    const cq = containerQtyMap.get(`${oi.outboundId}_${oi.productId}`);
+    return {
+      ...oi,
+      effectiveQty: cq ? cq.actualQty : oi.quantity,
+      returnedQty: cq?.returnedQty || 0,
+    };
+  });
+
   // 按商品汇总
   const productMap = new Map<number, {
     sku: string; name: string; spec: string; unit: string;
     plannedQty: number; receivedQty: number; unitPrice?: number;
-    shippedQty: number; returnedQty: number;
+    shippedQty: number; returnedQty: number; stockBalance: number;
   }>();
 
   for (const ci of contract.items) {
@@ -304,7 +324,7 @@ contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Respons
       spec: ci.product.spec || '', unit: ci.product.unit,
       plannedQty: ci.plannedQty, receivedQty: ci.receivedQty,
       unitPrice: ci.unitPrice ?? undefined,
-      shippedQty: 0, returnedQty: 0,
+      shippedQty: 0, returnedQty: 0, stockBalance: 0,
     });
   }
 
@@ -316,15 +336,20 @@ contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Respons
     }
   }
 
-  // 未装柜的出库也计入已出数
-  const containerOutboundIds = new Set(containerItems.map(ci => ci.outboundId));
+  // 未装柜的出库条目也计入已出数（按 outboundId+productId 判断）
+  const containerItemKeys = new Set(containerItems.map(ci => `${ci.outboundId}_${ci.productId}`));
   for (const oi of outboundItems) {
-    if (!containerOutboundIds.has(oi.outboundId)) {
+    if (!containerItemKeys.has(`${oi.outboundId}_${oi.productId}`)) {
       const entry = productMap.get(oi.productId);
       if (entry) {
         entry.shippedQty += oi.quantity;
       }
     }
+  }
+
+  // 合同口径结余 = 已收 - 已出
+  for (const [, entry] of productMap) {
+    entry.stockBalance = entry.receivedQty - entry.shippedQty;
   }
 
   const summary = Array.from(productMap.values());
@@ -333,8 +358,9 @@ contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Respons
     received: acc.received + item.receivedQty,
     shipped: acc.shipped + item.shippedQty,
     returned: acc.returned + item.returnedQty,
+    stockBalance: acc.stockBalance + item.stockBalance,
     amount: acc.amount + ((item.unitPrice || 0) * item.shippedQty),
-  }), { planned: 0, received: 0, shipped: 0, returned: 0, amount: 0 });
+  }), { planned: 0, received: 0, shipped: 0, returned: 0, stockBalance: 0, amount: 0 });
 
   res.json({
     contract: {
@@ -345,7 +371,7 @@ contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Respons
         : null,
     },
     inboundItems,
-    outboundItems,
+    outboundItems: outboundItemsWithQty,
     containerItems,
     summary,
     totals,

@@ -39,7 +39,6 @@ export default function OutboundDetail() {
   const deleteMutation = useMutation({
     mutationFn: () => apiClient.delete(`/outbound/${id}`),
     onSuccess: () => {
-    onError: (err: any) => message.error(err.response?.data?.error || '删除失败'),
       message.success('已删除');
       queryClient.invalidateQueries({ queryKey: ['outbound'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
@@ -84,12 +83,18 @@ export default function OutboundDetail() {
 
   if (isLoading) return <Card loading />;
 
-  const contractItem = order?.items?.find((i: any) => i.contract);
-  const linkedContract = contractItem?.contract;
+  const linkedContracts = [...new Map(
+    (order?.items || [])
+      .filter((i: any) => i.contract)
+      .map((i: any) => [i.contract.id, i.contract])
+  ).values()];
   const getContractPrice = (productId: number) => {
-    if (!linkedContract?.items) return undefined;
-    const ci = linkedContract.items.find((ci: any) => ci.productId === productId);
-    return ci?.unitPrice;
+    for (const lc of linkedContracts) {
+      if (!lc?.items) continue;
+      const ci = lc.items.find((ci: any) => ci.productId === productId);
+      if (ci?.unitPrice) return ci.unitPrice;
+    }
+    return undefined;
   };
 
   return (
@@ -116,7 +121,9 @@ export default function OutboundDetail() {
         <Descriptions.Item label="仓库">{order?.warehouse?.name}</Descriptions.Item>
         <Descriptions.Item label="领用人">{order?.receiver || '-'}</Descriptions.Item>
         <Descriptions.Item label="关联货柜">{order?.container ? <Tag color={order.container.status === 'sealed' ? 'green' : 'blue'}><a onClick={() => navigate(`/containers/${order.container.id}`)} style={{cursor:'pointer'}}>{order.container.containerNo}</a></Tag> : '-'}</Descriptions.Item>
-        <Descriptions.Item label="关联合同">{linkedContract ? <Tag color="purple"><a onClick={() => navigate(`/contracts/${linkedContract.id}`)} style={{cursor:'pointer'}}>{linkedContract.contractNo}</a></Tag> : '-'}</Descriptions.Item>
+        <Descriptions.Item label="关联合同">{linkedContracts.length > 0
+          ? <Space wrap size={[0, 4]}>{linkedContracts.map((lc: any) => <Tag key={lc.id} color="purple"><a onClick={() => navigate(`/contracts/${lc.id}`)} style={{cursor:'pointer'}}>{lc.contractNo}</a></Tag>)}</Space>
+          : '-'}</Descriptions.Item>
         <Descriptions.Item label="备注">{order?.note || '-'}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{dayjs(order?.createdAt).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
       </Descriptions>

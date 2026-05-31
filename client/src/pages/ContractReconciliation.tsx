@@ -17,7 +17,7 @@ export default function ContractReconciliation() {
   if (isLoading) return <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>;
   if (!data) return <div>加载失败</div>;
 
-  const { contract, summary, totals, inboundItems, containerItems } = data;
+  const { contract, summary, totals, inboundItems, outboundItems, containerItems } = data;
 
   const summaryCols = [
     { title: 'SKU', dataIndex: 'sku', width: 140 },
@@ -43,6 +43,9 @@ export default function ContractReconciliation() {
     { title: '甩柜', dataIndex: 'returnedQty', width: 60,
       render: (v: number) => v > 0 ? <Tag color="orange">{v}</Tag> : <span style={{ color: '#ccc' }}>0</span>,
     },
+    { title: '合同结余', dataIndex: 'stockBalance', width: 80,
+      render: (v: number) => <Typography.Text strong>{v}</Typography.Text>,
+    },
     { title: '出货金额', key: 'amount', width: 100,
       render: (_: any, r: any) => {
         const amt = (r.unitPrice || 0) * r.shippedQty;
@@ -57,6 +60,19 @@ export default function ContractReconciliation() {
     { title: '品名', dataIndex: ['product', 'name'] },
     { title: '数量', dataIndex: 'quantity', width: 60 },
     { title: '日期', dataIndex: ['inbound', 'createdAt'], render: (v: string) => v?.substring(0, 10) },
+  ];
+
+  const outboundCols = [
+    { title: '出库单号', dataIndex: ['outbound', 'orderNo'],
+      render: (v: string, r: any) => <a onClick={() => navigate(`/outbound/${r.outbound.id}`)}>{v}</a>,
+    },
+    { title: 'SKU', dataIndex: ['product', 'sku'], width: 120 },
+    { title: '品名', dataIndex: ['product', 'name'] },
+    { title: '实出', dataIndex: 'effectiveQty', width: 60 },
+    { title: '甩柜', dataIndex: 'returnedQty', width: 60,
+      render: (v: number) => v > 0 ? <Tag style={{ fontSize: 11 }} color="orange">{v}</Tag> : <span style={{ color: '#ccc' }}>0</span>,
+    },
+    { title: '日期', dataIndex: ['outbound', 'createdAt'], render: (v: string) => v?.substring(0, 10) },
   ];
 
   const containerCols = [
@@ -103,7 +119,8 @@ export default function ContractReconciliation() {
               <Table.Summary.Cell index={3}><Typography.Text strong>{totals.received}</Typography.Text></Table.Summary.Cell>
               <Table.Summary.Cell index={4}><Typography.Text strong>{totals.shipped}</Typography.Text></Table.Summary.Cell>
               <Table.Summary.Cell index={5}><Typography.Text strong>{totals.returned}</Typography.Text></Table.Summary.Cell>
-              <Table.Summary.Cell index={6}><Typography.Text strong>¥{totals.amount.toFixed(2)}</Typography.Text></Table.Summary.Cell>
+              <Table.Summary.Cell index={6}><Typography.Text strong>{totals.stockBalance}</Typography.Text></Table.Summary.Cell>
+              <Table.Summary.Cell index={7}><Typography.Text strong>¥{totals.amount.toFixed(2)}</Typography.Text></Table.Summary.Cell>
             </Table.Summary.Row>
           )}
         />
@@ -116,6 +133,13 @@ export default function ContractReconciliation() {
           children: inboundItems.length > 0
             ? <Table rowKey="id" columns={inboundCols} dataSource={inboundItems} pagination={false} size="small" />
             : <Typography.Text type="secondary">暂无入库记录</Typography.Text>,
+        },
+        {
+          key: 'outbound',
+          label: `出库记录 (${outboundItems.length} 条)`,
+          children: outboundItems.length > 0
+            ? <Table rowKey="id" columns={outboundCols} dataSource={outboundItems} pagination={false} size="small" />
+            : <Typography.Text type="secondary">暂无出库记录</Typography.Text>,
         },
         {
           key: 'container',
