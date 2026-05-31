@@ -33,12 +33,19 @@ contractsRouter.post('/business-customers', adminWrite, async (req: AuthRequest,
   res.status(201).json(customer);
 });
 
-// 删除业务客户
+// 删除业务客户（有关联排柜或合同的不可删）
 contractsRouter.delete('/business-customers/:id', adminWrite, validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (req.customerId) {
     const bc = await prisma.businessCustomer.findUnique({ where: { id }, select: { tenantId: true } });
     if (!bc || bc.tenantId !== req.customerId) return res.status(403).json({ error: '无权操作' });
+  }
+  const [containerCount, contractCount] = await Promise.all([
+    prisma.container.count({ where: { businessCustomerId: id } }),
+    prisma.contract.count({ where: { businessCustomerId: id } }),
+  ]);
+  if (containerCount > 0 || contractCount > 0) {
+    return res.status(400).json({ error: `该客户有关联数据（${containerCount} 个排柜，${contractCount} 个合同），无法删除` });
   }
   await prisma.businessCustomer.delete({ where: { id } });
   res.json({ message: '已删除' });
@@ -76,22 +83,36 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
     prisma.contract.count({ where }),
   ]);
 
-  // 过滤已全部出货的合同
+  // 过滤已全部出货的合同（考虑甩柜退回）
   let total = 0;
   let data = rawData;
   if (excludeShipped && rawData.length > 0) {
     const contractIds = rawData.map(c => c.id);
     const obItems = await prisma.outboundItem.findMany({
       where: { contractId: { in: contractIds } },
-      select: { contractId: true, productId: true, quantity: true },
+      select: { outboundId: true, contractId: true, productId: true, quantity: true },
     });
+    // 扣掉甩柜退回
+    const outboundIds = [...new Set(obItems.map(o => o.outboundId))];
+    const returnedItems = outboundIds.length > 0
+      ? await prisma.containerItem.findMany({
+          where: { outboundId: { in: outboundIds } },
+          select: { outboundId: true, productId: true, returnedQty: true },
+        })
+      : [];
+    const returnedMap = new Map<string, number>();
+    for (const ri of returnedItems) {
+      const k = `${ri.outboundId}_${ri.productId}`;
+      returnedMap.set(k, (returnedMap.get(k) || 0) + ri.returnedQty);
+    }
     const shippedMap = new Map<string, number>();
     for (const ob of obItems) {
       const k = `${ob.contractId}_${ob.productId}`;
-      shippedMap.set(k, (shippedMap.get(k) || 0) + ob.quantity);
+      const ret = returnedMap.get(`${ob.outboundId}_${ob.productId}`) || 0;
+      shippedMap.set(k, (shippedMap.get(k) || 0) + ob.quantity - ret);
     }
     data = rawData.filter(c =>
-      c.items.some(ci => (shippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
+      c.status === 'active' || c.items.some(ci => (shippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
     );
     // 全量计数：一次事务内并行查询所有合同和出库记录
     const [allContracts, allObItems] = await prisma.$transaction([
@@ -279,8 +300,16 @@ contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Respons
     orderBy: { inbound: { createdAt: 'desc' } },
   });
 
+  // 获取合同批次号
+  const batchNos = [...new Set(inboundItems.filter(i => i.batchNo).map(i => i.batchNo))];
+
   const outboundItems = await prisma.outboundItem.findMany({
-    where: { contractId: id },
+    where: {
+      OR: [
+        { contractId: id },
+        ...(batchNos.length > 0 ? [{ batchNo: { in: batchNos } }] : []),
+      ],
+    },
     include: {
       outbound: { select: { id: true, orderNo: true, createdAt: true } },
       product: { select: { id: true, sku: true, name: true } },

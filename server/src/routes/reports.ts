@@ -139,3 +139,139 @@ reportsRouter.get('/warehouse-comparison', async (req: AuthRequest, res: Respons
 
   res.json(Object.values(map));
 });
+
+// 分客户货柜/出货统计（月/年，含金额）
+reportsRouter.get('/customer-stats', async (req: AuthRequest, res: Response) => {
+  const year = parseInt((req.query.year as string) || String(new Date().getFullYear()));
+  const start = new Date(`${year}-01-01T00:00:00.000Z`);
+  const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
+
+  // SQLite Prisma Date 对比有 bug，用 raw SQL
+  const custFilter = req.customerId ? `AND customerId = ${req.customerId}` : '';
+  const containers = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT c.id, c.businessCustomerId, c.sealTime, ci.outboundId, ci.productId, ci.actualQty
+     FROM Container c
+     LEFT JOIN ContainerItem ci ON ci.containerId = c.id
+     WHERE c.status = 'sealed' AND c.sealTime >= ? AND c.sealTime < ? ${custFilter}
+     ORDER BY c.sealTime ASC`,
+    `${year}-01-01`, `${year + 1}-01-01`
+  );
+  // 按 container 归组
+  const containerMap = new Map<number, { businessCustomerId: number; month: number; items: { outboundId: number; productId: number; actualQty: number }[] }>();
+  for (const row of containers) {
+    if (!containerMap.has(row.id)) {
+      containerMap.set(row.id, {
+        businessCustomerId: row.businessCustomerId,
+        month: new Date(row.sealTime + 'Z').getMonth(),
+        items: [],
+      });
+    }
+    if (row.outboundId) {
+      containerMap.get(row.id)!.items.push({ outboundId: row.outboundId, productId: row.productId, actualQty: row.actualQty || 0 });
+    }
+  }
+  // 合同单价：通过 outboundItem 关联
+  const allOutboundIds = [...new Set([...containerMap.values()].flatMap(c => c.items.map(i => i.outboundId)))];
+  const obItems = allOutboundIds.length > 0
+    ? await prisma.outboundItem.findMany({
+        where: { outboundId: { in: allOutboundIds }, contractId: { not: null } },
+        select: { outboundId: true, productId: true, contractId: true },
+      })
+    : [];
+  const contractIds = [...new Set(obItems.map(o => o.contractId!))];
+  const contractPrices = contractIds.length > 0
+    ? await prisma.contractItem.findMany({
+        where: { contractId: { in: contractIds } },
+        select: { contractId: true, productId: true, unitPrice: true },
+      })
+    : [];
+  const priceMap = new Map<string, number>();
+  for (const cp of contractPrices) {
+    if (cp.unitPrice != null) priceMap.set(`${cp.contractId}_${cp.productId}`, cp.unitPrice);
+  }
+  const obContractMap = new Map<string, number>();
+  for (const oi of obItems) {
+    obContractMap.set(`${oi.outboundId}_${oi.productId}`, oi.contractId!);
+  }
+
+  // 按 businessCustomerId 分组
+  const customerMap = new Map<number, {
+    customerName: string;
+    monthlyContainers: number[];
+    monthlyQty: number[];
+    monthlyAmount: number[];
+  }>();
+
+  for (const [cid, data] of containerMap) {
+    const bizId = data.businessCustomerId;
+    if (!customerMap.has(bizId)) {
+      customerMap.set(bizId, {
+        customerName: '',
+        monthlyContainers: Array(12).fill(0),
+        monthlyQty: Array(12).fill(0),
+        monthlyAmount: Array(12).fill(0),
+      });
+    }
+    const entry = customerMap.get(bizId)!;
+    entry.monthlyContainers[data.month]++;
+    for (const item of data.items) {
+      const qty = item.actualQty || 0;
+      entry.monthlyQty[data.month] += qty;
+      const cid3 = obContractMap.get(`${item.outboundId}_${item.productId}`);
+      const price = cid3 ? priceMap.get(`${cid3}_${item.productId}`) : undefined;
+      if (price) entry.monthlyAmount[data.month] += price * qty;
+    }
+  }
+
+  // 客户名称
+  const bizIds = [...customerMap.keys()];
+  if (bizIds.length > 0) {
+    const bizList = await prisma.businessCustomer.findMany({
+      where: { id: { in: bizIds } },
+      select: { id: true, realName: true },
+    });
+    for (const b of bizList) bizList.forEach(b => {
+      const e = customerMap.get(b.id);
+      if (e) e.customerName = b.realName;
+    });
+  }
+
+  // 合同数统计（SQLite Prisma Date 对比有 bug，用字符串）
+  const contracts: { businessCustomerId: number; createdAt: Date }[] = await prisma.$queryRawUnsafe(
+    `SELECT businessCustomerId, createdAt FROM Contract WHERE createdAt >= ? AND createdAt < ?`,
+    `${year}-01-01`, `${year + 1}-01-01`
+  );
+  const contractMap = new Map<number, number[]>();
+  for (const ct of contracts) {
+    const cid = ct.businessCustomerId || 0;
+    if (!contractMap.has(cid)) contractMap.set(cid, Array(12).fill(0));
+    contractMap.get(cid)![new Date(ct.createdAt).getMonth()]++;
+  }
+
+  const customers = Array.from(customerMap.entries()).map(([cid, data]) => ({
+    businessCustomerId: cid,
+    customerName: data.customerName,
+    monthlyContainers: data.monthlyContainers,
+    monthlyContracts: contractMap.get(cid) || Array(12).fill(0),
+    monthlyQty: data.monthlyQty,
+    monthlyAmount: data.monthlyAmount.map(v => Math.round(v * 100) / 100),
+    yearlyContainers: data.monthlyContainers.reduce((a, b) => a + b, 0),
+    yearlyContracts: (contractMap.get(cid) || Array(12).fill(0)).reduce((a, b) => a + b, 0),
+    yearlyQty: data.monthlyQty.reduce((a, b) => a + b, 0),
+    yearlyAmount: Math.round(data.monthlyAmount.reduce((a, b) => a + b, 0) * 100) / 100,
+  }));
+
+  const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+  const totals = {
+    monthlyContainers: Array.from({ length: 12 }, (_, i) => sum(customers.map(c => c.monthlyContainers[i]))),
+    monthlyContracts: Array.from({ length: 12 }, (_, i) => sum(customers.map(c => c.monthlyContracts[i]))),
+    monthlyQty: Array.from({ length: 12 }, (_, i) => sum(customers.map(c => c.monthlyQty[i]))),
+    monthlyAmount: Array.from({ length: 12 }, (_, i) => Math.round(sum(customers.map(c => c.monthlyAmount[i])) * 100) / 100),
+    yearlyContainers: sum(customers.map(c => c.yearlyContainers)),
+    yearlyContracts: sum(customers.map(c => c.yearlyContracts)),
+    yearlyQty: sum(customers.map(c => c.yearlyQty)),
+    yearlyAmount: Math.round(sum(customers.map(c => c.yearlyAmount)) * 100) / 100,
+  };
+
+  res.json({ year, customers, totals });
+});

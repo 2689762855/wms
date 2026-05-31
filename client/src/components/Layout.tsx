@@ -92,6 +92,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
       children: [
         { key: 'reports-in-out', label: '出入库报表', path: '/reports/in-out' },
         { key: 'reports-turnover', label: '周转率报表', path: '/reports/turnover' },
+        { key: 'reports-customer-stats', label: '客户统计', path: '/reports/customer-stats' },
       ],
     },
     ...(canManageUsers || isTenant ? [{
@@ -120,6 +121,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     if (path.startsWith('/containers')) return ['containers'];
     if (path.startsWith('/reports/in-out')) return ['reports-in-out'];
     if (path.startsWith('/reports/turnover')) return ['reports-turnover'];
+    if (path.startsWith('/reports/customer-stats')) return ['reports-customer-stats'];
     if (path.startsWith('/settings/users')) return ['settings-users'];
     if (path.startsWith('/settings/customers')) return ['settings-customers'];
     if (path.startsWith('/settings/about')) return ['settings-about'];

@@ -30,6 +30,7 @@ import CheckTaskDetail from './pages/CheckTaskDetail';
 import Alerts from './pages/Alerts';
 import ReportsInOut from './pages/ReportsInOut';
 import ReportsTurnover from './pages/ReportsTurnover';
+import ReportsCustomerStats from './pages/ReportsCustomerStats';
 import Login from './pages/Login';
 import Claim from './pages/Claim';
 import AdminDashboard from './pages/AdminDashboard';
@@ -132,6 +133,7 @@ function AppRoutes() {
         <Route path="alerts" element={<Alerts />} />
         <Route path="reports/in-out" element={<ReportsInOut />} />
         <Route path="reports/turnover" element={<ReportsTurnover />} />
+        <Route path="reports/customer-stats" element={<ReportsCustomerStats />} />
         <Route path="contracts" element={<Contracts />} />
         <Route path="containers" element={<Containers />} />
         <Route path="settings/users" element={<Users />} />

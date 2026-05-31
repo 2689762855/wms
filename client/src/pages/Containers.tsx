@@ -21,8 +21,6 @@ export default function Containers() {
   const [custMgrOpen, setCustMgrOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [bizCustFilter, setBizCustFilter] = useState<number | undefined>();
-  const [extraItems, setExtraItems] = useState<{ productId?: number; plannedQty: number }[]>([]);
-
   const { data: products } = useQuery<any[]>({
     queryKey: ['products-all'],
     queryFn: () => apiClient.get('/products', { params: { pageSize: 999 } }).then(r => r.data.data),
@@ -54,8 +52,7 @@ export default function Containers() {
   const createMutation = useMutation({
     mutationFn: (values: any) => {
       if (values.toYardTime) values.toYardTime = values.toYardTime.toISOString();
-      const validExtras = extraItems.filter(ei => ei.productId && ei.plannedQty > 0);
-      return apiClient.post('/containers', { ...values, items: validExtras.length > 0 ? validExtras : undefined });
+      return apiClient.post('/containers', values);
     },
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['containers'] });
@@ -64,7 +61,6 @@ export default function Containers() {
       message.success(linked > 0 ? `已创建，自动关联 ${linked} 个出库单` : '已创建');
       setOpen(false);
       form.resetFields();
-      setExtraItems([]);
     },
     onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
   });
@@ -142,19 +138,6 @@ export default function Containers() {
           <Form.Item name="note" label="备注">
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Typography.Text strong>追加商品（特殊情况，可选）</Typography.Text>
-          <div style={{ marginTop: 8 }}>
-            {extraItems.map((ei, idx) => (
-              <Space key={idx} style={{ display: 'flex', marginBottom: 4 }}>
-                <Select style={{ width: 280 }} placeholder="选商品" showSearch optionFilterProp="label"
-                  value={ei.productId} onChange={(v) => { const next=[...extraItems];next[idx]={...next[idx],productId:v};setExtraItems(next); }}
-                  options={products?.map((p:any)=>({label:`${p.sku} | ${p.name}`,value:p.id}))} />
-                <InputNumber min={1} placeholder="数量" value={ei.plannedQty} onChange={(v)=>{const next=[...extraItems];next[idx]={...next[idx],plannedQty:v||0};setExtraItems(next);}} />
-                <Button size="small" danger onClick={()=>setExtraItems(extraItems.filter((_,i)=>i!==idx))}>删</Button>
-              </Space>
-            ))}
-            <Button type="dashed" size="small" onClick={()=>setExtraItems([...extraItems,{productId:undefined,plannedQty:0}])} block>+ 添加商品</Button>
-          </div>
         </Form>
       </Modal>
 

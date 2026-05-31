@@ -104,6 +104,7 @@ export default function ContainerReport() {
   const renderTemplate = (template: string) => {
     const vars: Record<string, string> = {
       containerNo: data.containerNo || '',
+      actualContainerNo: data.actualContainerNo || '',
       customerName: data.customerName || '',
       toYardTime: data.toYardTime ? dayjs(data.toYardTime).format('YYYY-MM-DD HH:mm') : '',
       sealTime: data.sealTime ? dayjs(data.sealTime).format('YYYY-MM-DD HH:mm') : '',
