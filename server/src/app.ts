@@ -140,17 +140,29 @@ let distPath = path.join(__dirname, '../../client/dist');
 if (!fs.existsSync(distPath)) {
   distPath = path.join(__dirname, '../client/dist');
 }
+const sendNoCache = (res: any, filePath: string, fallback?: () => void) => {
+  res.set('Cache-Control', 'no-cache');
+  const sendOpts = { headers: { 'Cache-Control': 'no-cache' } };
+  if (fallback) {
+    res.sendFile(filePath, sendOpts, (err: any) => { if (err) fallback(); });
+  } else {
+    res.sendFile(filePath, sendOpts);
+  }
+};
 app.get('/', (_req, res) => {
-  res.sendFile(path.join(distPath, 'landing.html'), (err) => { if (err) res.sendFile(path.join(distPath, 'index.html')); });
+  sendNoCache(res, path.join(distPath, 'landing.html'), () => sendNoCache(res, path.join(distPath, 'index.html')));
 });
-app.use(express.static(distPath));
-// 禁用 HTML 缓存（Cloudflare CDN 会缓存，导致前端更新不生效）
+// 静态资源缓存策略（哈希文件名，可长期缓存）
 app.use((_req, res, next) => {
-  if (_req.path === '/' || _req.path === '/index.html' || _req.path.endsWith('.html')) {
+  const p = _req.path;
+  if (p.match(/\.(js|css|svg|png|ico|woff2?)$/)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  } else if (p === '/' || p === '/index.html' || p.endsWith('.html')) {
     res.setHeader('Cache-Control', 'no-cache');
   }
   next();
 });
+app.use(express.static(distPath));
 // SPA fallback: 非首页、非 API、非 uploads 请求返回 index.html
 app.use((_req, res, next) => {
   if (_req.path === '/' || _req.path.startsWith('/api') || _req.path.startsWith('/uploads')) return next();
