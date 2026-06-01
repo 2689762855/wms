@@ -18,7 +18,7 @@ contractsRouter.get('/business-customers', async (req: AuthRequest, res: Respons
 });
 
 // 创建业务客户
-contractsRouter.post('/business-customers', adminWrite, async (req: AuthRequest, res: Response) => {
+contractsRouter.post('/business-customers', async (req: AuthRequest, res: Response) => {
   const { realName } = req.body;
   if (!realName) return res.status(400).json({ error: '客户名称必填' });
   const tenantId = req.customerId ?? 0;
@@ -166,7 +166,7 @@ contractsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) 
 });
 
 // 创建合同
-contractsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
+contractsRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { contractNo, customerName, items } = req.body;
   if (!contractNo) return res.status(400).json({ error: '合同号必填' });
   if (!customerName) return res.status(400).json({ error: '请输入客户名称' });
@@ -209,8 +209,13 @@ contractsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
 });
 
 // 编辑合同
-contractsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+contractsRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
+  // 校验合同归属
+  if (req.customerId) {
+    const ct = await prisma.contract.findUnique({ where: { id }, select: { customerId: true } });
+    if (!ct || ct.customerId !== req.customerId) return res.status(403).json({ error: '无权编辑此合同' });
+  }
   const { contractNo, items } = req.body;
 
   if (contractNo) {
