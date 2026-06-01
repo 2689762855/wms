@@ -2,6 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import { AsyncLocalStorage } from 'async_hooks';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const tenantCtx = new AsyncLocalStorage<{ dbPath: string; customerId: number }>();
 
@@ -15,6 +19,9 @@ export function runWithTenant(customerId: number, fn: () => void) {
 }
 
 const mainPrisma = new PrismaClient();
+
+// 平台库（User/Customer/Setting），不走租户路由
+export const platformPrisma = mainPrisma;
 
 // 缓存租户 PrismaClient 实例
 const tenantClients = new Map<string, PrismaClient>();
