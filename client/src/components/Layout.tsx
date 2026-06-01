@@ -26,6 +26,7 @@ import {
 
 const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 import { useAuth } from '../stores/AuthContext';
+import ErrorBoundary from './ErrorBoundary';
 
 const { Header, Sider, Content } = AntLayout;
 
@@ -215,7 +216,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
             style={{ borderRadius: 0, borderLeft: 0, borderRight: 0 }} />
         )}
         <Content style={{ margin: 16, padding: 24, background: themeToken.colorBgContainer, borderRadius: themeToken.borderRadiusLG }}>
-          {contentNode}
+          <ErrorBoundary>{contentNode}</ErrorBoundary>
         </Content>
       </AntLayout>
     </AntLayout>
