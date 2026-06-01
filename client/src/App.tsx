@@ -81,11 +81,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function HomeRedirect() {
   const { user } = useAuth();
   const isMobile = window.matchMedia('(max-width: 991px)').matches;
-  if (user?.operatorType === 'clerk') return <Navigate to="/contracts" replace />;
   if (!isStandalone && user?.role === 'super_admin') {
     return <Navigate to={isMobile ? '/m/admin' : '/admin'} replace />;
   }
   if (isMobile) return <Navigate to="/m/inbound" replace />;
+  if (user?.operatorType === 'warehouse') return <Navigate to="/inbound" replace />;
+  if (user?.operatorType === 'clerk') return <Navigate to="/contracts" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
