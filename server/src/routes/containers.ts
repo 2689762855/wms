@@ -76,7 +76,7 @@ containersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response)
 });
 
 // 创建货柜
-containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
+containersRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { containerNo, toYardTime, customerName, note, contractIds, actualContainerNo, items: extraItems } = req.body;
   if (!containerNo) return res.status(400).json({ error: '柜号必填' });
   if (!customerName) return res.status(400).json({ error: '请输入客户名称' });
@@ -142,12 +142,13 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
 });
 
 // 新增 SKU 到排柜（可选合同）
-containersRouter.post('/:id/items', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+containersRouter.post('/:id/items', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { productId, quantity, contractId } = req.body;
   if (!productId || !quantity) return res.status(400).json({ error: '请选择商品和数量' });
   const container = await prisma.container.findUnique({ where: { id } });
   if (!container) return res.status(404).json({ error: '排柜不存在' });
+  if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权操作' });
   if (container.status === 'sealed' || container.status === 'cancelled') return res.status(400).json({ error: '排柜状态不允许操作' });
   const item = await prisma.containerItem.create({
     data: { containerId: id, outboundId: 0, productId, plannedQty: quantity, actualQty: quantity, returnedQty: 0 },
@@ -163,7 +164,7 @@ containersRouter.post('/:id/items', validateId, adminWrite, async (req: AuthRequ
 });
 
 // 装柜：录入实装数
-containersRouter.put('/:id/load', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+containersRouter.put('/:id/load', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { items } = req.body;
 
