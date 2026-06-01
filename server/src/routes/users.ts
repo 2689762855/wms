@@ -79,13 +79,14 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { username, passwordHash, role: finalRole, realName, phone, warehouseId: finalWarehouseId, createdById: req.userId, operatorType: operatorType || null },
+      data: { username, passwordHash, role: finalRole, realName, phone, warehouseId: finalWarehouseId, createdById: req.userRole !== 'tenant_admin' ? req.userId : null, operatorType: operatorType || null },
       select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, operatorType: true, createdAt: true,
         warehouse: { select: { id: true, name: true } },
       },
     });
     res.status(201).json(user);
   } catch (err) {
+    console.error('Create user error:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
