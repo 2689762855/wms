@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import prisma from '../utils/prisma';
+import prisma, { runWithTenant } from '../utils/prisma';
 
 const DEV_ADMIN_SECRET = 'dev-admin-secret-8a1b9c2d3e4f5a6b7c8d9e0f';
 const DEV_INTER_SERVER_SECRET = 'dev-inter-server-shared-key';
@@ -63,7 +63,12 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       }
     }
 
-    next();
+    // 非超管请求切换到租户数据库
+    if (req.customerId && req.userRole !== 'super_admin') {
+      runWithTenant(req.customerId, () => next());
+    } else {
+      next();
+    }
   } catch (err) {
     if (!(err instanceof jwt.JsonWebTokenError || err instanceof jwt.TokenExpiredError)) {
       console.error('authenticate error:', err);
