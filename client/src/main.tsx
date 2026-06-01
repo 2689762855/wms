@@ -30,4 +30,4 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
-registerSW({ immediate: true })
+try { registerSW({ immediate: true }); } catch {} // SW 文件可能被删除，防止崩溃
