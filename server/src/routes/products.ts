@@ -190,6 +190,9 @@ productsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
   const id = parseInt(req.params.id as string);
   const product = await prisma.product.findUnique({ where: { id }, include: { category: true } });
   if (!product) return res.status(404).json({ error: '商品不存在' });
+  if (req.customerId && product.customerId && product.customerId !== req.customerId) {
+    return res.status(403).json({ error: '无权查看此商品' });
+  }
   res.json(product);
 });
 

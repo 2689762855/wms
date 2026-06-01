@@ -77,6 +77,11 @@ checkTasksRouter.get('/:id', validateId, async (req: AuthRequest, res: Response)
     },
   });
   if (!task) return res.status(404).json({ error: '不存在' });
+  // 操作员/仓管只能看自己仓库的盘点
+  if (req.customerId && task.warehouse) {
+    const wh = await prisma.warehouse.findUnique({ where: { id: task.warehouseId }, select: { customerId: true } });
+    if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
+  }
 
   // 如果是主任务，为每个子任务补充完整 item 信息
   if (!task.parentTaskId && task.subTasks) {
@@ -167,7 +172,11 @@ checkTasksRouter.put('/:id/submit', validateId, async (req: AuthRequest, res: Re
 
   const task = await prisma.checkTask.findUnique({ where: { id } });
   if (!task) return res.status(404).json({ error: '不存在' });
-  if (task.status !== 'in_progress') return res.status(400).json({ error: '只能提交进行中的盘点任务' });
+  // 操作员/仓管只能提交自己仓库的盘点
+  if (req.customerId) {
+    const wh = await prisma.warehouse.findUnique({ where: { id: task.warehouseId }, select: { customerId: true } });
+    if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+  }
 
   let hasDiff = false;
   await prisma.$transaction(async (tx) => {

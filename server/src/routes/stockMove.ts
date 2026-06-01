@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, adminWrite } from '../middleware/auth';
+import { AuthRequest, authenticate } from '../middleware/auth';
 
 export const stockMoveRouter = Router();
 stockMoveRouter.use(authenticate);
@@ -11,7 +11,7 @@ interface MoveItem {
 }
 
 // 库位库存转移
-stockMoveRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => {
+stockMoveRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { fromLocationId, toLocationId, items } = req.body as {
     fromLocationId: number;
     toLocationId: number;
@@ -45,6 +45,11 @@ stockMoveRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
   }
 
   const warehouseId = fromLoc.warehouseId;
+  // 操作员/仓管只能在自己客户仓库内移货
+  if (req.customerId) {
+    const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+    if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -137,7 +142,7 @@ stockMoveRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
 });
 
 // 给无库位库存分配库位
-stockMoveRouter.post('/assign-location', adminWrite, async (req: AuthRequest, res: Response) => {
+stockMoveRouter.post('/assign-location', async (req: AuthRequest, res: Response) => {
   const { inventoryId, toLocationId } = req.body;
   if (!inventoryId || !toLocationId) {
     return res.status(400).json({ error: '请指定库存记录和目标库位' });
@@ -153,6 +158,11 @@ stockMoveRouter.post('/assign-location', adminWrite, async (req: AuthRequest, re
   const toLoc = await prisma.location.findUnique({ where: { id: toLocationId } });
   if (!toLoc || toLoc.warehouseId !== inv.warehouseId) {
     return res.status(400).json({ error: '目标库位不属于同一仓库' });
+  }
+  // 操作员/仓管只能在自己客户仓库内操作
+  if (req.customerId) {
+    const wh = await prisma.warehouse.findUnique({ where: { id: inv.warehouseId }, select: { customerId: true } });
+    if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
   }
 
   try {

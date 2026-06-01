@@ -121,6 +121,11 @@ transferRouter.post('/', async (req: AuthRequest, res: Response) => {
   } else {
     fromWarehouseId = req.userWarehouseId!;
   }
+  // 校验目标仓库与操作员同属一个客户
+  if (req.customerId) {
+    const toWh = await prisma.warehouse.findUnique({ where: { id: toWarehouseId }, select: { customerId: true } });
+    if (!toWh || toWh.customerId !== req.customerId) return res.status(403).json({ error: '目标仓库不属于您的客户' });
+  }
   if (!fromWarehouseId || !toWarehouseId || !items?.length) return res.status(400).json({ error: '源仓库、目标仓库和明细必填' });
   if (fromWarehouseId === toWarehouseId) return res.status(400).json({ error: '不能调拨到同一仓库' });
   if (note && note.length > 1000) return res.status(400).json({ error: '备注不能超过 1000 字符' });
