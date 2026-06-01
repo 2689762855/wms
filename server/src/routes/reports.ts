@@ -146,15 +146,15 @@ reportsRouter.get('/customer-stats', async (req: AuthRequest, res: Response) => 
   const start = new Date(`${year}-01-01T00:00:00.000Z`);
   const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
 
-  // SQLite Prisma Date 对比有 bug，用 raw SQL
+  // Prisma 6 DateTime is stored as Unix ms integers, use raw SQL with numeric comparison
   const custFilter = req.customerId ? `AND customerId = ${req.customerId}` : '';
   const containers = await prisma.$queryRawUnsafe<any[]>(
     `SELECT c.id, c.businessCustomerId, c.sealTime, ci.outboundId, ci.productId, ci.actualQty
      FROM Container c
      LEFT JOIN ContainerItem ci ON ci.containerId = c.id
-     WHERE c.status = 'sealed' AND c.sealTime >= ? AND c.sealTime < ? ${custFilter}
+     WHERE c.status = 'sealed' AND c.businessCustomerId IS NOT NULL AND c.businessCustomerId != 0 AND c.sealTime >= ? AND c.sealTime < ? ${custFilter}
      ORDER BY c.sealTime ASC`,
-    `${year}-01-01`, `${year + 1}-01-01`
+    start.getTime(), end.getTime()
   );
   // 按 container 归组
   const containerMap = new Map<number, { businessCustomerId: number; month: number; items: { outboundId: number; productId: number; actualQty: number }[] }>();
@@ -162,7 +162,7 @@ reportsRouter.get('/customer-stats', async (req: AuthRequest, res: Response) => 
     if (!containerMap.has(row.id)) {
       containerMap.set(row.id, {
         businessCustomerId: row.businessCustomerId,
-        month: new Date(row.sealTime + 'Z').getMonth(),
+        month: new Date(Number(row.sealTime)).getMonth(),
         items: [],
       });
     }
@@ -230,22 +230,22 @@ reportsRouter.get('/customer-stats', async (req: AuthRequest, res: Response) => 
       where: { id: { in: bizIds } },
       select: { id: true, realName: true },
     });
-    for (const b of bizList) bizList.forEach(b => {
+    bizList.forEach(b => {
       const e = customerMap.get(b.id);
       if (e) e.customerName = b.realName;
     });
   }
 
-  // 合同数统计（SQLite Prisma Date 对比有 bug，用字符串）
+  // 合同数统计（Prisma 6 DateTime 整数存储，用 raw SQL + 毫秒值）
   const contracts: { businessCustomerId: number; createdAt: Date }[] = await prisma.$queryRawUnsafe(
-    `SELECT businessCustomerId, createdAt FROM Contract WHERE createdAt >= ? AND createdAt < ?`,
-    `${year}-01-01`, `${year + 1}-01-01`
+    `SELECT businessCustomerId, createdAt FROM Contract WHERE businessCustomerId IS NOT NULL AND businessCustomerId != 0 AND createdAt >= ? AND createdAt < ?`,
+    start.getTime(), end.getTime()
   );
   const contractMap = new Map<number, number[]>();
   for (const ct of contracts) {
     const cid = ct.businessCustomerId || 0;
     if (!contractMap.has(cid)) contractMap.set(cid, Array(12).fill(0));
-    contractMap.get(cid)![new Date(ct.createdAt).getMonth()]++;
+    contractMap.get(cid)![new Date(Number(ct.createdAt)).getMonth()]++;
   }
 
   const customers = Array.from(customerMap.entries()).map(([cid, data]) => ({
