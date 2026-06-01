@@ -3,12 +3,14 @@ import { Card, Typography, Descriptions, Table, Tag, Button, Space, message, Pop
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryPath } from '../utils/categoryTree';
+import { useAuth } from '../stores/AuthContext';
 import dayjs from 'dayjs';
 
 export default function InboundDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['inbound', id],
@@ -49,8 +51,10 @@ export default function InboundDetail() {
     { title: '保质期至', key: 'expiryDate', width: 110, render: (_: unknown, r: any) => r.expiryDate ? dayjs(r.expiryDate).format('YYYY-MM-DD') : '-' },
     { title: '批次号', dataIndex: 'batchNo', key: 'batchNo', width: 140, render: (v: string | null) => v ? <Tag color="blue">{v}</Tag> : '-' },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
-    { title: '单价', dataIndex: 'unitPrice', key: 'unitPrice', width: 80, render: (v: number) => v ? `¥${v.toFixed(2)}` : '-' },
-    { title: '小计', key: 'total', width: 80, render: (_: unknown, r: { quantity: number; unitPrice?: number }) => r.unitPrice ? `¥${(r.quantity * r.unitPrice).toFixed(2)}` : '-' },
+    ...(user?.operatorType !== 'warehouse' ? [
+      { title: '单价', dataIndex: 'unitPrice', key: 'unitPrice', width: 80, render: (v: number) => v ? `¥${v.toFixed(2)}` : '-' },
+      { title: '小计', key: 'total', width: 80, render: (_: unknown, r: { quantity: number; unitPrice?: number }) => r.unitPrice ? `¥${(r.quantity * r.unitPrice).toFixed(2)}` : '-' },
+    ] : []),
   ];
 
   if (isLoading) return <Card loading />;

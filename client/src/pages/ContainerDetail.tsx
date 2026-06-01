@@ -4,6 +4,7 @@ import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Moda
 import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined, EditOutlined, CloseCircleOutlined, PlusOutlined, AuditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { useAuth } from '../stores/AuthContext';
 import dayjs from 'dayjs';
 
 const statusMap: Record<string, { color: string; label: string }> = {
@@ -17,6 +18,7 @@ export default function ContainerDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [actualQs, setActualQs] = useState<Record<string, number>>({});
   const [returnLocations, setReturnLocations] = useState<Record<string, number | null>>({});
   const actualQsRef = useRef(actualQs);
@@ -448,8 +450,10 @@ export default function ContainerDetail() {
                 { title: '单位', dataIndex: 'unit', width: 50 },
                 { title: '计划', dataIndex: 'plannedQty', width: 60 },
                 { title: '实装', dataIndex: 'actualQty', width: 60 },
-                { title: '单价', dataIndex: 'unitPrice', width: 70, render: (v: number) => v ? `¥${v.toFixed(2)}` : <span style={{ color: '#ccc' }}>—</span> },
-                { title: '金额', key: 'amount', width: 80, render: (_: any, r: any) => r.unitPrice ? `¥${(r.unitPrice * r.actualQty).toFixed(2)}` : <span style={{ color: '#ccc' }}>—</span> },
+                ...(user?.operatorType !== 'warehouse' ? [
+                  { title: '单价', dataIndex: 'unitPrice', width: 70, render: (v: number) => v ? `¥${v.toFixed(2)}` : <span style={{ color: '#ccc' }}>—</span> },
+                  { title: '金额', key: 'amount', width: 80, render: (_: any, r: any) => r.unitPrice ? `¥${(r.unitPrice * r.actualQty).toFixed(2)}` : <span style={{ color: '#ccc' }}>—</span> },
+                ] : []),
                 { title: '甩柜', dataIndex: 'returnedQty', width: 60, render: (v: number) => v > 0 ? <Tag color="orange">{v}</Tag> : '-' },
               ]}
               dataSource={ct.items} pagination={false} size="small" />

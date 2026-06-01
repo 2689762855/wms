@@ -3,12 +3,14 @@ import { Card, Typography, Descriptions, Table, Tag, Button, Space, message, Pop
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { getCategoryPath } from '../utils/categoryTree';
+import { useAuth } from '../stores/AuthContext';
 import dayjs from 'dayjs';
 
 export default function OutboundDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['outbound', id],
@@ -64,21 +66,23 @@ export default function OutboundDetail() {
         return ci?.returnedQty ? <Tag color="orange">{ci.returnedQty}</Tag> : '-';
       }},
     ] : []),
-    { title: '合同单价', key: 'unitPrice', width: 90,
-      render: (_: any, r: any) => {
-        const price = getContractPrice(r.productId);
-        return price ? `¥${price.toFixed(2)}` : <span style={{color:'#ccc'}}>—</span>;
+    ...(user?.operatorType !== 'warehouse' ? [
+      { title: '合同单价', key: 'unitPrice', width: 90,
+        render: (_: any, r: any) => {
+          const price = getContractPrice(r.productId);
+          return price ? `¥${price.toFixed(2)}` : <span style={{color:'#ccc'}}>—</span>;
+        },
       },
-    },
-    { title: '金额', key: 'amount', width: 90,
-      render: (_: any, r: any) => {
-        const price = getContractPrice(r.productId);
-        if (!price) return <span style={{color:'#ccc'}}>—</span>;
-        const ci = containerItems?.find((ci: any) => ci.productId === r.productId);
-        const netQty = ci ? (ci.actualQty || 0) : r.quantity;
-        return `¥${(price * netQty).toFixed(2)}`;
+      { title: '金额', key: 'amount', width: 90,
+        render: (_: any, r: any) => {
+          const price = getContractPrice(r.productId);
+          if (!price) return <span style={{color:'#ccc'}}>—</span>;
+          const ci = containerItems?.find((ci: any) => ci.productId === r.productId);
+          const netQty = ci ? (ci.actualQty || 0) : r.quantity;
+          return `¥${(price * netQty).toFixed(2)}`;
+        },
       },
-    },
+    ] : []),
   ];
 
   if (isLoading) return <Card loading />;

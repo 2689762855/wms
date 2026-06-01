@@ -45,13 +45,8 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
   }, []);
   const isSuperAdmin = !isStandalone && user?.role === 'super_admin';
   const isTenant = user?.role === 'tenant_admin';
-  const isWarehouse = user?.operatorType === 'warehouse';
   const isClerk = user?.operatorType === 'clerk';
-
-  // 库人员仅移动端，桌面端强制跳转
-  useEffect(() => {
-    if (isWarehouse) navigate('/m', { replace: true });
-  }, [isWarehouse, navigate]);
+  const isWarehouse = user?.operatorType === 'warehouse';
   const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
   const plan = isTenant && user?.maxWarehouses != null ? (user.maxWarehouses >= 3 ? 'professional' : 'standard') : null;
   const canManageUsers = isSuperAdmin || user?.role === 'warehouse_admin';
@@ -120,7 +115,25 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     { key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' },
   ];
 
-  const menuItems = isSuperAdmin ? adminMenuItems : isClerk ? clerkMenuItems : opsMenuItems;
+  // 库人员桌面菜单：库存/出入库/盘点/预警/排柜
+  const warehouseMenuItems = [
+    {
+      key: 'inventory-group',
+      label: '库存管理',
+      icon: <InboxOutlined />,
+      children: [
+        { key: 'inventory-list', label: '库存查询', path: '/inventory' },
+        { key: 'inventory-logs', label: '库存流水', path: '/inventory/logs' },
+      ],
+    },
+    { key: 'inbound', label: '入库管理', icon: <ImportOutlined />, path: '/inbound' },
+    { key: 'outbound', label: '出库管理', icon: <ExportOutlined />, path: '/outbound' },
+    { key: 'check-tasks', label: '盘点管理', icon: <CheckSquareOutlined />, path: '/check-tasks' },
+    { key: 'alerts', label: '库存预警', icon: <AlertOutlined />, path: '/alerts' },
+    { key: 'containers', label: '排柜管理', icon: <ContainerOutlined />, path: '/containers' },
+  ];
+
+  const menuItems = isSuperAdmin ? adminMenuItems : isClerk ? clerkMenuItems : isWarehouse ? warehouseMenuItems : opsMenuItems;
 
   const getSelectedKeys = () => {
     const path = location.pathname;
