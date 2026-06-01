@@ -11,7 +11,7 @@ export const authRouter = Router();
 // 统一登录（自动识别 User 或 Customer）
 authRouter.post('/login', async (req: AuthRequest, res: Response) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, device } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
@@ -28,10 +28,11 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
         const wh = await prisma.warehouse.findUnique({ where: { id: user.warehouseId }, select: { customerId: true } });
         customerId = wh?.customerId ?? null;
       }
-      const tokenVersion = user.tokenVersion + 1;
-      await platformPrisma.user.update({ where: { id: user.id }, data: { tokenVersion } });
+      const tokenVersionField = deviceType === 'mobile' ? 'mobileTokenVersion' : 'desktopTokenVersion';
+      const tokenVersion = (deviceType === 'mobile' ? user.mobileTokenVersion : user.desktopTokenVersion) + 1;
+      await platformPrisma.user.update({ where: { id: user.id }, data: { [tokenVersionField]: tokenVersion } });
       const token = jwt.sign(
-        { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId, operatorType: user.operatorType ?? null, tokenVersion },
+        { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId, operatorType: user.operatorType ?? null, tokenVersion, device: deviceType },
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
@@ -152,7 +153,7 @@ authRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
 // 客户登录
 authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, device } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }

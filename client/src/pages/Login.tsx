@@ -14,7 +14,8 @@ export default function Login() {
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
-      const res = await apiClient.post('/auth/login', values);
+      const isMobileDevice = window.matchMedia('(max-width: 991px)').matches;
+      const res = await apiClient.post('/auth/login', { ...values, device: isMobileDevice ? 'mobile' : 'desktop' });
 
       // 多服务器路由：客户在另一台服务器，自动跳转
       if (res.data.serverRedirect) {

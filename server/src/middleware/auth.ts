@@ -50,10 +50,13 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     req.customerId = payload.customerId ?? undefined;
     req.operatorType = payload.operatorType ?? null;
 
-    // 非超管校验 tokenVersion（多设备登录互踢）
+    // 非超管校验 tokenVersion（桌面/移动独立，同端互踢）
     if (payload.role !== 'super_admin' && payload.tokenVersion != null) {
-      const user = await platformPrisma.user.findUnique({ where: { id: payload.userId }, select: { tokenVersion: true } });
-      if (!user || user.tokenVersion !== payload.tokenVersion) {
+      const device = payload.device || 'desktop';
+      const select = device === 'mobile' ? { mobileTokenVersion: true } as const : { desktopTokenVersion: true } as const;
+      const user = await platformPrisma.user.findUnique({ where: { id: payload.userId }, select });
+      const dbVersion = device === 'mobile' ? user?.mobileTokenVersion : user?.desktopTokenVersion;
+      if (dbVersion == null || dbVersion !== payload.tokenVersion) {
         return res.status(401).json({ error: '账号已在其他设备登录，请重新登录' });
       }
     }
