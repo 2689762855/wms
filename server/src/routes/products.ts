@@ -207,33 +207,36 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
   // 自动生成 SKU（原子序号，防并发重复）
   const sku = await nextOrderNo('SKU');
 
-  const product = await prisma.product.create({
-    data: {
-      sku,
-      name,
-      spec,
-      unit: unit || 'pcs',
-      barcode,
-      categoryId: categoryId || null,
-      customerId: req.customerId || null,
-      safetyStock: safetyStock || 0,
-      costPrice,
-      salePrice,
-      imageUrl: imageUrl || null,
-      expiryDate: expiryDate ? new Date(expiryDate) : null,
-      expiryWarningDays: expiryWarningDays ?? 30,
-    },
-    include: { category: true },
-  });
+  const [product] = await prisma.$transaction(async (tx) => {
+    const p = await tx.product.create({
+      data: {
+        sku,
+        name,
+        spec,
+        unit: unit || 'pcs',
+        barcode,
+        categoryId: categoryId || null,
+        customerId: req.customerId || null,
+        safetyStock: safetyStock || 0,
+        costPrice,
+        salePrice,
+        imageUrl: imageUrl || null,
+        expiryDate: expiryDate ? new Date(expiryDate) : null,
+        expiryWarningDays: expiryWarningDays ?? 30,
+      },
+      include: { category: true },
+    });
 
-  if (Array.isArray(warehouseConfigs) && warehouseConfigs.length > 0) {
-    for (const wc of warehouseConfigs) {
-      if (!wc.warehouseId) continue;
-      await prisma.productWarehouse.create({
-        data: { productId: product.id, warehouseId: wc.warehouseId, safetyStock: wc.safetyStock || 0 },
-      });
+    if (Array.isArray(warehouseConfigs) && warehouseConfigs.length > 0) {
+      for (const wc of warehouseConfigs) {
+        if (!wc.warehouseId) continue;
+        await tx.productWarehouse.create({
+          data: { productId: p.id, warehouseId: wc.warehouseId, safetyStock: wc.safetyStock || 0 },
+        });
+      }
     }
-  }
+    return [p];
+  });
 
   res.status(201).json(product);
 });
@@ -258,21 +261,24 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
   if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
   if (expiryDate !== undefined) updateData.expiryDate = expiryDate ? new Date(expiryDate) : null;
   if (expiryWarningDays !== undefined) updateData.expiryWarningDays = expiryWarningDays ?? 30;
-  const product = await prisma.product.update({
-    where: { id },
-    data: updateData,
-    include: { category: true },
-  });
+  const [product] = await prisma.$transaction(async (tx) => {
+    const p = await tx.product.update({
+      where: { id },
+      data: updateData,
+      include: { category: true },
+    });
 
-  if (Array.isArray(warehouseConfigs)) {
-    await prisma.productWarehouse.deleteMany({ where: { productId: id } });
-    for (const wc of warehouseConfigs) {
-      if (!wc.warehouseId) continue;
-      await prisma.productWarehouse.create({
-        data: { productId: id, warehouseId: wc.warehouseId, safetyStock: wc.safetyStock || 0 },
-      });
+    if (Array.isArray(warehouseConfigs)) {
+      await tx.productWarehouse.deleteMany({ where: { productId: id } });
+      for (const wc of warehouseConfigs) {
+        if (!wc.warehouseId) continue;
+        await tx.productWarehouse.create({
+          data: { productId: id, warehouseId: wc.warehouseId, safetyStock: wc.safetyStock || 0 },
+        });
+      }
     }
-  }
+    return [p];
+  });
 
   res.json(product);
 });

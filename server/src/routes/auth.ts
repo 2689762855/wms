@@ -267,21 +267,24 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
     const autoSetting = await prisma.setting.findUnique({ where: { key: 'autoApproveRegistrations' } });
     const initialStatus = autoSetting?.value === 'true' ? 'active' : 'pending';
 
-    const customer = await prisma.customer.create({
-      data: { username, passwordHash, realName: realName || username, phone: phone || null, maxWarehouses: 1, expiresAt, status: initialStatus },
-    });
+    const [customer] = await prisma.$transaction(async (tx) => {
+      const cust = await tx.customer.create({
+        data: { username, passwordHash, realName: realName || username, phone: phone || null, maxWarehouses: 1, expiresAt, status: initialStatus },
+      });
 
-    // 自动创建仓库
-    const wh = await prisma.warehouse.create({
-      data: { name: `${realName || username}主仓库`, customerId: customer.id },
-    });
+      // 自动创建仓库
+      const wh = await tx.warehouse.create({
+        data: { name: `${realName || username}主仓库`, customerId: cust.id },
+      });
 
-    // 创建默认库位
-    const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
-    for (const locName of locNames) {
-      const code = 'LOC-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
-      await prisma.location.create({ data: { name: locName, warehouseId: wh.id, code } });
-    }
+      // 创建默认库位
+      const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
+      for (const locName of locNames) {
+        const code = 'LOC-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
+        await tx.location.create({ data: { name: locName, warehouseId: wh.id, code } });
+      }
+      return [cust];
+    });
 
     res.status(201).json({ message: '注册成功，90 天免费试用已开通', username, expiresAt });
   } catch (err) {

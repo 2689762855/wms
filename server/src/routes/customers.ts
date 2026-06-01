@@ -83,32 +83,35 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
     const softDeleted = await prisma.customer.findFirst({ where: { username, deletedAt: { not: null } } });
     if (softDeleted) await prisma.customer.update({ where: { id: softDeleted.id }, data: { deletedAt: null } });
 
-    const customer = await prisma.customer.create({
-      data: {
-        username,
-        passwordHash,
-        realName: realName || username,
-        maxWarehouses: maxWarehouses || 1,
-        expiresAt,
-        createdBy: req.userId,
-      },
-    });
+    const [customer, wh] = await prisma.$transaction(async (tx) => {
+      const cust = await tx.customer.create({
+        data: {
+          username,
+          passwordHash,
+          realName: realName || username,
+          maxWarehouses: maxWarehouses || 1,
+          expiresAt,
+          createdBy: req.userId,
+        },
+      });
 
-    // 自动创建专属仓库
-    const wh = await prisma.warehouse.create({
-      data: {
-        name: warehouseName || `${realName || username}主仓库`,
-        address: null,
-        customerId: customer.id,
-      },
-    });
+      // 自动创建专属仓库
+      const warehouse = await tx.warehouse.create({
+        data: {
+          name: warehouseName || `${realName || username}主仓库`,
+          address: null,
+          customerId: cust.id,
+        },
+      });
 
-    // 自动生成默认库位
-    const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
-    for (const locName of locNames) {
-      const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
-      await prisma.location.create({ data: { name: locName, warehouseId: wh.id, code } });
-    }
+      // 自动生成默认库位
+      const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
+      for (const locName of locNames) {
+        const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
+        await tx.location.create({ data: { name: locName, warehouseId: warehouse.id, code } });
+      }
+      return [cust, warehouse];
+    });
 
     const { passwordHash: _, ...safe } = customer;
     res.status(201).json({ ...safe, warehouses: [wh] });
@@ -238,7 +241,7 @@ customerTemplateRouter.put('/:id/template', adminWrite, validateId, async (req: 
 });
 
 // 获取客户报表模板（仅 admin 可看他人模板，客户只能看自己的）
-customerTemplateRouter.get('/:id/template', async (req: AuthRequest, res: Response) => {
+customerTemplateRouter.get('/:id/template', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '无权查看此模板' });
@@ -249,7 +252,7 @@ customerTemplateRouter.get('/:id/template', async (req: AuthRequest, res: Respon
 });
 
 // 选择预设模板（admin + 客户自己）
-customerTemplateRouter.put('/:id/template-preset', async (req: AuthRequest, res: Response) => {
+customerTemplateRouter.put('/:id/template-preset', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '只能切换自己的模板' });
@@ -261,7 +264,7 @@ customerTemplateRouter.put('/:id/template-preset', async (req: AuthRequest, res:
 });
 
 // 选择 Excel 导出预设（admin + 客户自己）
-customerTemplateRouter.put('/:id/excel-preset', async (req: AuthRequest, res: Response) => {
+customerTemplateRouter.put('/:id/excel-preset', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (req.userRole === 'tenant_admin' && req.customerId !== id) {
     return res.status(403).json({ error: '只能切换自己的模板' });

@@ -90,52 +90,55 @@ containersRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =
   const existing = await prisma.container.findUnique({ where: { containerNo } });
   if (existing) return res.status(400).json({ error: '柜号已存在' });
 
-  const container = await prisma.container.create({
-    data: {
-      containerNo,
-      toYardTime: toYardTime ? new Date(toYardTime) : null,
-      customerId: tenantId,
-      businessCustomerId: bizCust.id,
-      note,
-      actualContainerNo: actualContainerNo || null,
-      ...(contractIds?.length > 0 ? {
-        contracts: { create: contractIds.map((cid: number) => ({ contractId: cid })) },
-      } : {}),
-      ...(extraItems?.length > 0 ? {
-        items: { create: extraItems.map((ei: any) => ({ productId: ei.productId, plannedQty: ei.plannedQty || 0, actualQty: ei.actualQty || ei.plannedQty || 0, returnedQty: 0, outboundId: 0 })) },
-      } : {}),
-    },
-    include: {
-      customer: { select: { id: true, username: true, realName: true } },
-      contracts: { include: { contract: { select: { id: true, contractNo: true, status: true } } } },
-      items: {
-        include: {
-          product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
+  const result = await prisma.$transaction(async (tx) => {
+    const container = await tx.container.create({
+      data: {
+        containerNo,
+        toYardTime: toYardTime ? new Date(toYardTime) : null,
+        customerId: tenantId,
+        businessCustomerId: bizCust.id,
+        note,
+        actualContainerNo: actualContainerNo || null,
+        ...(contractIds?.length > 0 ? {
+          contracts: { create: contractIds.map((cid: number) => ({ contractId: cid })) },
+        } : {}),
+        ...(extraItems?.length > 0 ? {
+          items: { create: extraItems.map((ei: any) => ({ productId: ei.productId, plannedQty: ei.plannedQty || 0, actualQty: ei.actualQty || ei.plannedQty || 0, returnedQty: 0, outboundId: 0 })) },
+        } : {}),
+      },
+      include: {
+        customer: { select: { id: true, username: true, realName: true } },
+        contracts: { include: { contract: { select: { id: true, contractNo: true, status: true } } } },
+        items: {
+          include: {
+            product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } },
+          },
         },
       },
-    },
-  });
-  // 自动匹配排柜编号相同的出库单
-  const matchedOutbounds = await prisma.outboundOrder.findMany({
-    where: { containerNo, containerId: null, status: 'confirmed' },
-    include: { items: true },
-  });
-  let linkedCount = 0;
-  for (const ob of matchedOutbounds) {
-    await prisma.outboundOrder.update({ where: { id: ob.id }, data: { containerId: container.id } });
-    for (const item of ob.items) {
-      await prisma.containerItem.create({
-        data: { containerId: container.id, outboundId: ob.id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo },
-      });
-      const ocIds = [...new Set(ob.items.map(i => i.contractId).filter(Boolean))] as number[];
-      for (const cid of ocIds) {
-        await prisma.containerContract.upsert({ where: { containerId_contractId: { containerId: container.id, contractId: cid } }, create: { containerId: container.id, contractId: cid }, update: {} }).catch(() => {});
+    });
+    // 自动匹配排柜编号相同的出库单
+    const matchedOutbounds = await tx.outboundOrder.findMany({
+      where: { containerNo, containerId: null, status: 'confirmed' },
+      include: { items: true },
+    });
+    let linkedCount = 0;
+    for (const ob of matchedOutbounds) {
+      await tx.outboundOrder.update({ where: { id: ob.id }, data: { containerId: container.id } });
+      for (const item of ob.items) {
+        await tx.containerItem.create({
+          data: { containerId: container.id, outboundId: ob.id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo },
+        });
+        const ocIds = [...new Set(ob.items.map(i => i.contractId).filter(Boolean))] as number[];
+        for (const cid of ocIds) {
+          await tx.containerContract.upsert({ where: { containerId_contractId: { containerId: container.id, contractId: cid } }, create: { containerId: container.id, contractId: cid }, update: {} }).catch(() => {});
+        }
       }
+      linkedCount++;
     }
-    linkedCount++;
-  }
+    return { container, linkedCount };
+  });
 
-  res.status(201).json({ ...container, businessCustomer: { id: bizCust.id, realName: bizCust.realName }, linkedOutbounds: linkedCount });
+  res.status(201).json({ ...result.container, businessCustomer: { id: bizCust.id, realName: bizCust.realName }, linkedOutbounds: result.linkedCount });
 });
 
 // 新增 SKU 到排柜（可选合同）

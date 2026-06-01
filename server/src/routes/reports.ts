@@ -147,7 +147,7 @@ reportsRouter.get('/customer-stats', async (req: AuthRequest, res: Response) => 
   const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
 
   // Prisma 6 DateTime is stored as Unix ms integers, use raw SQL with numeric comparison
-  const custFilter = req.customerId ? `AND customerId = ${req.customerId}` : '';
+  const custFilter = req.customerId ? `AND customerId = ${Number(req.customerId)}` : '';
   const containers = await prisma.$queryRawUnsafe<any[]>(
     `SELECT c.id, c.businessCustomerId, c.sealTime, ci.outboundId, ci.productId, ci.actualQty
      FROM Container c

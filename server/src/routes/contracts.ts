@@ -142,7 +142,7 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
 });
 
 // 合同详情
-contractsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
+contractsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const contract = await prisma.contract.findUnique({
     where: { id },
@@ -209,7 +209,7 @@ contractsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) =>
 });
 
 // 编辑合同
-contractsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
+contractsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { contractNo, items } = req.body;
 
@@ -249,7 +249,7 @@ contractsRouter.put('/:id', adminWrite, async (req: AuthRequest, res: Response) 
 });
 
 // 删除合同（已有入库记录的不可删）
-contractsRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Response) => {
+contractsRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const contract = await prisma.contract.findUnique({ where: { id }, select: { customerId: true, status: true } });
   if (!contract) return res.status(404).json({ error: '合同不存在' });
@@ -262,7 +262,7 @@ contractsRouter.delete('/:id', adminWrite, async (req: AuthRequest, res: Respons
 });
 
 // 更新合同状态
-contractsRouter.patch('/:id/status', adminWrite, async (req: AuthRequest, res: Response) => {
+contractsRouter.patch('/:id/status', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { status } = req.body;
   if (!['active', 'completed', 'cancelled'].includes(status)) {
@@ -279,7 +279,7 @@ contractsRouter.patch('/:id/status', adminWrite, async (req: AuthRequest, res: R
 });
 
 // 合同对账：收发存汇总
-contractsRouter.get('/:id/reconciliation', async (req: AuthRequest, res: Response) => {
+contractsRouter.get('/:id/reconciliation', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const contract = await prisma.contract.findUnique({
     where: { id },

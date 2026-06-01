@@ -62,7 +62,10 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     }
 
     next();
-  } catch {
+  } catch (err) {
+    if (!(err instanceof jwt.JsonWebTokenError || err instanceof jwt.TokenExpiredError)) {
+      console.error('authenticate error:', err);
+    }
     return res.status(401).json({ error: '令牌无效或已过期' });
   }
 }
