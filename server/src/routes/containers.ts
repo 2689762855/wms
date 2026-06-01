@@ -87,7 +87,7 @@ containersRouter.post('/', async (req: AuthRequest, res: Response) => {
     create: { realName: customerName, tenantId },
     update: {},
   });
-  const existing = await prisma.container.findUnique({ where: { containerNo } });
+  const existing = await prisma.container.findFirst({ where: { containerNo, customerId: tenantId } });
   if (existing) return res.status(400).json({ error: '柜号已存在' });
 
   const result = await prisma.$transaction(async (tx) => {

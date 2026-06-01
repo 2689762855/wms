@@ -75,7 +75,7 @@ model Category {
 
 model Product {
   id         Int      @id @default(autoincrement())
-  sku        String   @unique
+  sku        String
   name       String
   spec       String?
   unit       String   @default("pcs")
@@ -144,7 +144,7 @@ model Inventory {
 
 model InboundOrder {
   id          Int      @id @default(autoincrement())
-  orderNo     String   @unique
+  orderNo     String
   warehouseId Int
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
   supplier    String?
@@ -183,7 +183,7 @@ model InboundItem {
 
 model OutboundOrder {
   id          Int      @id @default(autoincrement())
-  orderNo     String   @unique
+  orderNo     String
   warehouseId Int
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
   receiver    String?  // 领用人/部门
@@ -225,7 +225,7 @@ model OutboundItem {
 
 model TransferOrder {
   id              Int      @id @default(autoincrement())
-  orderNo         String   @unique
+  orderNo         String
   fromWarehouseId Int
   fromWarehouse   Warehouse @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
   toWarehouseId   Int
@@ -318,7 +318,7 @@ model Location {
   warehouseId Int
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
   name        String
-  code        String   @unique
+  code        String
   createdAt   DateTime @default(now())
 
   inventories     Inventory[]
@@ -373,7 +373,7 @@ model Setting {
 
 model Contract {
   id                 Int              @id @default(autoincrement())
-  contractNo         String           @unique
+  contractNo         String
   customerId         Int
   customer           Customer         @relation(fields: [customerId], references: [id])
   businessCustomerId Int              @default(0)
@@ -385,6 +385,7 @@ model Contract {
   outboundItems      OutboundItem[]
   containerContracts ContainerContract[]
 
+  @@unique([contractNo, customerId])
   @@index([customerId])
   @@index([businessCustomerId])
   @@index([status])
@@ -405,7 +406,7 @@ model ContractItem {
 
 model Container {
   id                 Int              @id @default(autoincrement())
-  containerNo        String           @unique
+  containerNo        String
   actualContainerNo  String?          // 真实车辆货柜号，封柜时填写
   toYardTime         DateTime?
   sealTime           DateTime?
@@ -420,6 +421,7 @@ model Container {
   outbounds          OutboundOrder[]
   contracts          ContainerContract[]
 
+  @@unique([containerNo, customerId])
   @@index([customerId])
   @@index([businessCustomerId])
   @@index([status])

@@ -182,7 +182,7 @@ contractsRouter.post('/', async (req: AuthRequest, res: Response) => {
     update: {},
   });
 
-  const existing = await prisma.contract.findUnique({ where: { contractNo } });
+  const existing = await prisma.contract.findFirst({ where: { contractNo, customerId: tenantId } });
   if (existing) return res.status(400).json({ error: '合同号已存在' });
 
   const contract = await prisma.contract.create({
@@ -219,7 +219,7 @@ contractsRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) 
   const { contractNo, items } = req.body;
 
   if (contractNo) {
-    const dup = await prisma.contract.findUnique({ where: { contractNo } });
+    const dup = await prisma.contract.findFirst({ where: { contractNo, customerId: req.customerId ?? 0 } });
     if (dup && dup.id !== id) return res.status(400).json({ error: '合同号已存在' });
   }
 
