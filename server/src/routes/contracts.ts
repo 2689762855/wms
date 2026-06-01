@@ -34,7 +34,7 @@ contractsRouter.post('/business-customers', async (req: AuthRequest, res: Respon
 });
 
 // 删除业务客户（有关联排柜或合同的不可删）
-contractsRouter.delete('/business-customers/:id', adminWrite, validateId, async (req: AuthRequest, res: Response) => {
+contractsRouter.delete('/business-customers/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (req.customerId) {
     const bc = await prisma.businessCustomer.findUnique({ where: { id }, select: { tenantId: true } });
@@ -254,7 +254,7 @@ contractsRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) 
 });
 
 // 删除合同（已有入库记录的不可删）
-contractsRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
+contractsRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const contract = await prisma.contract.findUnique({ where: { id }, select: { customerId: true, status: true } });
   if (!contract) return res.status(404).json({ error: '合同不存在' });
