@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import prisma from '../utils/prisma';
+import prisma, { platformPrisma } from '../utils/prisma';
 import { AuthRequest, authenticate, JWT_ADMIN_SECRET, INTER_SERVER_SECRET, THIS_HOST } from '../middleware/auth';
 
 const JWT_EXPIRES_IN = '24h';
@@ -137,8 +137,8 @@ authRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.json({ ...rest, role: 'tenant_admin', warehouses: customer.warehouses });
     }
 
-    // admin / warehouse_admin / operator
-    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    // admin / warehouse_admin / operator（User 在平台库，需要显式指定）
+    const user = await platformPrisma.user.findUnique({ where: { id: req.userId } });
     if (!user) return res.status(404).json({ error: '用户不存在' });
     const { passwordHash: _, ...rest } = user;
     res.json(rest);

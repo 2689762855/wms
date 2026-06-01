@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import prisma from '../utils/prisma';
+import prisma, { platformPrisma } from '../utils/prisma';
 import { AuthRequest, authenticate, authorize, validateId } from '../middleware/auth';
 
 export const usersRouter = Router();
@@ -22,7 +22,7 @@ usersRouter.get('/', authenticate, authorize('super_admin', 'warehouse_admin', '
         where.warehouseId = req.userWarehouseId;
       }
     }
-    const users = await prisma.user.findMany({
+    const users = await platformPrisma.user.findMany({
       where,
       select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, operatorType: true, createdAt: true,
         createdBy: { select: { id: true, realName: true, username: true } },
@@ -64,7 +64,7 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
       // 检查操作员数量限制：标准版最多3人，专业版最多20人
       const customer = await prisma.customer.findFirst({ where: { id: req.customerId!, deletedAt: null }, select: { maxWarehouses: true } });
       const maxOperators = (customer?.maxWarehouses || 1) >= 3 ? 20 : 3;
-      const operatorCount = await prisma.user.count({
+      const operatorCount = await platformPrisma.user.count({
         where: { createdById: req.userId, role: 'operator' },
       });
       if (operatorCount >= maxOperators) {
@@ -72,13 +72,13 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
       }
     }
 
-    const existing = await prisma.user.findUnique({ where: { username } });
+    const existing = await platformPrisma.user.findUnique({ where: { username } });
     if (existing) return res.status(400).json({ error: '用户名已存在' });
     const customerConflict = await prisma.customer.findFirst({ where: { username, deletedAt: null } });
     if (customerConflict) return res.status(400).json({ error: '用户名已被客户账号使用' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
+    const user = await platformPrisma.user.create({
       data: { username, passwordHash, role: finalRole, realName, phone, warehouseId: finalWarehouseId, createdById: req.userRole !== 'tenant_admin' ? req.userId : null, operatorType: operatorType || null },
       select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, operatorType: true, createdAt: true,
         warehouse: { select: { id: true, name: true } },
@@ -95,7 +95,7 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
 usersRouter.put('/:id', validateId, authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string);
-    const target = await prisma.user.findUnique({ where: { id } });
+    const target = await platformPrisma.user.findUnique({ where: { id } });
     if (!target) return res.status(404).json({ error: '用户不存在' });
 
     if (req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
@@ -125,7 +125,7 @@ usersRouter.put('/:id', validateId, authenticate, authorize('super_admin', 'ware
       data.warehouseId = warehouseId;
     }
 
-    const user = await prisma.user.update({
+    const user = await platformPrisma.user.update({
       where: { id },
       data,
       select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, operatorType: true, createdAt: true,
@@ -143,14 +143,14 @@ usersRouter.delete('/:id', validateId, authenticate, authorize('super_admin', 'w
   try {
     const id = parseInt(req.params.id as string);
     if (id === req.userId) return res.status(400).json({ error: '不能删除自己' });
-    const target = await prisma.user.findUnique({ where: { id } });
+    const target = await platformPrisma.user.findUnique({ where: { id } });
     if (!target) return res.status(404).json({ error: '用户不存在' });
     if (req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
       if (target.role !== 'operator' || target.createdById !== req.userId) {
         return res.status(403).json({ error: '只能删除自己创建的操作员' });
       }
     }
-    await prisma.user.delete({ where: { id } });
+    await platformPrisma.user.delete({ where: { id } });
     res.json({ message: '已删除' });
   } catch (err) {
     res.status(500).json({ error: '服务器错误' });
