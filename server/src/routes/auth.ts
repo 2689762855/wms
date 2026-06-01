@@ -85,8 +85,11 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
         return res.json({ serverRedirect: `https://${serverHost}`, transferToken, expiryWarning });
       }
 
+      const tokenVersionField = deviceType === 'mobile' ? 'mobileTokenVersion' : 'desktopTokenVersion';
+      const tokenVersion = (deviceType === 'mobile' ? customer.mobileTokenVersion : customer.desktopTokenVersion) + 1;
+      await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField]: tokenVersion } });
       const token = jwt.sign(
-        { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
+        { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
@@ -179,19 +182,22 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
 
     const warehouseId = customer.warehouses[0]?.id ?? null;
     const { passwordHash: _, serverHost, status: custStatus, ...customerWithoutPassword } = customer;
+    const tokenVersionField2 = deviceType === 'mobile' ? 'mobileTokenVersion' : 'desktopTokenVersion';
+    const tokenVersion = (deviceType === 'mobile' ? customer.mobileTokenVersion : customer.desktopTokenVersion) + 1;
 
     // 多服务器路由
     if (serverHost && serverHost !== THIS_HOST) {
       const transferToken = jwt.sign(
-        { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
+        { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
         INTER_SERVER_SECRET,
         { expiresIn: '5m' }
       );
       return res.json({ serverRedirect: `https://${serverHost}`, transferToken });
     }
 
+    await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField2]: tokenVersion } });
     const token = jwt.sign(
-      { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id },
+      { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
       JWT_ADMIN_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
