@@ -143,7 +143,7 @@ export default function Users() {
           {selectedRole === 'operator' && (
             <Form.Item name="operatorType" label="操作员类型">
               <Select allowClear placeholder="不限（全功能）">
-                <Select.Option value="warehouse">库人员（仅移动端出入库/盘点/排柜）</Select.Option>
+                <Select.Option value="warehouse">库人员（出入库/盘点/预警/排柜，双端可用，不可看金额）</Select.Option>
                 <Select.Option value="clerk">文员（仅桌面端合同管理）</Select.Option>
               </Select>
             </Form.Item>
