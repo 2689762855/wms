@@ -33,7 +33,7 @@ export default function Login() {
         navigate(isMobile ? '/m/admin' : '/admin', { replace: true });
       } else {
         const isMobile = window.matchMedia('(max-width: 991px)').matches;
-        navigate(isMobile ? '/m/inbound' : '/dashboard', { replace: true });
+        navigate(isMobile ? '/m/inbound' : '/', { replace: true });
       }
     } catch (err: any) {
       message.error(err.response?.data?.error || '登录失败');
