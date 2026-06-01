@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Button, InputNumber, Space, Typography, Tag, message, Modal, Descriptions, Select, DatePicker, Popconfirm, Input, Form } from 'antd';
 import { ArrowLeftOutlined, LockOutlined, PrinterOutlined, InboxOutlined, EditOutlined, CloseCircleOutlined, PlusOutlined, AuditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -19,6 +19,10 @@ export default function ContainerDetail() {
   const queryClient = useQueryClient();
   const [actualQs, setActualQs] = useState<Record<string, number>>({});
   const [returnLocations, setReturnLocations] = useState<Record<string, number | null>>({});
+  const actualQsRef = useRef(actualQs);
+  const returnLocationsRef = useRef(returnLocations);
+  useEffect(() => { actualQsRef.current = actualQs; }, [actualQs]);
+  useEffect(() => { returnLocationsRef.current = returnLocations; }, [returnLocations]);
   const [sealModalOpen, setSealModalOpen] = useState(false);
   const [sealTime, setSealTime] = useState<string | null>(null);
   const [sealTimeEditOpen, setSealTimeEditOpen] = useState(false);
@@ -324,16 +328,18 @@ export default function ContainerDetail() {
           <Button
             type="primary"
             onClick={() => {
+              const curActualQs = actualQsRef.current;
+              const curReturnLocs = returnLocationsRef.current;
               const adjItems = mergedItems
                 .filter((m: any) => {
                   const key = `${m.productId}`;
-                  return actualQs[key] != null && actualQs[key] !== m.rawActualQty;
+                  return curActualQs[key] != null && curActualQs[key] !== m.rawActualQty;
                 })
-                .map((m: any) => ({ productId: m.productId, actualQty: actualQs[`${m.productId}`] }));
+                .map((m: any) => ({ productId: m.productId, actualQty: curActualQs[`${m.productId}`] }));
               if (adjItems.length === 0) { message.info('无变更'); return; }
               const hasReturn = adjItems.some((i: any) => i.actualQty < (container?.items?.filter((ci: any) => ci.productId === i.productId).reduce((s: number, ci: any) => s + ci.plannedQty, 0) || 0));
               const returnLocs: Record<string, number> = {};
-              for (const [k, v] of Object.entries(returnLocations)) {
+              for (const [k, v] of Object.entries(curReturnLocs)) {
                 if (v != null) returnLocs[k] = v;
               }
               if (hasReturn && Object.keys(returnLocs).length === 0) { message.warning('有甩柜商品，请选择归还库位'); return; }

@@ -24,14 +24,16 @@ export default function MobileCheckDetail() {
     enabled: !!id,
   });
 
-  // 恢复已填的实际数量
+  // 恢复已填的实际数量（仅首次加载，后续由用户输入控制）
+  const [loadedTaskId, setLoadedTaskId] = useState<number | null>(null);
   useEffect(() => {
-    if (task?.status === 'in_progress' && task.items) {
+    if (task?.status === 'in_progress' && task.items && task.id !== loadedTaskId) {
       const qts: Record<number, string> = {};
       task.items.forEach((i: CheckItem) => { if (i.actualQty != null) qts[i.id] = String(i.actualQty); });
       setActualQtys(qts);
+      setLoadedTaskId(task.id);
     }
-  }, [task]);
+  }, [task, loadedTaskId]);
 
   const handleSubmit = async () => {
     if (!task) return;

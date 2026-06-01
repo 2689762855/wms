@@ -176,31 +176,32 @@ containersRouter.put('/:id/load', validateId, adminWrite, async (req: AuthReques
   if (req.customerId && container.customerId !== req.customerId) return res.status(403).json({ error: '无权访问' });
   if (container.status !== 'pending' && container.status !== 'loading') return res.status(400).json({ error: '货柜状态不允许装柜' });
 
-  // 更新已有条目 + 插入新条目（按 outboundId+productId 识别，不删旧数据）
-  for (const item of items) {
-    const returnedQty = Math.max(0, (item.plannedQty || 0) - (item.actualQty || 0));
-    const existing = await prisma.containerItem.findFirst({
-      where: { containerId: id, outboundId: item.outboundId, productId: item.productId },
-    });
-    if (existing) {
-      await prisma.containerItem.update({
-        where: { id: existing.id },
-        data: { plannedQty: item.plannedQty || 0, actualQty: item.actualQty || 0, returnedQty, locationId: item.locationId || null },
+  const updated = await prisma.$transaction(async (tx) => {
+    for (const item of items) {
+      const returnedQty = Math.max(0, (item.plannedQty || 0) - (item.actualQty || 0));
+      const existing = await tx.containerItem.findFirst({
+        where: { containerId: id, outboundId: item.outboundId, productId: item.productId },
       });
-    } else {
-      await prisma.containerItem.create({
-        data: { containerId: id, outboundId: item.outboundId, productId: item.productId, plannedQty: item.plannedQty || 0, actualQty: item.actualQty || 0, returnedQty, locationId: item.locationId || null },
-      });
+      if (existing) {
+        await tx.containerItem.update({
+          where: { id: existing.id },
+          data: { plannedQty: item.plannedQty || 0, actualQty: item.actualQty || 0, returnedQty, locationId: item.locationId || null },
+        });
+      } else {
+        await tx.containerItem.create({
+          data: { containerId: id, outboundId: item.outboundId, productId: item.productId, plannedQty: item.plannedQty || 0, actualQty: item.actualQty || 0, returnedQty, locationId: item.locationId || null },
+        });
+      }
     }
-  }
 
-  await prisma.container.update({ where: { id }, data: { status: 'loading' } });
+    await tx.container.update({ where: { id }, data: { status: 'loading' } });
 
-  const updated = await prisma.container.findUnique({
-    where: { id },
-    include: {
-      items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } } } },
-    },
+    return tx.container.findUnique({
+      where: { id },
+      include: {
+        items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } }, returnLocation: { select: { id: true, name: true } } } },
+      },
+    });
   });
   res.json(updated);
 });

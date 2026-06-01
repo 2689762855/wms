@@ -70,6 +70,16 @@ export default function CheckTaskDetail() {
     onError: (err: any) => message.error(err.response?.data?.error || '取消失败'),
   });
 
+  const finalizeMutation = useMutation({
+    mutationFn: () => apiClient.put(`/check-tasks/${id}/finalize`),
+    onSuccess: () => {
+      message.success('盘点已最终确定');
+      queryClient.invalidateQueries({ queryKey: ['check-task', id] });
+      queryClient.invalidateQueries({ queryKey: ['check-tasks'] });
+    },
+    onError: (err: any) => message.error(err.response?.data?.error || '操作失败'),
+  });
+
   // 子任务汇总表格
   const subColumns = [
     { title: '库位', key: 'loc', render: (_: unknown, r: CheckTask) => r.location?.name || '无库位' },
@@ -127,14 +137,8 @@ export default function CheckTaskDetail() {
           {isMaster && task?.status !== 'completed' && isAdmin && (
             <>
               {subTasks.length > 0 && subTasks.every(s => s.status === 'completed') && (
-                <Popconfirm title="最终确定后数据将锁定为只读，子任务从手机端移除" onConfirm={() => {
-                  apiClient.put(`/check-tasks/${id}/finalize`).then(() => {
-                    message.success('盘点已最终确定');
-                    queryClient.invalidateQueries({ queryKey: ['check-task', id] });
-                    queryClient.invalidateQueries({ queryKey: ['check-tasks'] });
-                  }).catch((err: any) => message.error(err.response?.data?.error || '操作失败'));
-                }}>
-                  <Button type="primary">最终确定</Button>
+                <Popconfirm title="最终确定后数据将锁定为只读，子任务从手机端移除" onConfirm={() => finalizeMutation.mutate()}>
+                  <Button type="primary" loading={finalizeMutation.isPending}>最终确定</Button>
                 </Popconfirm>
               )}
               <Popconfirm title="确定取消此盘点任务？将删除所有子任务" onConfirm={() => deleteMutation.mutate()}>
@@ -191,14 +195,8 @@ export default function CheckTaskDetail() {
           {isMaster && task?.status !== 'completed' && subTasks.length > 0 && subTasks.every(s => s.status === 'completed') && isAdmin && (
             <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 8, padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>全部 {subTasks.length} 个库位已完成盘点，确认数据无误后点击「最终确定」锁定结果</span>
-              <Popconfirm title="最终确定后数据将锁定为只读" onConfirm={() => {
-                apiClient.put(`/check-tasks/${id}/finalize`).then(() => {
-                  message.success('盘点已最终确定');
-                  queryClient.invalidateQueries({ queryKey: ['check-task', id] });
-                  queryClient.invalidateQueries({ queryKey: ['check-tasks'] });
-                }).catch((err: any) => message.error(err.response?.data?.error || '操作失败'));
-              }}>
-                <Button type="primary" size="large">最终确定</Button>
+              <Popconfirm title="最终确定后数据将锁定为只读" onConfirm={() => finalizeMutation.mutate()}>
+                <Button type="primary" size="large" loading={finalizeMutation.isPending}>最终确定</Button>
               </Popconfirm>
             </div>
           )}
