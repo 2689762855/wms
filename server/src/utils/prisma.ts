@@ -18,7 +18,9 @@ export function runWithTenant(customerId: number, fn: () => void) {
   return tenantCtx.run({ dbPath, customerId }, fn);
 }
 
-const mainPrisma = new PrismaClient();
+const mainPrisma = new PrismaClient({
+  datasources: { db: { url: `file:${path.join(__dirname, '../../prisma/dev.db')}` } },
+});
 
 // 平台库（User/Customer/Setting），不走租户路由
 export const platformPrisma = mainPrisma;

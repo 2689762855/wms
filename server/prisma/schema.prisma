@@ -19,6 +19,7 @@ model User {
   createdById  Int?
   createdBy    User?    @relation("CreatedUsers", fields: [createdById], references: [id])
   operatorType String?  // warehouse=库人员(仅移动端), clerk=文员(仅桌面端合同)
+  tokenVersion Int      @default(0)  // 登录时+1，旧token自动失效
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

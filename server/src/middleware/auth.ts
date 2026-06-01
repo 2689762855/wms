@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import prisma, { runWithTenant } from '../utils/prisma';
+import prisma, { runWithTenant, platformPrisma } from '../utils/prisma';
 
 const DEV_ADMIN_SECRET = 'dev-admin-secret-8a1b9c2d3e4f5a6b7c8d9e0f';
 const DEV_INTER_SERVER_SECRET = 'dev-inter-server-shared-key';
@@ -49,6 +49,14 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     req.userWarehouseId = payload.warehouseId;
     req.customerId = payload.customerId ?? undefined;
     req.operatorType = payload.operatorType ?? null;
+
+    // 非超管校验 tokenVersion（多设备登录互踢）
+    if (payload.role !== 'super_admin' && payload.tokenVersion != null) {
+      const user = await platformPrisma.user.findUnique({ where: { id: payload.userId }, select: { tokenVersion: true } });
+      if (!user || user.tokenVersion !== payload.tokenVersion) {
+        return res.status(401).json({ error: '账号已在其他设备登录，请重新登录' });
+      }
+    }
 
     if (payload.role === 'tenant_admin' && payload.customerId) {
       const customer = await prisma.customer.findFirst({

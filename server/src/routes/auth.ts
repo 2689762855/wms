@@ -28,8 +28,10 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
         const wh = await prisma.warehouse.findUnique({ where: { id: user.warehouseId }, select: { customerId: true } });
         customerId = wh?.customerId ?? null;
       }
+      const tokenVersion = user.tokenVersion + 1;
+      await platformPrisma.user.update({ where: { id: user.id }, data: { tokenVersion } });
       const token = jwt.sign(
-        { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId, operatorType: user.operatorType ?? null },
+        { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId, operatorType: user.operatorType ?? null, tokenVersion },
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );

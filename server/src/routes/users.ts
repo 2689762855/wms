@@ -61,9 +61,9 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
           return res.status(403).json({ error: '无权操作此仓库' });
         }
       }
-      // 检查操作员数量限制：标准版最多3人，专业版最多20人
+      // 检查操作员数量限制：标准版最多5人，专业版最多20人
       const customer = await prisma.customer.findFirst({ where: { id: req.customerId!, deletedAt: null }, select: { maxWarehouses: true } });
-      const maxOperators = (customer?.maxWarehouses || 1) >= 3 ? 20 : 3;
+      const maxOperators = (customer?.maxWarehouses || 1) >= 3 ? 20 : 5;
       const operatorCount = await platformPrisma.user.count({
         where: { createdById: req.userId, role: 'operator' },
       });
