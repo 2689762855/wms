@@ -12,6 +12,7 @@ export const authRouter = Router();
 authRouter.post('/login', async (req: AuthRequest, res: Response) => {
   try {
     const { username, password, device } = req.body;
+    const deviceType = device === 'mobile' ? 'mobile' : 'desktop';
     if (!username || !password) {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
@@ -154,6 +155,7 @@ authRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
 authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
   try {
     const { username, password, device } = req.body;
+    const deviceType = device === 'mobile' ? 'mobile' : 'desktop';
     if (!username || !password) {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
