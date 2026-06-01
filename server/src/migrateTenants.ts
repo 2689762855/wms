@@ -94,6 +94,15 @@ for (const cust of customers) {
     }
   }
 
+  // 复制 Customer 记录（解决 FK 约束）
+  const custCols = src.prepare('SELECT * FROM Customer LIMIT 1').columns().map(c => c.name);
+  const custRow = src.prepare('SELECT * FROM Customer WHERE id = ?').get(cid);
+  if (custRow) {
+    const ph = custCols.map(() => '?').join(',');
+    const qc = custCols.map(c => `"${c}"`).join(',');
+    dst.prepare(`INSERT OR REPLACE INTO Customer (${qc}) VALUES (${ph})`).run(...custCols.map(c => custRow[c]));
+  }
+
   dst.pragma('foreign_keys = ON');
   dst.close();
   console.log(`  ✅ 完成 (${Math.round(fs.statSync(targetPath).size / 1024)}KB)`);
