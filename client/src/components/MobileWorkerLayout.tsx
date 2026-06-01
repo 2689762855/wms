@@ -30,6 +30,7 @@ export default function MobileWorkerLayout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const isTenant = user?.role === 'tenant_admin';
+  const isClerk = user?.operatorType === 'clerk';
   const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
   const plan = isTenant && user?.maxWarehouses != null ? (user.maxWarehouses >= 3 ? 'professional' : 'standard') : null;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -50,8 +51,18 @@ export default function MobileWorkerLayout() {
 
   const activeTab = tabs.find(t => location.pathname.startsWith(t.path))?.key || 'inbound';
 
-  return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f5', maxWidth: '100vw', overflow: 'hidden' }}>
+  if (isClerk) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#f5f5f5' }}>
+          <InboxOutlined style={{ fontSize: 48, color: '#ccc', marginBottom: 16 }} />
+          <span style={{ fontSize: 16, color: '#999', marginBottom: 24 }}>文员账号仅限桌面端操作</span>
+          <Button type="primary" onClick={() => navigate('/login')}>切换到桌面端</Button>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ minHeight: '100vh', background: '#f5f5f5', maxWidth: '100vw', overflow: 'hidden' }}>
       <div style={{
         position: 'sticky', top: 0, zIndex: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

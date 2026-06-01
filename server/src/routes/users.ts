@@ -24,7 +24,7 @@ usersRouter.get('/', authenticate, authorize('super_admin', 'warehouse_admin', '
     }
     const users = await prisma.user.findMany({
       where,
-      select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, createdAt: true,
+      select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, operatorType: true, createdAt: true,
         createdBy: { select: { id: true, realName: true, username: true } },
         warehouse: { select: { id: true, name: true } },
       },
@@ -39,7 +39,7 @@ usersRouter.get('/', authenticate, authorize('super_admin', 'warehouse_admin', '
 // 创建用户
 usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 'tenant_admin'), async (req: AuthRequest, res: Response) => {
   try {
-    const { username, password, role, realName, phone, warehouseId } = req.body;
+    const { username, password, role, realName, phone, warehouseId, operatorType } = req.body;
     if (!username || !password) return res.status(400).json({ error: '用户名和密码必填' });
     if (username.length > 50) return res.status(400).json({ error: '用户名不能超过50字符' });
     if (password.length < 6) return res.status(400).json({ error: '密码至少6位' });
@@ -79,8 +79,8 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { username, passwordHash, role: finalRole, realName, phone, warehouseId: finalWarehouseId, createdById: req.userId },
-      select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, createdAt: true,
+      data: { username, passwordHash, role: finalRole, realName, phone, warehouseId: finalWarehouseId, createdById: req.userId, operatorType: operatorType || null },
+      select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, operatorType: true, createdAt: true,
         warehouse: { select: { id: true, name: true } },
       },
     });
@@ -103,10 +103,11 @@ usersRouter.put('/:id', validateId, authenticate, authorize('super_admin', 'ware
       }
     }
 
-    const { role, realName, phone, password, warehouseId } = req.body;
+    const { role, realName, phone, password, warehouseId, operatorType } = req.body;
     const data: Record<string, unknown> = {};
     if (realName !== undefined) data.realName = realName;
     if (phone !== undefined) data.phone = phone;
+    if (operatorType !== undefined) data.operatorType = operatorType || null;
     if (password) {
       if (password.length < 6) return res.status(400).json({ error: '密码至少6位' });
       if (password.length > 128) return res.status(400).json({ error: '密码不能超过128位' });
@@ -126,7 +127,7 @@ usersRouter.put('/:id', validateId, authenticate, authorize('super_admin', 'ware
     const user = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, createdAt: true,
+      select: { id: true, username: true, role: true, realName: true, phone: true, warehouseId: true, operatorType: true, createdAt: true,
         warehouse: { select: { id: true, name: true } },
       },
     });

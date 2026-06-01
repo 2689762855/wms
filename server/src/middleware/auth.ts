@@ -24,6 +24,7 @@ export interface AuthRequest extends Request {
   userRole?: string;
   userWarehouseId?: number | null;
   customerId?: number;
+  operatorType?: string | null;
 }
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
@@ -47,6 +48,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     req.userRole = payload.role;
     req.userWarehouseId = payload.warehouseId;
     req.customerId = payload.customerId ?? undefined;
+    req.operatorType = payload.operatorType ?? null;
 
     if (payload.role === 'tenant_admin' && payload.customerId) {
       const customer = await prisma.customer.findFirst({

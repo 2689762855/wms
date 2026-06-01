@@ -67,15 +67,26 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { token, loading } = useAuth();
+  const { token, loading, user } = useAuth();
+  const loc = window.location.pathname;
   if (loading) return null;
   if (!token) return <Navigate to="/login" replace />;
+  // 库人员仅移动端
+  if (user?.operatorType === 'warehouse' && !loc.startsWith('/m')) {
+    return <Navigate to="/m" replace />;
+  }
+  // 文员仅合同管理
+  if (user?.operatorType === 'clerk' && !loc.startsWith('/contracts') && !loc.startsWith('/m')) {
+    return <Navigate to="/contracts" replace />;
+  }
   return <>{children}</>;
 }
 
 function HomeRedirect() {
   const { user } = useAuth();
   const isMobile = window.matchMedia('(max-width: 991px)').matches;
+  if (user?.operatorType === 'warehouse') return <Navigate to="/m/inbound" replace />;
+  if (user?.operatorType === 'clerk') return <Navigate to="/contracts" replace />;
   if (!isStandalone && user?.role === 'super_admin') {
     return <Navigate to={isMobile ? '/m/admin' : '/admin'} replace />;
   }

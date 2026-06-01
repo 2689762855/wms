@@ -29,7 +29,7 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
         customerId = wh?.customerId ?? null;
       }
       const token = jwt.sign(
-        { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId },
+        { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId, operatorType: user.operatorType ?? null },
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );

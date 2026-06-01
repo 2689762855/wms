@@ -45,6 +45,13 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
   }, []);
   const isSuperAdmin = !isStandalone && user?.role === 'super_admin';
   const isTenant = user?.role === 'tenant_admin';
+  const isWarehouse = user?.operatorType === 'warehouse';
+  const isClerk = user?.operatorType === 'clerk';
+
+  // 库人员仅移动端，桌面端强制跳转
+  useEffect(() => {
+    if (isWarehouse) navigate('/m', { replace: true });
+  }, [isWarehouse, navigate]);
   const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
   const plan = isTenant && user?.maxWarehouses != null ? (user.maxWarehouses >= 3 ? 'professional' : 'standard') : null;
   const canManageUsers = isSuperAdmin || user?.role === 'warehouse_admin';
@@ -108,7 +115,12 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     }] : []),
   ];
 
-  const menuItems = isSuperAdmin ? adminMenuItems : opsMenuItems;
+  // 文员菜单：仅合同管理
+  const clerkMenuItems = [
+    { key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' },
+  ];
+
+  const menuItems = isSuperAdmin ? adminMenuItems : isClerk ? clerkMenuItems : opsMenuItems;
 
   const getSelectedKeys = () => {
     const path = location.pathname;

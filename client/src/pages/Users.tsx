@@ -76,6 +76,14 @@ export default function Users() {
         },
       },
       {
+        title: '操作员类型', dataIndex: 'operatorType', key: 'operatorType', width: 100,
+        render: (t: string | null) => {
+          if (t === 'warehouse') return <Tag color="blue">库人员</Tag>;
+          if (t === 'clerk') return <Tag color="green">文员</Tag>;
+          return '-';
+        },
+      },
+      {
         title: '创建人', key: 'createdBy',
         render: (_: unknown, record: User) => record.createdBy?.realName || record.createdBy?.username || '—',
       },
@@ -129,6 +137,14 @@ export default function Users() {
             <Form.Item name="warehouseId" label="所属仓库">
               <Select allowClear placeholder="选择仓库">
                 {warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}
+              </Select>
+            </Form.Item>
+          )}
+          {selectedRole === 'operator' && (
+            <Form.Item name="operatorType" label="操作员类型">
+              <Select allowClear placeholder="不限（全功能）">
+                <Select.Option value="warehouse">库人员（仅移动端出入库/盘点/排柜）</Select.Option>
+                <Select.Option value="clerk">文员（仅桌面端合同管理）</Select.Option>
               </Select>
             </Form.Item>
           )}

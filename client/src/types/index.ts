@@ -2,6 +2,7 @@ export interface User {
   id: number;
   username: string;
   role: 'super_admin' | 'warehouse_admin' | 'operator' | 'tenant_admin';
+  operatorType?: string | null; // warehouse=库人员, clerk=文员
   realName?: string;
   phone?: string;
   warehouseId?: number | null;

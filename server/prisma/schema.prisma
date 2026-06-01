@@ -18,6 +18,7 @@ model User {
   warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
   createdById  Int?
   createdBy    User?    @relation("CreatedUsers", fields: [createdById], references: [id])
+  operatorType String?  // warehouse=库人员(仅移动端), clerk=文员(仅桌面端合同)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
