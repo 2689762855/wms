@@ -144,9 +144,17 @@ app.get('/', (_req, res) => {
   res.sendFile(path.join(distPath, 'landing.html'), (err) => { if (err) res.sendFile(path.join(distPath, 'index.html')); });
 });
 app.use(express.static(distPath));
+// 禁用 HTML 缓存（Cloudflare CDN 会缓存，导致前端更新不生效）
+app.use((_req, res, next) => {
+  if (_req.path === '/' || _req.path === '/index.html' || _req.path.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+  next();
+});
 // SPA fallback: 非首页、非 API、非 uploads 请求返回 index.html
 app.use((_req, res, next) => {
   if (_req.path === '/' || _req.path.startsWith('/api') || _req.path.startsWith('/uploads')) return next();
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(distPath, 'index.html'), (err) => { if (err) next(); });
 });
 
