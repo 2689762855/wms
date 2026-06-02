@@ -101,6 +101,10 @@ export default function Customers() {
     { title: '仓库', dataIndex: 'warehouses', key: 'warehouses', width: 160,
       render: (v: CustomerInfo['warehouses']) => v?.map(w => <Tag key={w.id}>{w.name}</Tag>) },
     { title: '上限', dataIndex: 'maxWarehouses', key: 'maxWarehouses', width: 60 },
+    { title: '登录', key: 'loginCount', width: 60,
+      render: (_: unknown, r: CustomerInfo) => r.loginCount ?? 0 },
+    { title: '最近登录', key: 'lastLoginAt', width: 120,
+      render: (_: unknown, r: CustomerInfo) => r.lastLoginAt ? dayjs(r.lastLoginAt).format('MM-DD HH:mm') : '-' },
     { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 120,
       render: (v: string) => dayjs(v).format('MM-DD HH:mm') },
     {

@@ -133,8 +133,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // 确保上传目录存在
 fs.mkdirSync(path.join(__dirname, '../uploads/products'), { recursive: true });
+fs.mkdirSync(path.join(__dirname, '../public'), { recursive: true });
 // 商品图片静态托管（必须在 SPA fallback 之前）
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/public', express.static(path.join(__dirname, '../public')));
 // 兼容两种目录结构：开发时 ../../client/dist，部署时 ../client/dist
 let distPath = path.join(__dirname, '../../client/dist');
 if (!fs.existsSync(distPath)) {

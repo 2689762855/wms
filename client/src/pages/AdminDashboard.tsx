@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Row, Col, Statistic, Typography, Tag, Button, Space, Modal, message, Table } from 'antd';
-import { TeamOutlined, BankOutlined, ShoppingOutlined, PlusOutlined, EyeOutlined, StopOutlined, PlayCircleOutlined, EditOutlined } from '@ant-design/icons';
+import { TeamOutlined, BankOutlined, ShoppingOutlined, DownloadOutlined, PlusOutlined, EyeOutlined, StopOutlined, PlayCircleOutlined, EditOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { useAuth } from '../stores/AuthContext';
@@ -18,6 +18,11 @@ export default function AdminDashboard() {
   const { data: customers, isLoading } = useQuery<CustomerInfo[]>({
     queryKey: ['customers'],
     queryFn: () => apiClient.get('/customers').then(r => r.data),
+  });
+
+  const { data: downloadInfo } = useQuery<{ count: number }>({
+    queryKey: ['downloadCount'],
+    queryFn: () => apiClient.get('/app/download-counter').then(r => r.data),
   });
 
   const switchMutation = useMutation({
@@ -57,19 +62,24 @@ export default function AdminDashboard() {
       </div>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card hoverable onClick={() => navigate('/settings/customers')}>
             <Statistic title="活跃客户" value={activeCustomers} prefix={<TeamOutlined />} suffix={`/ ${customers?.length || 0}`} />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic title="客户仓库总数" value={totalWarehouses} prefix={<BankOutlined />} />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic title="客户商品总数" value={totalProducts} prefix={<ShoppingOutlined />} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic title="部署包下载" value={downloadInfo?.count ?? '-'} prefix={<DownloadOutlined />} />
           </Card>
         </Col>
       </Row>
@@ -99,6 +109,10 @@ export default function AdminDashboard() {
           { title: '仓库上限', dataIndex: 'maxWarehouses', key: 'max', width: 80 },
           { title: '商品数', key: 'products', width: 70,
             render: (_: unknown, r: CustomerInfo) => r._count?.products ?? 0 },
+          { title: '登录次数', key: 'loginCount', width: 80,
+            render: (_: unknown, r: CustomerInfo) => r.loginCount ?? 0 },
+          { title: '最后登录', key: 'lastLoginAt', width: 140,
+            render: (_: unknown, r: CustomerInfo) => r.lastLoginAt ? new Date(r.lastLoginAt).toLocaleDateString('zh-CN') + ' ' + new Date(r.lastLoginAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '-' },
           { title: '有效期', key: 'expiry', width: 110,
             render: (_: unknown, r: any) => {
               if (!r.expiresAt) return <Tag color="purple">永久</Tag>;

@@ -25,7 +25,8 @@ apiClient.interceptors.response.use(
       localStorage.removeItem('token');
       if (window.location.pathname !== '/login' && !redirectingToLogin) {
         redirectingToLogin = true;
-        window.location.href = '/login';
+        const reason = error.response?.data?.error || '登录已过期，请重新登录';
+        window.location.href = '/login?reason=' + encodeURIComponent(reason);
       }
     }
     return Promise.reject(error);

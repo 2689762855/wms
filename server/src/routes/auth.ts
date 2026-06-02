@@ -87,7 +87,7 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
 
       const tokenVersionField = deviceType === 'mobile' ? 'mobileTokenVersion' : 'desktopTokenVersion';
       const tokenVersion = (deviceType === 'mobile' ? customer.mobileTokenVersion : customer.desktopTokenVersion) + 1;
-      await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField]: tokenVersion } });
+      await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField]: tokenVersion, loginCount: { increment: 1 }, lastLoginAt: new Date() } });
       const token = jwt.sign(
         { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
         JWT_ADMIN_SECRET,
@@ -135,7 +135,7 @@ authRouter.post('/switch-customer', authenticate, async (req: AuthRequest, res: 
 authRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (req.userRole === 'tenant_admin') {
-      const customer = await prisma.customer.findFirst({
+      const customer = await platformPrisma.customer.findFirst({
         where: { id: req.userId, deletedAt: null },
         include: { warehouses: { select: { id: true, name: true } } },
       });
@@ -195,7 +195,7 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
       return res.json({ serverRedirect: `https://${serverHost}`, transferToken });
     }
 
-    await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField2]: tokenVersion } });
+    await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField2]: tokenVersion, loginCount: { increment: 1 }, lastLoginAt: new Date() } });
     const token = jwt.sign(
       { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
       JWT_ADMIN_SECRET,

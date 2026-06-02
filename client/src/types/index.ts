@@ -23,6 +23,8 @@ export interface CustomerInfo {
   _count?: { products: number };
   createdByUser?: { id: number; realName?: string | null; username: string } | null;
   createdAt: string;
+  loginCount?: number;
+  lastLoginAt?: string | null;
 }
 
 export interface Warehouse {

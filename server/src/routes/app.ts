@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import prisma from '../utils/prisma';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,5 +61,32 @@ appRouter.get('/download/latest', (_req: Request, res: Response) => {
   } catch (err) {
     console.error('APK 下载失败:', err);
     res.status(500).json({ error: '下载失败' });
+  }
+});
+
+// POST /api/app/download-counter — 记录一次下载
+appRouter.post('/download-counter', async (_req: Request, res: Response) => {
+  try {
+    const existing = await prisma.setting.findUnique({ where: { key: 'downloadCount' } });
+    const count = Number(existing?.value || '0') + 1;
+    if (existing) {
+      await prisma.setting.update({ where: { key: 'downloadCount' }, data: { value: String(count) } });
+    } else {
+      await prisma.setting.create({ data: { key: 'downloadCount', value: String(count) } });
+    }
+    res.json({ count });
+  } catch (err) {
+    console.error('下载计数失败:', err);
+    res.status(500).json({ error: '计数失败' });
+  }
+});
+
+// GET /api/app/download-counter — 查询下载次数
+appRouter.get('/download-counter', async (_req: Request, res: Response) => {
+  try {
+    const setting = await prisma.setting.findUnique({ where: { key: 'downloadCount' } });
+    res.json({ count: Number(setting?.value || '0') });
+  } catch (err) {
+    res.status(500).json({ error: '查询失败' });
   }
 });

@@ -179,7 +179,7 @@
           <li class="caveat" style="color:#999;font-size:13px;">需自行备份数据</li>
           <li class="caveat" style="color:#999;font-size:13px;">不懂电脑维护较麻烦</li>
         </ul>
-        <a href="/WMS-Package.zip" class="btn btn-outline" style="width:100%">下载安装包</a>
+        <a href="/WMS-Package.zip" class="btn btn-outline" style="width:100%" onclick="trackDownload(event)">下载安装包</a>
       </div>
       <div class="price-card featured">
         <span class="badge">推荐</span>
@@ -220,7 +220,7 @@
     <h2>让仓库管理告别 Excel</h2>
     <p>90 天免费试用，满意后 ¥999 起 / 年</p>
     <a href="/login" class="btn btn-success">免费试用</a>
-    <p style="margin-top:16px;color:#999;font-size:14px;">也支持私有部署，<a href="/WMS-Package.zip" style="color:#1677ff;">下载安装包</a>一键启动</p>
+    <p style="margin-top:16px;color:#999;font-size:14px;">也支持私有部署，<a href="/WMS-Package.zip" style="color:#1677ff;" onclick="trackDownload(event)">下载安装包</a>一键启动</p>
   </div>
 </section>
 
@@ -343,6 +343,14 @@ async function handleRegister(e) {
 
 
 <script>
+function trackDownload(e) {
+  e.preventDefault();
+  fetch('/api/app/download-counter', { method: 'POST' }).then(function() {
+    window.location.href = '/WMS-Package.zip';
+  }).catch(function() {
+    window.location.href = '/WMS-Package.zip';
+  });
+}
 if (typeof Capacitor === "undefined" && window.matchMedia("(max-width: 640px)").matches) {
   document.getElementById("app-download").style.display = "block";
 }

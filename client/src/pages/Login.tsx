@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, message } from 'antd';
 import { UserOutlined, LockOutlined, InboxOutlined } from '@ant-design/icons';
 import apiClient from '../api/client';
@@ -10,6 +10,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const reason = searchParams.get('reason');
+    if (reason) {
+      message.error(reason, 5);
+    }
+  }, []);
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
