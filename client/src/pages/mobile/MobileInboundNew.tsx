@@ -31,7 +31,7 @@ export default function MobileInboundNew() {
 
   const { data: contractsData } = useQuery({
     queryKey: ['mobile-contracts'],
-    queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 9999 } }).then(r => r.data),
+    queryFn: () => apiClient.get('/contracts', { params: { status: 'active', pageSize: 500 } }).then(r => r.data),
   });
 
   const { data: selectedContract } = useQuery({

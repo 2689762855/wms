@@ -40,7 +40,7 @@ export default function InboundNew() {
 
   const { data: contractsData } = useQuery({
     queryKey: ['contracts'],
-    queryFn: () => apiClient.get('/contracts', { params: { pageSize: 9999 } }).then(r => r.data),
+    queryFn: () => apiClient.get('/contracts', { params: { pageSize: 500 } }).then(r => r.data),
   });
 
   // 选中合同的详情

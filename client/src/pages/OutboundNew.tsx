@@ -105,7 +105,7 @@ export default function OutboundNew() {
     setItems(prev => prev.filter(i => !i.contractId || selectedContractIds.includes(i.contractId)));
   }, [selectedContractIds]);
 
-  const { data: containersData } = useQuery({ queryKey: ['containers'], queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data) });
+  const { data: containersData } = useQuery({ queryKey: ['containers'], queryFn: () => apiClient.get('/containers', { params: { pageSize: 500 } }).then(r => r.data) });
 
   const { data: selectedContainer } = useQuery({
     queryKey: ['container', selectedContainerId],
