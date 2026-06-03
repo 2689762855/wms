@@ -64,8 +64,9 @@ usersRouter.post('/', authenticate, authorize('super_admin', 'warehouse_admin', 
       // 检查操作员数量限制：标准版最多5人，专业版最多20人
       const customer = await prisma.customer.findFirst({ where: { id: req.customerId!, deletedAt: null }, select: { maxWarehouses: true } });
       const maxOperators = (customer?.maxWarehouses || 1) >= 3 ? 20 : 5;
+      const customerWhIds = (await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } })).map(w => w.id);
       const operatorCount = await platformPrisma.user.count({
-        where: { createdById: req.userId, role: 'operator' },
+        where: { warehouseId: { in: customerWhIds }, role: 'operator' },
       });
       if (operatorCount >= maxOperators) {
         return res.status(400).json({ error: `操作员已达上限（${maxOperators}人），请升级版本` });

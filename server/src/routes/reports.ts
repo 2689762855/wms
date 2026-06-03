@@ -24,6 +24,7 @@ reportsRouter.get('/stock-summary', async (req: AuthRequest, res: Response) => {
     where,
     include: {
       inventories: {
+        take: 20000,
         include: { product: true },
       },
     },
@@ -147,14 +148,19 @@ reportsRouter.get('/customer-stats', async (req: AuthRequest, res: Response) => 
   const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
 
   // Prisma 6 DateTime is stored as Unix ms integers, use raw SQL with numeric comparison
-  const custFilter = req.customerId ? `AND customerId = ${Number(req.customerId)}` : '';
+  const params: any[] = [start.getTime(), end.getTime()];
+  let custFilter = '';
+  if (req.customerId) {
+    custFilter = 'AND c.customerId = ?';
+    params.push(Number(req.customerId));
+  }
   const containers = await prisma.$queryRawUnsafe<any[]>(
     `SELECT c.id, c.businessCustomerId, c.sealTime, ci.outboundId, ci.productId, ci.actualQty
      FROM Container c
      LEFT JOIN ContainerItem ci ON ci.containerId = c.id
      WHERE c.status = 'sealed' AND c.businessCustomerId IS NOT NULL AND c.businessCustomerId != 0 AND c.sealTime >= ? AND c.sealTime < ? ${custFilter}
      ORDER BY c.sealTime ASC`,
-    start.getTime(), end.getTime()
+    ...params
   );
   // 按 container 归组
   const containerMap = new Map<number, { businessCustomerId: number; month: number; items: { outboundId: number; productId: number; actualQty: number }[] }>();
