@@ -2,7 +2,30 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import multer from 'multer';
 import path from 'path';
-import * as XLSX from 'xlsx';
+// CSV 解析：替代 xlsx，零依赖，避免高危漏洞
+function parseCSV(buffer: Buffer): string[][] {
+  const text = buffer.toString('utf-8').replace(/^﻿/, ''); // 去除 UTF-8 BOM
+  const rows: string[][] = [];
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const cols: string[] = [];
+    let col = '', inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuote) {
+        if (ch === '"') { if (line[i + 1] === '"') { col += '"'; i++; } else inQuote = false; }
+        else col += ch;
+      } else {
+        if (ch === '"') inQuote = true;
+        else if (ch === ',') { cols.push(col); col = ''; }
+        else col += ch;
+      }
+    }
+    cols.push(col);
+    rows.push(cols);
+  }
+  return rows;
+}
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
@@ -64,9 +87,9 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
 
 // 下载导入模板（必须在 /:id 之前）
 productsRouter.get('/template', (_req: AuthRequest, res: Response) => {
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename=product-template.xlsx');
-  res.sendFile('product-template.xlsx', { root: 'src/assets' });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=product-template.csv');
+  res.sendFile('product-template.csv', { root: 'src/assets' });
 });
 
 // 批量导入商品（必须在 /:id 之前）
@@ -79,11 +102,9 @@ productsRouter.post('/upload-image', adminWrite, uploadImage.single('image'), as
 
 productsRouter.post('/import', adminWrite, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.file) return res.status(400).json({ error: '请上传 Excel 文件' });
+    if (!req.file) return res.status(400).json({ error: '请上传 CSV 文件' });
 
-    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const rows = parseCSV(req.file.buffer);
     if (rows.length < 2) return res.status(400).json({ error: '模板为空，请填写商品数据' });
 
     const customerId = req.customerId || null;
