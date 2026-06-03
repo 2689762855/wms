@@ -38,6 +38,14 @@ async function cleanup() {
         await prisma.warehouse.delete({ where: { id: wid } });
       }
 
+      // 清理合同和货柜相关数据（外键关联 Customer，必须先于 Customer 删除）
+      await prisma.containerItem.deleteMany({ where: { container: { customerId: id } } });
+      await prisma.containerContract.deleteMany({ where: { container: { customerId: id } } });
+      await prisma.contractItem.deleteMany({ where: { contract: { customerId: id } } });
+      await prisma.container.deleteMany({ where: { customerId: id } });
+      await prisma.contract.deleteMany({ where: { customerId: id } });
+      await prisma.businessCustomer.deleteMany({ where: { tenantId: id } });
+
       await prisma.product.deleteMany({ where: { customerId: id } });
       await prisma.category.deleteMany({ where: { customerId: id } });
       await prisma.customer.delete({ where: { id } });

@@ -50,7 +50,7 @@ export default function MobileOutboundNew() {
 
   const { data: containersData } = useQuery({
     queryKey: ['mobile-containers'],
-    queryFn: () => apiClient.get('/containers', { params: { pageSize: 9999 } }).then(r => r.data),
+    queryFn: () => apiClient.get('/containers', { params: { pageSize: 500 } }).then(r => r.data),
   });
 
   const { data: contracts } = useQuery({
@@ -78,7 +78,7 @@ export default function MobileOutboundNew() {
   // 全部仓库库存（合同自动填商品用，不需要先扫库位）
   const { data: allInventory } = useQuery({
     queryKey: ['all-inventory-outbound'],
-    queryFn: () => apiClient.get('/inventory', { params: { pageSize: 9999 } }).then(r => r.data as InventoryItem[]),
+    queryFn: () => apiClient.get('/inventory', { params: { pageSize: 2000 } }).then(r => r.data as InventoryItem[]),
   });
 
   // 匹配排柜号
