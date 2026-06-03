@@ -146,7 +146,7 @@ export default function Products() {
         <Space>
           <Button icon={<DownloadOutlined />} onClick={() => apiClient.get('/products/template', { responseType: 'blob' }).then(res => {
             const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement('a'); a.href = url; a.download = 'product-template.xlsx'; a.click();
+            const a = document.createElement('a'); a.href = url; a.download = 'product-template.csv'; a.click();
             URL.revokeObjectURL(url);
           }).catch(() => message.error('下载失败，请重试'))}>下载模板</Button>
           <Select
@@ -157,7 +157,7 @@ export default function Products() {
             onChange={setImportWarehouseId}
             options={warehouses?.map((w: Warehouse) => ({ label: w.name, value: w.id }))}
           />
-          <Upload accept=".xlsx,.xls,.csv" showUploadList={false} beforeUpload={file => {
+          <Upload accept=".csv" showUploadList={false} beforeUpload={file => {
             if (!importWarehouseId) { message.error('请先选择入库仓库'); return false; }
             const form = new FormData();
             form.append('file', file);
