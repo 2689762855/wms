@@ -18,8 +18,12 @@ export default function InventoryLogs() {
     transfer_in: { color: 'blue', label: '调拨入库' },
     transfer_out: { color: 'orange', label: '调拨出库' },
     check_adjust: { color: 'purple', label: '盘点调整' },
+    check_reopen: { color: 'gold', label: '重新盘点' },
     container_return: { color: 'orange', label: '排柜退回' },
     container_adjust: { color: 'purple', label: '排柜调整' },
+    location_move_out: { color: 'blue', label: '库位移出' },
+    location_move_in: { color: 'blue', label: '库位移入' },
+    assign_location: { color: 'cyan', label: '分配库位' },
   };
 
   const columns = [

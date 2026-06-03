@@ -1,5 +1,9 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+
+dayjs.locale('zh-cn');
 
 const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 import { ConfigProvider, Spin } from 'antd';

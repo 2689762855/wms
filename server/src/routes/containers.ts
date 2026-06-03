@@ -22,6 +22,14 @@ containersRouter.get('/', async (req: AuthRequest, res: Response) => {
   if (customerId) where.customerId = customerId;
   if (req.customerId) where.customerId = req.customerId;
 
+  const startDate = req.query.startDate as string;
+  const endDate = req.query.endDate as string;
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) (where.createdAt as any).gte = new Date(startDate);
+    if (endDate) (where.createdAt as any).lte = new Date(endDate);
+  }
+
   const [data, total] = await Promise.all([
     prisma.container.findMany({
       where,

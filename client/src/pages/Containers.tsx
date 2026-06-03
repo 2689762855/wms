@@ -21,15 +21,23 @@ export default function Containers() {
   const [custMgrOpen, setCustMgrOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [bizCustFilter, setBizCustFilter] = useState<number | undefined>();
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const { data: products } = useQuery<any[]>({
     queryKey: ['products-all'],
     queryFn: () => apiClient.get('/products', { params: { pageSize: 999 } }).then(r => r.data.data),
   });
 
+  const monthParam = dateRange?.[0]
+    ? { startDate: dateRange[0].startOf('month').toISOString(), endDate: dateRange[0].endOf('month').toISOString() }
+    : {};
+
   const { data, isLoading } = useQuery({
-    queryKey: ['containers', bizCustFilter],
+    queryKey: ['containers', bizCustFilter, dateRange],
     queryFn: () => apiClient.get('/containers', {
-      params: { ...(bizCustFilter ? { businessCustomerId: bizCustFilter } : {}) },
+      params: {
+        ...(bizCustFilter ? { businessCustomerId: bizCustFilter } : {}),
+        ...monthParam,
+      },
     }).then((r) => r.data),
   });
 
@@ -108,6 +116,7 @@ export default function Containers() {
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>排柜管理</Typography.Title>}
       extra={<Space>
+        <DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" />
         <Select allowClear placeholder="客户筛选" style={{ width: 150 }} value={bizCustFilter} onChange={(v) => setBizCustFilter(v)} showSearch optionFilterProp="label"
           options={businessCustomers?.map((c) => ({ label: c.realName, value: c.id }))} />
         <Button onClick={() => setCustMgrOpen(true)}>客户管理</Button>

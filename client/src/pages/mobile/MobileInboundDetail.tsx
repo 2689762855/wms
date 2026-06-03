@@ -20,6 +20,7 @@ export default function MobileInboundDetail() {
   const itemColumns = [
     { title: '商品', dataIndex: ['product', 'name'], key: 'name', width: 120 },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 100 },
+    { title: '库位', key: 'loc', width: 80, render: (_: unknown, r: any) => r.location?.name || order.location?.name || '-' },
     { title: '数量', dataIndex: 'quantity', key: 'qty', width: 50, align: 'center' as const },
     { title: '单价', dataIndex: 'unitPrice', key: 'price', width: 60, align: 'center' as const,
       render: (v: number | undefined) => v != null ? `¥${v.toFixed(2)}` : '-' },

@@ -7,7 +7,7 @@ locationsRouter.use(authenticate);
 
 // 按扫码 code 查询库位
 locationsRouter.get('/code/:code', async (req: AuthRequest, res: Response) => {
-  const location = await prisma.location.findUnique({
+  const location = await prisma.location.findFirst({
     where: { code: req.params.code as string },
     include: { warehouse: true },
   });

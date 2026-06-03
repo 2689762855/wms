@@ -110,7 +110,7 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
       let sku = row[0]?.toString().trim() || '';
       if (!sku) sku = nameSkuMap.get(name) || ''; // 同名商品复用 SKU
 
-      let productExists = sku ? !!(await prisma.product.findUnique({ where: { sku }, select: { id: true } })) : false;
+      let productExists = sku ? !!(await prisma.product.findFirst({ where: { sku }, select: { id: true } })) : false;
 
       // SKU 为空时按名称+客户查重，防止重复导入
       if (!productExists && !sku) {

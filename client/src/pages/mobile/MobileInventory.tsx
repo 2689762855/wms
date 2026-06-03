@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Input, Card, Tag, Typography, Space, Spin, Empty, Modal } from 'antd';
+import { Input, Card, Tag, Typography, Space, Spin, Empty, Modal, Select } from 'antd';
 import { SearchOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import apiClient from '../../api/client';
 import { getServerUrl } from '../../utils/serverConfig';
@@ -14,24 +14,29 @@ function toFullUrl(path: string | null | undefined): string | null {
 
 export default function MobileInventory() {
   const [keyword, setKeyword] = useState('');
+  const [categoryId, setCategoryId] = useState<number | undefined>();
   const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
+  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories').then(r => r.data) });
+
   const { data: items, isLoading, isError } = useQuery({
-    queryKey: ['inventory-search', keyword],
-    queryFn: () => apiClient.get('/inventory', { params: { keyword: keyword || undefined, pageSize: 200 } })
+    queryKey: ['inventory-search', keyword, categoryId],
+    queryFn: () => apiClient.get('/inventory', { params: { keyword: keyword || undefined, categoryId, pageSize: 200 } })
       .then(r => r.data as InventoryItem[]),
   });
 
-  // 按商品分组
-  const grouped = new Map<number, { product: InventoryItem['product']; locations: { wh: string; loc: string; qty: number }[] }>();
+  // 按商品+批次分组
+  const grouped = new Map<string, { product: InventoryItem['product']; locations: { wh: string; loc: string; qty: number; batchNo?: string | null }[] }>();
   items?.forEach(item => {
-    if (!grouped.has(item.productId)) {
-      grouped.set(item.productId, { product: item.product, locations: [] });
+    const key = `${item.productId}_${item.batchNo || 'null'}`;
+    if (!grouped.has(key)) {
+      grouped.set(key, { product: item.product, locations: [] });
     }
-    grouped.get(item.productId)!.locations.push({
+    grouped.get(key)!.locations.push({
       wh: item.warehouse.name,
       loc: item.location?.name || '无库位',
       qty: item.quantity,
+      batchNo: item.batchNo,
     });
   });
 
@@ -47,8 +52,11 @@ export default function MobileInventory() {
         onSearch={v => setKeyword(v)}
         enterButton={<><SearchOutlined /> 搜索</>}
         size="large"
-        style={{ marginBottom: 12 }}
+        style={{ marginBottom: 8 }}
       />
+      <Select allowClear placeholder="商品分类" value={categoryId} onChange={setCategoryId}
+        style={{ width: '100%', marginBottom: 12 }} size="large"
+        options={categories?.map((c: any) => ({ label: c.name, value: c.id }))} />
 
       {isLoading && <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>}
 
@@ -84,6 +92,7 @@ export default function MobileInventory() {
                     <Typography.Text style={{ fontSize: 13 }}>
                       <EnvironmentOutlined style={{ marginRight: 4, color: '#999' }} />
                       {loc.wh} · {loc.loc}
+                      {loc.batchNo && <Tag color="geekblue" style={{ fontSize: 10, marginLeft: 4 }}>{loc.batchNo}</Tag>}
                     </Typography.Text>
                     <Tag color="blue" style={{ fontSize: 13 }}>{loc.qty}</Tag>
                   </div>

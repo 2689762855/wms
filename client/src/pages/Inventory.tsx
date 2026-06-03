@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, message, InputNumber } from 'antd';
+import { Table, Select, Input, Card, Typography, Space, Tag, Button, Modal, message, InputNumber, Cascader } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
-import { getCategoryLevelName } from '../utils/categoryTree';
+import { getCategoryLevelName, buildTree, toCascaderOptions } from '../utils/categoryTree';
 import { getServerUrl } from '../utils/serverConfig';
 import type { Warehouse, InventoryItem, Category, Location, ProductWarehouse } from '../types';
 
@@ -133,13 +133,15 @@ export default function Inventory() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [keyword, setKeyword] = useState('');
   const [batchNo, setBatchNo] = useState('');
+  const [categoryId, setCategoryId] = useState<number | undefined>();
   const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories').then(r => r.data) });
+  const cascaderOptions = useMemo(() => categories ? toCascaderOptions(buildTree(categories)) : [], [categories]);
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', warehouseId, keyword, batchNo],
-    queryFn: () => apiClient.get('/inventory', { params: { warehouseId, keyword, batchNo } }).then(r => r.data),
+    queryKey: ['inventory', warehouseId, keyword, batchNo, categoryId],
+    queryFn: () => apiClient.get('/inventory', { params: { warehouseId, keyword, batchNo, categoryId } }).then(r => r.data),
   });
 
   const { data: productWarehouses } = useQuery({
@@ -227,6 +229,9 @@ export default function Inventory() {
         </Select>
         <Input.Search placeholder="搜索商品名称" allowClear onSearch={setKeyword} style={{ width: 220 }} />
         <Input.Search placeholder="搜索批次号" allowClear onSearch={setBatchNo} style={{ width: 180 }} />
+        <Cascader allowClear placeholder="商品分类" style={{ width: 180 }}
+          options={cascaderOptions} changeOnSelect
+          onChange={(val) => setCategoryId(val ? val[val.length - 1] as number : undefined)} />
       </Space>
       <Table rowKey={(r: { productId: number; warehouseId: number }) => `${r.productId}-${r.warehouseId}`} columns={columns} dataSource={grouped} loading={isLoading}
         pagination={{ pageSize: 50, showTotal: (t) => `共 ${t} 条` }}

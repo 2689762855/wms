@@ -35,6 +35,13 @@ inboundRouter.get('/', async (req: AuthRequest, res: Response) => {
       where.warehouseId = req.userWarehouseId;
     }
   }
+  const startDate = req.query.startDate as string;
+  const endDate = req.query.endDate as string;
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) (where.createdAt as any).gte = new Date(startDate);
+    if (endDate) (where.createdAt as any).lte = new Date(endDate);
+  }
   const [data, total] = await Promise.all([
     prisma.inboundOrder.findMany({
       where,
@@ -52,7 +59,7 @@ inboundRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =>
   const id = parseInt(req.params.id as string);
   const order = await prisma.inboundOrder.findUnique({
     where: { id },
-    include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true, contract: { select: { id: true, contractNo: true } } } } },
+    include: { warehouse: true, location: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true, contract: { select: { id: true, contractNo: true } } } } },
   });
   if (!order) return res.status(404).json({ error: '不存在' });
   if (req.userRole !== 'super_admin') {
@@ -101,7 +108,7 @@ inboundRouter.post('/', async (req: AuthRequest, res: Response) => {
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
-          locationId: i.locationId ?? null,
+          locationId: i.locationId ?? locationId ?? null,
           expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
           contractId: i.contractId ?? null,
         })),

@@ -12,6 +12,7 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
   const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
   const keyword = (req.query.keyword as string) || '';
   const batchNo = (req.query.batchNo as string) || '';
+  const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
 
   // 非超管只能看自己仓库/客户的数据
   let tenantWhIds: number[] | undefined;
@@ -40,6 +41,9 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
   if (productId) where.productId = productId;
   if (keyword) {
     where.product = { name: { contains: keyword } };
+  }
+  if (categoryId) {
+    where.product = { ...(where.product as any), categoryId };
   }
   if (batchNo) {
     where.batchNo = { contains: batchNo };

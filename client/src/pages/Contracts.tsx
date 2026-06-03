@@ -1,31 +1,48 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Tag, Popconfirm, List } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, Card, Typography, message, Tag, Popconfirm, List, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import ProductSelector from '../components/ProductSelector';
+import type { Product } from '../types';
+import dayjs from 'dayjs';
 
 export default function Contracts() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
-  const [selectedProducts, setSelectedProducts] = useState<{ productId?: number; plannedQty: number; unitPrice?: number }[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<{ productId?: number; productName?: string; productSku?: string; plannedQty: number; unitPrice?: number }[]>([]);
+  const [productSelectorOpen, setProductSelectorOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [bizCustFilter, setBizCustFilter] = useState<number | undefined>();
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [custMgrOpen, setCustMgrOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['contracts', statusFilter, bizCustFilter],
-    queryFn: () => apiClient.get('/contracts', {
-      params: { ...(statusFilter ? { status: statusFilter } : {}), ...(bizCustFilter ? { businessCustomerId: bizCustFilter } : {}) },
-    }).then((r) => r.data),
-  });
+  const handleProductsSelected = (prods: Product[]) => {
+    const existingIds = new Set(selectedProducts.map((p) => p.productId));
+    const newItems = prods
+      .filter((p) => !existingIds.has(p.id))
+      .map((p) => ({ productId: p.id, productName: p.name, productSku: p.sku, plannedQty: 0, unitPrice: undefined as number | undefined }));
+    setSelectedProducts([...selectedProducts, ...newItems]);
+    setProductSelectorOpen(false);
+  };
 
-  const { data: products } = useQuery<any[]>({
-    queryKey: ['products-all'],
-    queryFn: () => apiClient.get('/products', { params: { pageSize: 9999 } }).then((r) => r.data.data),
+  const monthParam = dateRange?.[0]
+    ? { startDate: dateRange[0].startOf('month').toISOString(), endDate: dateRange[0].endOf('month').toISOString() }
+    : {};
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['contracts', statusFilter, bizCustFilter, dateRange],
+    queryFn: () => apiClient.get('/contracts', {
+      params: {
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(bizCustFilter ? { businessCustomerId: bizCustFilter } : {}),
+        ...monthParam,
+      },
+    }).then((r) => r.data),
   });
 
   const { data: businessCustomers, refetch: refetchCustomers } = useQuery<{ id: number; realName: string }[]>({
@@ -81,6 +98,7 @@ export default function Contracts() {
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>合同管理</Typography.Title>}
       extra={<Space>
         <Select allowClear placeholder="状态筛选" style={{ width: 120 }} value={statusFilter || undefined} onChange={(v) => setStatusFilter(v || '')} options={[{ label: '进行中', value: 'active' }, { label: '已完成', value: 'completed' }, { label: '已取消', value: 'cancelled' }]} />
+        <DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" />
         <Select allowClear placeholder="客户筛选" style={{ width: 150 }} value={bizCustFilter} onChange={(v) => setBizCustFilter(v)} showSearch optionFilterProp="label"
           options={businessCustomers?.map((c) => ({ label: c.realName, value: c.id }))} />
         <Button onClick={() => setCustMgrOpen(true)}>客户管理</Button>
@@ -105,11 +123,11 @@ export default function Contracts() {
           <Typography.Text strong>商品明细</Typography.Text>
           <div style={{ marginTop: 8 }}>
             {selectedProducts.map((sp, idx) => (
-              <Space key={idx} style={{ display: 'flex', marginBottom: 8 }}>
-                <Select style={{ width: 300 }} placeholder="选择商品" showSearch optionFilterProp="label"
-                  value={sp.productId}
-                  onChange={(v) => { const next = [...selectedProducts]; next[idx] = { ...next[idx], productId: v }; setSelectedProducts(next); }}
-                  options={products?.map((p: any) => ({ label: `${p.sku} | ${p.name}`, value: p.id }))} />
+              <Space key={idx} style={{ display: 'flex', marginBottom: 8, alignItems: 'center' }}>
+                <Typography.Text style={{ minWidth: 260, padding: '4px 8px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+                  {sp.productSku && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{sp.productSku} | </Typography.Text>}
+                  {sp.productName || '未选择'}
+                </Typography.Text>
                 <InputNumber min={1} placeholder="计划数量" value={sp.plannedQty}
                   onChange={(v) => { const next = [...selectedProducts]; next[idx] = { ...next[idx], plannedQty: v || 0 }; setSelectedProducts(next); }} />
                 <InputNumber min={0} step={0.01} placeholder="单价" value={sp.unitPrice} style={{ width: 100 }}
@@ -117,7 +135,13 @@ export default function Contracts() {
                 <Button danger size="small" onClick={() => setSelectedProducts(selectedProducts.filter((_, i) => i !== idx))}>删除</Button>
               </Space>
             ))}
-            <Button type="dashed" onClick={() => setSelectedProducts([...selectedProducts, { productId: undefined, plannedQty: 0 }])} block>+ 添加商品</Button>
+            <Button type="dashed" onClick={() => setProductSelectorOpen(true)} block icon={<PlusOutlined />}>添加商品</Button>
+            <ProductSelector
+              open={productSelectorOpen}
+              onCancel={() => setProductSelectorOpen(false)}
+              onOk={handleProductsSelected}
+              excludeIds={selectedProducts.map((p) => p.productId).filter(Boolean) as number[]}
+            />
           </div>
         </Form>
       </Modal>
