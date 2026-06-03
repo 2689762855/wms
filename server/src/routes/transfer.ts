@@ -17,35 +17,38 @@ async function executeTransfer(
     if (totalQty < item.quantity) {
       throw new Error(`库存不足: productId=${item.productId}, 库存=${totalQty}, 需要=${item.quantity}`);
     }
+    const fromTotalBefore = (await tx.inventory.aggregate({
+      where: { productId: item.productId, warehouseId: order.fromWarehouseId },
+      _sum: { quantity: true },
+    }))._sum.quantity || 0;
     let remaining = item.quantity;
     for (const inv of fromInvs) {
       if (remaining <= 0) break;
       const deduct = Math.min(inv.quantity, remaining);
-      const fromTotal = (await tx.inventory.aggregate({
-        where: { productId: item.productId, warehouseId: order.fromWarehouseId },
-        _sum: { quantity: true },
-      }))._sum.quantity || 0;
       await tx.inventory.update({ where: { id: inv.id }, data: { quantity: { decrement: deduct } } });
       await tx.stockLog.create({
-        data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: fromTotal, afterQty: fromTotal - deduct, type: 'transfer_out', refId: order.id },
+        data: { productId: item.productId, warehouseId: order.fromWarehouseId, changeQty: -deduct, beforeQty: fromTotalBefore, afterQty: fromTotalBefore - item.quantity, type: 'transfer_out', refId: order.id },
       });
+
+      // 调入方：按批次写入，保留源批次的 batchNo
+      const toTotalBefore = (await tx.inventory.aggregate({
+        where: { productId: item.productId, warehouseId: order.toWarehouseId },
+        _sum: { quantity: true },
+      }))._sum.quantity || 0;
+      const toInv = await tx.inventory.findFirst({
+        where: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, batchNo: inv.batchNo ?? null },
+      });
+      if (toInv) {
+        await tx.inventory.update({ where: { id: toInv.id }, data: { quantity: { increment: deduct } } });
+      } else {
+        await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: deduct, batchNo: inv.batchNo } });
+      }
+      await tx.stockLog.create({
+        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: deduct, beforeQty: toTotalBefore, afterQty: toTotalBefore + deduct, type: 'transfer_in', refId: order.id },
+      });
+
       remaining -= deduct;
     }
-    const toInv = await tx.inventory.findFirst({
-      where: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, batchNo: null },
-    });
-    if (toInv) {
-      await tx.inventory.update({ where: { id: toInv.id }, data: { quantity: { increment: item.quantity } } });
-    } else {
-      await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: item.quantity } });
-    }
-    const toTotalBefore = (await tx.inventory.aggregate({
-      where: { productId: item.productId, warehouseId: order.toWarehouseId },
-      _sum: { quantity: true },
-    }))._sum.quantity || 0;
-    await tx.stockLog.create({
-      data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: item.quantity, beforeQty: toTotalBefore, afterQty: toTotalBefore + item.quantity, type: 'transfer_in', refId: order.id },
-    });
   }
 }
 

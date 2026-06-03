@@ -54,13 +54,13 @@ stockMoveRouter.post('/', async (req: AuthRequest, res: Response) => {
   try {
     await prisma.$transaction(async (tx) => {
       for (const item of items) {
-        // 查找源库位库存
+        // 查找源库位库存（不限批次，直接取第一条有库存的）
         const fromInv = await tx.inventory.findFirst({
           where: {
             productId: item.productId,
             warehouseId,
             locationId: fromLocationId,
-            batchNo: null,
+            quantity: { gt: 0 },
           },
         });
 
@@ -78,13 +78,13 @@ stockMoveRouter.post('/', async (req: AuthRequest, res: Response) => {
           data: { quantity: { decrement: item.quantity } },
         });
 
-        // 目标库位增库存 (upsert，原子操作)
+        // 目标库位增库存，保留源批次的 batchNo
         let toInv = await tx.inventory.findFirst({
           where: {
             productId: item.productId,
             warehouseId,
             locationId: toLocationId,
-            batchNo: null,
+            batchNo: fromInv.batchNo ?? null,
           },
         });
         if (toInv) {
@@ -99,6 +99,7 @@ stockMoveRouter.post('/', async (req: AuthRequest, res: Response) => {
               warehouseId,
               locationId: toLocationId,
               quantity: item.quantity,
+              batchNo: fromInv.batchNo,
             },
           });
         }

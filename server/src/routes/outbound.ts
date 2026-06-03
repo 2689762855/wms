@@ -134,17 +134,10 @@ outboundRouter.put('/:id/link-container', validateId, adminWrite, async (req: Au
   // 自动创建 containerItems
   const items = await prisma.outboundItem.findMany({ where: { outboundId: id }, include: { product: { select: { name: true } } } });
   for (const item of items) {
-    await prisma.containerItem.upsert({
-      where: { id: -1 }, // force create (no unique constraint)
-      create: { containerId, outboundId: id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo },
-      update: {},
-    }).catch(async () => {
-      // upsert failed (no unique), try findFirst + create
-      const exist = await prisma.containerItem.findFirst({ where: { containerId, outboundId: id, productId: item.productId } });
-      if (!exist) {
-        await prisma.containerItem.create({ data: { containerId, outboundId: id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo } });
-      }
-    });
+    const exist = await prisma.containerItem.findFirst({ where: { containerId, outboundId: id, productId: item.productId } });
+    if (!exist) {
+      await prisma.containerItem.create({ data: { containerId, outboundId: id, productId: item.productId, plannedQty: item.quantity, actualQty: item.quantity, returnedQty: 0, locationId: item.locationId, batchNo: item.batchNo } });
+    }
   }
   // 同步容器合同
   const ocIds = [...new Set(items.map(i => i.contractId).filter(Boolean))] as number[];
@@ -204,9 +197,14 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
           orderBy: specifiedBatch ? undefined : { batchNo: 'asc' as const },
         });
         if (!inv) {
-          const msg = specifiedBatch
-            ? `库存不足: productId=${item.productId}, 指定批次 ${specifiedBatch} 库存不够`
-            : `库存不足: productId=${item.productId}, 已分配 ${item.quantity - remaining}, 还需 ${remaining}`;
+          let msg: string;
+          if (specifiedBatch) {
+            msg = `库存不足: productId=${item.productId}, 指定批次 ${specifiedBatch} 库存不够`;
+          } else if (skippedBatches.size > 0) {
+            msg = `库存不足: productId=${item.productId}, 所有可用批次已被其他排柜锁定 (${[...skippedBatches].join(', ')})`;
+          } else {
+            msg = `库存不足: productId=${item.productId}, 已分配 ${item.quantity - remaining}, 还需 ${remaining}`;
+          }
           throw new Error(msg);
         }
 

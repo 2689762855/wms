@@ -122,15 +122,22 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
     data = rawData.filter(c =>
       c.status === 'active' || c.items.some(ci => (shippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
     );
-    // 全量计数：一次事务内并行查询所有合同和出库记录
-    const [allContracts, allObItems] = await prisma.$transaction([
+    // 全量计数：额外查询甩柜退回，保证 total 准确
+    const [allContracts, allObItems, allReturnedItems] = await prisma.$transaction([
       prisma.contract.findMany({ where, select: { id: true, items: { select: { productId: true, plannedQty: true } } } }),
-      prisma.outboundItem.findMany({ where: { contractId: { not: null } }, select: { contractId: true, productId: true, quantity: true } }),
+      prisma.outboundItem.findMany({ where: { contractId: { not: null } }, select: { outboundId: true, contractId: true, productId: true, quantity: true } }),
+      prisma.containerItem.findMany({ where: { returnedQty: { gt: 0 } }, select: { outboundId: true, productId: true, returnedQty: true } }),
     ]);
+    const returnedMap2 = new Map<string, number>();
+    for (const ri of allReturnedItems) {
+      const k = `${ri.outboundId}_${ri.productId}`;
+      returnedMap2.set(k, (returnedMap2.get(k) || 0) + ri.returnedQty);
+    }
     const allShippedMap = new Map<string, number>();
     for (const ob of allObItems) {
       const k = `${ob.contractId}_${ob.productId}`;
-      allShippedMap.set(k, (allShippedMap.get(k) || 0) + ob.quantity);
+      const ret = returnedMap2.get(`${ob.outboundId}_${ob.productId}`) || 0;
+      allShippedMap.set(k, (allShippedMap.get(k) || 0) + ob.quantity - ret);
     }
     total = allContracts.filter(c =>
       c.items.some(ci => (allShippedMap.get(`${c.id}_${ci.productId}`) || 0) < ci.plannedQty)
@@ -208,7 +215,7 @@ contractsRouter.post('/', async (req: AuthRequest, res: Response) => {
     },
     include: {
       customer: { select: { id: true, username: true, realName: true } },
-      
+
       items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
     },
   });
@@ -254,7 +261,7 @@ contractsRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) 
     data: contractNo ? { contractNo } : {},
     include: {
       customer: { select: { id: true, username: true, realName: true } },
-      
+
       items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
     },
   });
@@ -298,7 +305,7 @@ contractsRouter.get('/:id/reconciliation', validateId, async (req: AuthRequest, 
     where: { id },
     include: {
       customer: { select: { id: true, username: true, realName: true } },
-      
+
       items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
     },
   });
