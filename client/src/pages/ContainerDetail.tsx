@@ -99,16 +99,17 @@ export default function ContainerDetail() {
   // 获取仓库库位列表（用于甩柜归还选择）
   const linkedContracts = container?.contracts || [];
 
-  const firstItem = container?.items?.[0];
+  // 找第一个有有效出库单的条目（跳过 outboundId=0 的手动添加 SKU）
+  const firstLinkedItem = container?.items?.find((i: any) => i.outboundId > 0);
   const { data: warehouseLocations } = useQuery({
-    queryKey: ['container-return-locations', firstItem?.outboundId],
+    queryKey: ['container-return-locations', firstLinkedItem?.outboundId],
     queryFn: async () => {
-      if (!firstItem?.outboundId) return [];
-      const outbound = await apiClient.get(`/outbound/${firstItem.outboundId}`).then(r => r.data);
+      if (!firstLinkedItem?.outboundId) return [];
+      const outbound = await apiClient.get(`/outbound/${firstLinkedItem.outboundId}`).then(r => r.data);
       if (!outbound?.warehouseId) return [];
       return apiClient.get('/locations', { params: { warehouseId: outbound.warehouseId } }).then(r => r.data);
     },
-    enabled: !!firstItem?.outboundId,
+    enabled: !!firstLinkedItem?.outboundId,
   });
 
   // 合并同商品
