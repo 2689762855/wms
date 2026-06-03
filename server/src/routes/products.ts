@@ -2,9 +2,15 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import multer from 'multer';
 import path from 'path';
-// CSV 解析：替代 xlsx，零依赖，避免高危漏洞
+// CSV 解析：替代 xlsx，零依赖，兼容 UTF-8 和 GBK 编码
 function parseCSV(buffer: Buffer): string[][] {
-  const text = buffer.toString('utf-8').replace(/^﻿/, ''); // 去除 UTF-8 BOM
+  let text = buffer.toString('utf-8');
+  // 检测乱码：UTF-8 解码后含大量替换字符（U+FFFD），说明是 GBK
+  if (text.includes('')) {
+    const iconv = require('iconv-lite');
+    text = iconv.decode(buffer, 'gbk');
+  }
+  text = text.replace(/^﻿/, ''); // 去除 UTF-8 BOM
   const rows: string[][] = [];
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;
