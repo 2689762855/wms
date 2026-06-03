@@ -5,8 +5,52 @@ import prisma, { platformPrisma } from '../utils/prisma';
 import { AuthRequest, authenticate, JWT_ADMIN_SECRET, INTER_SERVER_SECRET, THIS_HOST } from '../middleware/auth';
 
 const JWT_EXPIRES_IN = '24h';
+const COOKIE_MAX_AGE = 24 * 60 * 60 * 1000; // 24h ms
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+function setTokenCookie(res: Response, token: string) {
+  res.cookie('wms_token', token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/api',
+    maxAge: COOKIE_MAX_AGE,
+  });
+}
 
 export const authRouter = Router();
+
+// 登录失败锁定：连续5次失败锁定15分钟，成功登录后清零
+const MAX_FAILURES = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+const failedLogins = new Map<string, { count: number; lockedUntil: number }>();
+
+function checkLockout(username: string): string | null {
+  const entry = failedLogins.get(username);
+  if (!entry) return null;
+  if (entry.lockedUntil > Date.now()) {
+    const mins = Math.ceil((entry.lockedUntil - Date.now()) / 60000);
+    return `账号已临时锁定，请 ${mins} 分钟后重试`;
+  }
+  if (entry.lockedUntil > 0) {
+    // 锁定期已过，重置计数（但保留记录等下次失败时重新计数）
+  }
+  return null;
+}
+
+function recordFailedLogin(username: string) {
+  const entry = failedLogins.get(username) || { count: 0, lockedUntil: 0 };
+  entry.count++;
+  if (entry.count >= MAX_FAILURES) {
+    entry.lockedUntil = Date.now() + LOCKOUT_MS;
+  }
+  failedLogins.set(username, entry);
+}
+
+function clearFailedLogins(username: string) {
+  failedLogins.delete(username);
+}
 
 // 统一登录（自动识别 User 或 Customer）
 authRouter.post('/login', async (req: AuthRequest, res: Response) => {
@@ -17,11 +61,16 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
 
+    // 锁定检查
+    const lockMsg = checkLockout(username);
+    if (lockMsg) return res.status(429).json({ error: lockMsg });
+
     // 先查 User 表
     const user = await prisma.user.findUnique({ where: { username } });
     if (user) {
       const valid = await bcrypt.compare(password, user.passwordHash);
       if (!valid) {
+        recordFailedLogin(username);
         return res.status(401).json({ error: '用户名或密码错误' });
       }
       let customerId = null;
@@ -38,6 +87,8 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
         { expiresIn: JWT_EXPIRES_IN }
       );
       const { passwordHash: _, ...rest } = user;
+      clearFailedLogins(username);
+      setTokenCookie(res, token);
       return res.json({ token, user: rest });
     }
 
@@ -57,6 +108,7 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
       }
       const valid = await bcrypt.compare(password, customer.passwordHash);
       if (!valid) {
+        recordFailedLogin(username);
         return res.status(401).json({ error: '用户名或密码错误' });
       }
 
@@ -93,9 +145,12 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
+      clearFailedLogins(username);
+      setTokenCookie(res, token);
       return res.json({ token, user: { ...rest, role: 'tenant_admin', warehouseId, expiresAt: customer.expiresAt }, expiryWarning });
     }
 
+        recordFailedLogin(username);
     return res.status(401).json({ error: '用户名或密码错误' });
   } catch (err) {
     console.error('Login error:', err);
@@ -125,6 +180,7 @@ authRouter.post('/switch-customer', authenticate, async (req: AuthRequest, res: 
       { expiresIn: '8h' }
     );
     const { passwordHash: _, ...rest } = customer;
+      setTokenCookie(res, token);
     res.json({ token, user: { ...rest, role: 'tenant_admin', warehouseId } });
   } catch (err) {
     res.status(500).json({ error: '服务器错误' });
@@ -168,6 +224,7 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
       include: { warehouses: { take: 1, orderBy: { id: 'asc' } } },
     });
     if (!customer) {
+        recordFailedLogin(username);
       return res.status(401).json({ error: '用户名或密码错误' });
     }
 
@@ -177,6 +234,7 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
 
     const valid = await bcrypt.compare(password, customer.passwordHash);
     if (!valid) {
+        recordFailedLogin(username);
       return res.status(401).json({ error: '用户名或密码错误' });
     }
 
@@ -201,6 +259,8 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
       JWT_ADMIN_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
+      clearFailedLogins(username);
+      setTokenCookie(res, token);
     res.json({ token, user: { ...customerWithoutPassword, role: 'tenant_admin', warehouseId } });
   } catch (err) {
     console.error('Tenant login error:', err);
@@ -232,6 +292,7 @@ authRouter.post('/claim', async (req: AuthRequest, res: Response) => {
 
     // 生成正式 token
     const token = jwt.sign(payload, JWT_ADMIN_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    setTokenCookie(res, token);
     res.json({ token });
   } catch (err) {
     console.error('中转 token 验证失败:', err);

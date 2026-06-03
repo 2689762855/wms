@@ -18,6 +18,18 @@ export function runWithTenant(customerId: number, fn: () => void) {
   return tenantCtx.run({ dbPath, customerId }, fn);
 }
 
+/** 断言当前请求处于租户上下文中，否则记录告警（非超管请求不应访问主库） */
+export function assertTenantContext(role?: string) {
+  if (role && role === 'super_admin') return;
+  const ctx = tenantCtx.getStore();
+  if (!ctx) {
+    console.error(`[安全] 租户上下文丢失！role=${role} 的请求未路由到租户数据库，命中了主库`);
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('租户数据库路由异常，已拒绝请求');
+    }
+  }
+}
+
 const mainPrisma = new PrismaClient({
   datasources: { db: { url: `file:${path.join(__dirname, '../../prisma/dev.db')}` } },
 });

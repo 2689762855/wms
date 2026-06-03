@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
@@ -36,8 +37,14 @@ if (isProduction && !process.env.JWT_ADMIN_SECRET) {
   console.error('[安全] 请运行: export JWT_ADMIN_SECRET=$(openssl rand -hex 32)');
   process.exit(1);
 }
-if (!isProduction && !process.env.JWT_ADMIN_SECRET) {
-  console.warn('[安全] 警告：使用开发模式默认 JWT 密钥，生产部署前务必设置 JWT_ADMIN_SECRET');
+if (isProduction && !process.env.INTER_SERVER_SECRET) {
+  console.error('[安全] FATAL: NODE_ENV=production 但未设置 INTER_SERVER_SECRET 环境变量');
+  console.error('[安全] 请运行: export INTER_SERVER_SECRET=$(openssl rand -hex 32)');
+  process.exit(1);
+}
+if (!isProduction) {
+  if (!process.env.JWT_ADMIN_SECRET) console.warn('[安全] 警告：使用开发模式默认 JWT_ADMIN_SECRET');
+  if (!process.env.INTER_SERVER_SECRET) console.warn('[安全] 警告：使用开发模式默认 INTER_SERVER_SECRET');
 }
 
 const app = express();
@@ -59,6 +66,7 @@ app.use(helmet({
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
       upgradeInsecureRequests: null,
+      reportUri: '/api/csp-report',
     },
   },
 }));
@@ -81,7 +89,11 @@ app.use(cors({
     callback(new Error('Not allowed by CORS'));
   },
 }));
-app.use(morgan('short'));
+app.use(cookieParser());
+// 自定义 morgan token：记录租户 ID
+morgan.token('tenant', (req: any) => req.customerId ? `cust=${req.customerId}` : '-');
+morgan.token('user-id', (req: any) => req.userId ? `uid=${req.userId}` : '-');
+app.use(morgan(':remote-addr :method :url :status :response-time ms :tenant :user-id'));
 app.use(express.json({ limit: '1mb' }));
 
 // 限速：登录接口严格限制
@@ -99,6 +111,20 @@ app.use('/api', rateLimit({
   max: 200,
   message: { error: '请求过于频繁，请稍后再试' },
 }));
+
+// CSP 违规报告（记录可能的 XSS 攻击）
+app.post('/api/csp-report', (req, res) => {
+  const report = req.body?.['csp-report'];
+  if (report) {
+    console.error('[CSP] 违规报告:', JSON.stringify({
+      blockedUri: report['blocked-uri'],
+      violatedDirective: report['violated-directive'],
+      documentUri: report['document-uri'],
+      scriptSample: report['script-sample']?.substring(0, 100),
+    }));
+  }
+  res.status(204).end();
+});
 
 // API Routes
 app.use('/api/auth', authRouter);

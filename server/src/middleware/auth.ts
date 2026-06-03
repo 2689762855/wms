@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import prisma, { runWithTenant, platformPrisma } from '../utils/prisma';
+import prisma, { runWithTenant, platformPrisma, assertTenantContext } from '../utils/prisma';
 
 const DEV_ADMIN_SECRET = 'dev-admin-secret-8a1b9c2d3e4f5a6b7c8d9e0f';
 const DEV_INTER_SERVER_SECRET = 'dev-inter-server-shared-key';
@@ -28,13 +28,17 @@ export interface AuthRequest extends Request {
 }
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: '未登录' });
+  // 优先从 HttpOnly Cookie 读取 token，fallback 到 Authorization header（兼容旧客户端/APK）
+  let token = req.cookies?.wms_token || null;
+  if (!token) {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith('Bearer ')) {
+      return res.status(401).json({ error: '未登录' });
+    }
+    token = header.split(' ')[1];
   }
 
   try {
-    const token = header.split(' ')[1];
     const payload = jwt.verify(token, JWT_ADMIN_SECRET) as {
       userId: number;
       role: string;
@@ -84,7 +88,10 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
     // 非超管请求切换到租户数据库
     if (req.customerId && req.userRole !== 'super_admin') {
-      runWithTenant(req.customerId, () => next());
+      runWithTenant(req.customerId, () => {
+        assertTenantContext(req.userRole);
+        next();
+      });
     } else {
       next();
     }
