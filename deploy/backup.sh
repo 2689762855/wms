@@ -10,7 +10,9 @@ mkdir -p $BACKUP_DIR
 sqlite3 $DB "PRAGMA wal_checkpoint(TRUNCATE)" > /dev/null 2>&1
 
 cp $DB $BACKUP_DIR/wms-$(date +%Y%m%d-%H%M%S).db
-gzip $BACKUP_DIR/wms-*.db 2>/dev/null
+# 压缩所有 .db 备份文件（包括手动备份，不限 wms- 前缀）
+gzip $BACKUP_DIR/*.db 2>/dev/null
+# 清理过期备份（匹配所有 .db.gz 文件）
 find $BACKUP_DIR -name '*.db.gz' -mtime +$RETENTION_DAYS -delete
 
 echo "$(date): Backup done, size: $(du -sh $BACKUP_DIR | cut -f1)"
