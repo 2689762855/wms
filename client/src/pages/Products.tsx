@@ -280,7 +280,7 @@ export default function Products() {
             <Form.Item name="costPrice" label="成本价">
               <InputNumber min={0} precision={2} prefix="¥" />
             </Form.Item>
-            <Form.Item name="salePrice" label="售价">
+            <Form.Item name="salePrice" label="默认售价" tooltip="没有关联合同时，入库单价默认取此值">
               <InputNumber min={0} precision={2} prefix="¥" />
             </Form.Item>
           </Space>

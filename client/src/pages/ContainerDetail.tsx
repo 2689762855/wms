@@ -252,7 +252,6 @@ export default function ContainerDetail() {
       render: (_: any, r: any) => {
         if (r.returnedQty <= 0) return <span>-</span>;
         if (container?.status === 'sealed' && !(actualQs[`${r.productId}`] != null && actualQs[`${r.productId}`] !== r.rawActualQty)) {
-          // 已封柜且未修改数量：显示实际归还库位
           const returnLoc = container.items?.find((i: any) => i.productId === r.productId && i.returnLocation)?.returnLocation;
           return returnLoc ? <Tag>{returnLoc.name}</Tag> : <span>-</span>;
         }

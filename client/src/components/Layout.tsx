@@ -13,6 +13,7 @@ import {
   AlertOutlined,
   BarChartOutlined,
   SettingOutlined,
+  KeyOutlined,
   UserOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -27,11 +28,13 @@ import {
 const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
 import { useAuth } from '../stores/AuthContext';
 import ErrorBoundary from './ErrorBoundary';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const { Header, Sider, Content } = AntLayout;
 
 export default function AppLayout({ children }: { children?: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [changePwdOpen, setChangePwdOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -202,7 +205,10 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
                 返回平台管理
               </Button>
             )}
-            <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
+            <Dropdown menu={{ items: [
+              { key: 'change-pwd', icon: <KeyOutlined />, label: '修改密码', onClick: () => setChangePwdOpen(true) },
+              { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout },
+            ] }}>
               <Button type="text" icon={<UserOutlined />}>
                 {user?.realName || user?.username}
                 {plan === 'standard' && <Tag color="blue" style={{ marginLeft: 6, fontSize: 11, lineHeight: '18px' }}>标准版</Tag>}
@@ -217,6 +223,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
         )}
         <Content style={{ margin: 16, padding: 24, background: themeToken.colorBgContainer, borderRadius: themeToken.borderRadiusLG }}>
           <ErrorBoundary>{contentNode}</ErrorBoundary>
+          <ChangePasswordModal open={changePwdOpen} onClose={() => setChangePwdOpen(false)} />
         </Content>
       </AntLayout>
     </AntLayout>

@@ -69,13 +69,13 @@ export default function OutboundDetail() {
     ...(user?.operatorType !== 'warehouse' ? [
       { title: '合同单价', key: 'unitPrice', width: 90,
         render: (_: any, r: any) => {
-          const price = getContractPrice(r.productId);
+          const price = getItemPrice(r);
           return price ? `¥${price.toFixed(2)}` : <span style={{color:'#ccc'}}>—</span>;
         },
       },
       { title: '金额', key: 'amount', width: 90,
         render: (_: any, r: any) => {
-          const price = getContractPrice(r.productId);
+          const price = getItemPrice(r);
           if (!price) return <span style={{color:'#ccc'}}>—</span>;
           const ci = containerItems?.find((ci: any) => ci.productId === r.productId);
           const netQty = ci ? (ci.actualQty || 0) : r.quantity;
@@ -92,13 +92,14 @@ export default function OutboundDetail() {
       .filter((i: any) => i.contract)
       .map((i: any) => [i.contract.id, i.contract])
   ).values()];
-  const getContractPrice = (productId: number) => {
-    for (const lc of linkedContracts) {
-      if (!lc?.items) continue;
-      const ci = lc.items.find((ci: any) => ci.productId === productId);
-      if (ci?.unitPrice) return ci.unitPrice;
+  const getItemPrice = (item: any) => {
+    // 该条目关联的合同 → 取合同单价
+    if (item.contract?.items) {
+      const ci = item.contract.items.find((ci: any) => ci.productId === item.productId);
+      if (ci?.unitPrice != null) return ci.unitPrice;
     }
-    return undefined;
+    // 合同没填单价 → 取商品默认售价
+    return item.product?.salePrice ?? undefined;
   };
 
   return (

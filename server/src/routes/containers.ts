@@ -415,6 +415,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
 
   const isSealed = container.status === 'sealed';
 
+  try {
   await prisma.$transaction(async (tx) => {
     for (const adj of items) {
       const pid = adj.productId;
@@ -438,9 +439,13 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
         });
       }
 
-      // 封柜后调整库存：oldReturnedTotal 已归还，newReturnedTotal 是修正后的甩柜数
-      if (isSealed && newReturnedTotal !== oldReturnedTotal) {
-        const diff = newReturnedTotal - oldReturnedTotal; // 正数=多甩需补还, 负数=少甩需扣回
+      // 封柜后只允许调低（甩柜），不允许调高超装
+      if (isSealed) {
+        const oldActual = existingItems.reduce((s, i) => s + (i.actualQty || 0), 0);
+        if (newActual > oldActual) {
+          throw new Error(`商品 #${pid} 已封柜，不允许增加实装数（原${oldActual}→新${newActual}）`);
+        }
+        const diff = oldActual - newActual;
         if (diff === 0) continue;
 
         // 取原出库单的仓库和归还库位
@@ -539,6 +544,7 @@ containersRouter.put('/:id/adjust', validateId, adminWrite, async (req: AuthRequ
     },
   });
   res.json(updated);
+  } catch (err: any) { return res.status(400).json({ error: err.message || '调整失败' }); }
 });
 
 // 删除货柜（仅 pending 状态可删）
@@ -578,14 +584,24 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   });
   const allContractIds = obContractIds.map(o => o.contractId!);
 
-  // 出库条目→合同映射（用于按合同取单价）
+  // 出库条目→合同映射（用 outboundId+productId 精确匹配，防止同商品多合同串位）
   const itemContracts = await prisma.outboundItem.findMany({
     where: { outboundId: { in: outboundIds }, contractId: { not: null } },
     select: { outboundId: true, productId: true, contractId: true },
   });
-  const itemContractMap = new Map<number, number>();
+  const itemContractMap = new Map<string, number>();
   for (const ic of itemContracts) {
-    itemContractMap.set(ic.productId, ic.contractId);
+    itemContractMap.set(`${ic.outboundId}_${ic.productId}`, ic.contractId!);
+  }
+
+  // 收集所有产品 ID，用于兜底查售价
+  const allPids = [...new Set(container.items.map(i => i.productId))];
+  const productPrices = allPids.length > 0
+    ? await prisma.product.findMany({ where: { id: { in: allPids } }, select: { id: true, salePrice: true } })
+    : [];
+  const productPriceMap = new Map<number, number>();
+  for (const p of productPrices) {
+    if (p.salePrice != null) productPriceMap.set(p.id, p.salePrice);
   }
 
   let contractPriceMap: Map<string, number> = new Map();
@@ -603,8 +619,8 @@ containersRouter.get('/:id/report', validateId, async (req: AuthRequest, res: Re
   const merged = new Map<number, { sku: string; name: string; spec: string; unit: string; plannedQty: number; actualQty: number; returnedQty: number; unitPrice?: number }>();
   for (const item of container.items) {
     const pid = item.productId;
-    const cid = itemContractMap.get(pid);
-    const price = cid ? contractPriceMap.get(`${cid}_${pid}`) : undefined;
+    const cid = itemContractMap.get(`${item.outboundId}_${pid}`);
+    const price = cid ? (contractPriceMap.get(`${cid}_${pid}`) ?? productPriceMap.get(pid)) : productPriceMap.get(pid);
     const existing = merged.get(pid);
     if (existing) {
       existing.plannedQty += item.plannedQty;
@@ -705,6 +721,16 @@ containersRouter.get('/:id/reconciliation', validateId, async (req: AuthRequest,
     if (ci.unitPrice != null) priceMap.set(`${ci.contractId}_${ci.productId}`, ci.unitPrice);
   }
 
+  // 商品默认售价兜底
+  const allPids2 = [...new Set(container.items.map(i => i.productId))];
+  const productPrices2 = allPids2.length > 0
+    ? await prisma.product.findMany({ where: { id: { in: allPids2 } }, select: { id: true, salePrice: true } })
+    : [];
+  const productPriceMap2 = new Map<number, number>();
+  for (const p of productPrices2) {
+    if (p.salePrice != null) productPriceMap2.set(p.id, p.salePrice);
+  }
+
   // 按合同分组
   const contractMap2 = new Map<number, {
     contractId: number; contractNo: string; contractStatus: string;
@@ -726,7 +752,7 @@ containersRouter.get('/:id/reconciliation', validateId, async (req: AuthRequest,
     }
     const pid = ci.productId;
     const existing = group.items.get(pid);
-    const up = priceMap.get(`${cid}_${pid}`);
+    const up = priceMap.get(`${cid}_${pid}`) ?? productPriceMap2.get(pid);
     if (existing) {
       existing.plannedQty += ci.plannedQty;
       existing.actualQty += (ci.actualQty || 0);

@@ -13,7 +13,6 @@ interface CartItem {
   productId: number;
   product: Product;
   quantity: number;
-  unitPrice?: number;
 }
 
 export default function MobileInboundNew() {
@@ -48,7 +47,7 @@ export default function MobileInboundNew() {
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      const items = cart.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, contractId: selectedContractId }));
+      const items = cart.map(i => ({ productId: i.productId, quantity: i.quantity, contractId: selectedContractId }));
       const createRes = await apiClient.post('/inbound', {
         warehouseId: location!.warehouseId,
         locationId: location!.id,

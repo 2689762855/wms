@@ -104,13 +104,33 @@ inboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
       locationId: locationId || null,
       items: {
-        create: items.map((i: { productId: number; quantity: number; unitPrice?: number; locationId?: number | null; expiryDate?: string | null; contractId?: number | null }) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          locationId: i.locationId ?? locationId ?? null,
-          expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
-          contractId: i.contractId ?? null,
+        create: await Promise.all(items.map(async (i: { productId: number; quantity: number; unitPrice?: number; locationId?: number | null; expiryDate?: string | null; contractId?: number | null }) => {
+          let unitPrice = i.unitPrice;
+          if (unitPrice == null) {
+            if (i.contractId) {
+              // 关联合同 → 取合同单价
+              const ci = await prisma.contractItem.findUnique({
+                where: { contractId_productId: { contractId: i.contractId, productId: i.productId } },
+                select: { unitPrice: true },
+              });
+              if (ci?.unitPrice != null) unitPrice = ci.unitPrice;
+            } else {
+              // 无关联合同时 → 取商品默认售价
+              const p = await prisma.product.findUnique({
+                where: { id: i.productId },
+                select: { salePrice: true },
+              });
+              if (p?.salePrice != null) unitPrice = p.salePrice;
+            }
+          }
+          return {
+            productId: i.productId,
+            quantity: i.quantity,
+            unitPrice,
+            locationId: i.locationId ?? locationId ?? null,
+            expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
+            contractId: i.contractId ?? null,
+          };
         })),
       },
     },

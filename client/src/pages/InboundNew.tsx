@@ -12,7 +12,6 @@ import type { Warehouse, Product, Location } from '../types';
 interface ItemEntry {
   productId: number;
   quantity: number;
-  unitPrice?: number;
   locationId?: number | null;
   expiryDate?: string | null;
   contractId?: number | null;
@@ -103,6 +102,16 @@ export default function InboundNew() {
 
   const getProduct = (id: number) => allProducts?.find((p: Product) => p.id === id);
 
+  // 显示将自动带入的单价（合同价 > 商品默认售价）
+  const getItemPrice = (item: ItemEntry) => {
+    if (item.contractId && selectedContract?.items) {
+      const ci = selectedContract.items.find((i: any) => i.productId === item.productId);
+      if (ci?.unitPrice != null) return ci.unitPrice;
+    }
+    const p = getProduct(item.productId);
+    return (p as any)?.salePrice ?? null;
+  };
+
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>新建入库单</Typography.Title>}>
       <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate({ ...values, items })}>
@@ -173,11 +182,12 @@ export default function InboundNew() {
 
         {items.map((item, idx) => {
           const p = getProduct(item.productId);
+          const price = getItemPrice(item);
           return (
             <Space key={idx} style={{ marginBottom: 8 }} wrap>
               <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
               <InputNumber min={1} value={item.quantity} onChange={(v) => updateItem(idx, 'quantity', v || 1)} placeholder="数量" style={{ width: 80 }} />
-              <InputNumber min={0} precision={2} value={item.unitPrice} onChange={(v) => updateItem(idx, 'unitPrice', v || 0)} placeholder="单价" prefix="¥" style={{ width: 110 }} />
+              {price != null && <Tag color="green">¥{price.toFixed(2)}</Tag>}
               <Select allowClear placeholder="入库库位" value={item.locationId} onChange={(v) => updateItem(idx, 'locationId', v ?? null)}
                 style={{ width: 160 }} options={locations?.map((l: Location) => ({ label: l.name, value: l.id }))}
                 disabled={!selectedWarehouseId} notFoundContent={selectedWarehouseId ? '该仓库无库位' : '请先选择仓库'} />

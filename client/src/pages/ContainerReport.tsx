@@ -19,27 +19,30 @@ export default function ContainerReport() {
     queryFn: () => apiClient.get(`/containers/${id}/report`).then((r) => r.data),
   });
 
+  const isStandalone = import.meta.env.VITE_STANDALONE === 'true';
+  const templateBaseUrl = isStandalone ? '/settings' : `/customers/${data?.customerId}`;
+
   const saveMutation = useMutation({
-    mutationFn: (template: string) => apiClient.put(`/customers/${data.customerId}/template`, { template }),
+    mutationFn: (template: string) => apiClient.put(`${templateBaseUrl}/report-template`, { template }),
     onSuccess: () => { message.success('模板已保存'); setEditOpen(false); },
     onError: (err: any) => message.error(err.response?.data?.error || '保存失败'),
   });
 
   const presetMutation = useMutation({
-    mutationFn: (preset: string | null) => apiClient.put(`/customers/${data.customerId}/template-preset`, { preset }),
+    mutationFn: (preset: string | null) => apiClient.put(`${templateBaseUrl}/report-template/preset`, { preset }),
     onSuccess: () => { message.success('模板已切换'); window.location.reload(); },
     onError: (err: any) => message.error(err.response?.data?.error || '切换失败'),
   });
 
   const excelPresetMutation = useMutation({
-    mutationFn: (preset: string | null) => apiClient.put(`/customers/${data.customerId}/excel-preset`, { preset }),
+    mutationFn: (preset: string | null) => apiClient.put(`${templateBaseUrl}/excel-preset`, { preset }),
     onSuccess: () => { message.success('Excel 模板已切换'); window.location.reload(); },
     onError: (err: any) => message.error(err.response?.data?.error || '切换失败'),
   });
 
   const excelSaveMutation = useMutation({
     mutationFn: (exportTemplate: string | null) =>
-      apiClient.put(`/customers/${data.customerId}/export-template`, { exportTemplate }),
+      apiClient.put(`${templateBaseUrl}/report-template/export`, { exportTemplate }),
     onSuccess: () => { message.success('Excel 模板已保存'); setExcelEditOpen(false); },
     onError: (err: any) => message.error(err.response?.data?.error || '保存失败'),
   });

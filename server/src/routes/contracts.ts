@@ -177,7 +177,29 @@ contractsRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) 
     select: { productId: true, batchNo: true },
   });
   const contractBatchNos = [...new Set(inboundItems.filter(i => i.batchNo).map(i => i.batchNo))];
-  res.json({ ...contract, businessCustomer: biz, batchNos: contractBatchNos });
+
+  // 计算每个商品的剩余可出数量（已出 - 甩柜退回）
+  const obItems = await prisma.outboundItem.findMany({
+    where: { contractId: id },
+    select: { outboundId: true, productId: true, quantity: true },
+  });
+  const shippedMap = new Map<number, number>();
+  for (const ob of obItems) shippedMap.set(ob.productId, (shippedMap.get(ob.productId) || 0) + ob.quantity);
+  const outboundIds = [...new Set(obItems.map(o => o.outboundId))];
+  if (outboundIds.length > 0) {
+    const returnedItems = await prisma.containerItem.findMany({
+      where: { outboundId: { in: outboundIds }, returnedQty: { gt: 0 } },
+      select: { productId: true, returnedQty: true },
+    });
+    for (const ri of returnedItems) shippedMap.set(ri.productId, (shippedMap.get(ri.productId) || 0) - ri.returnedQty);
+  }
+  const itemsWithRemaining = contract.items.map(ci => ({
+    ...ci,
+    shippedQty: shippedMap.get(ci.productId) || 0,
+    remainingQty: Math.max(0, ci.plannedQty - (shippedMap.get(ci.productId) || 0)),
+  }));
+
+  res.json({ ...contract, items: itemsWithRemaining, businessCustomer: biz, batchNos: contractBatchNos });
 });
 
 // 创建合同

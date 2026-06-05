@@ -56,7 +56,7 @@ export default function OutboundNew() {
 
   // 选合同后自动填入商品（按批次库存，含库位；选排柜时跳过，由排柜逻辑接管）
   useEffect(() => {
-    if (!selectedContainerId && multiContractItems && multiContractItems.length > 0) {
+    if (multiContractItems && multiContractItems.length > 0) {
       setItems(prev => {
         const existingKeys = new Set(prev.map(i => `${i.productId}_${i.batchNo || 'null'}_${i.locationId || 0}`));
         const newItems: ItemEntry[] = [];
@@ -65,32 +65,32 @@ export default function OutboundNew() {
         multiContractItems.forEach((ct: any) => {
           const ctBatchNos = new Set((ct.batchNos || []).filter(Boolean) as string[]);
           (ct.items || []).forEach((ci: any) => {
-            if (inv && inv.length > 0) {
-              // 只添加该合同关联批次的库存（每个库位单独一条）
-              const batches = inv.filter(
+            if (inv && inv.length > 0 && ci.remainingQty !== 0) {
+              const remaining = ci.remainingQty ?? ci.plannedQty ?? 1;
+              if (remaining <= 0) return;
+              // 优先匹配合同批次库存
+              let batches = inv.filter(
                 (x: InventoryItem) => x.productId === ci.productId && x.quantity > 0 && x.batchNo && ctBatchNos.has(x.batchNo)
               );
-              if (batches.length > 0) {
-                batches.forEach((b: InventoryItem) => {
-                  const key = `${ci.productId}_${b.batchNo || 'null'}_${b.locationId || 0}`;
-                  if (!existingKeys.has(key)) {
-                    newItems.push({
-                      productId: ci.productId,
-                      quantity: b.quantity,
-                      locationId: b.locationId,
-                      contractId: ct.id,
-                      batchNo: b.batchNo,
-                    });
-                    existingKeys.add(key);
-                  }
-                });
+              // 若无匹配批次，取该商品所有库存
+              if (batches.length === 0) {
+                batches = inv.filter(
+                  (x: InventoryItem) => x.productId === ci.productId && x.quantity > 0
+                );
               }
-            } else {
-              // 未选仓库，按合同计划量添加
-              const key = `${ci.productId}_null`;
-              if (!existingKeys.has(key)) {
-                newItems.push({ productId: ci.productId, quantity: ci.plannedQty || 1, contractId: ct.id });
-                existingKeys.add(key);
+              let added = 0;
+              for (const b of batches) {
+                if (added >= remaining) break;
+                const key = `${ci.productId}_${b.batchNo || 'null'}_${b.locationId || 0}`;
+                if (!existingKeys.has(key)) {
+                  const take = Math.min(b.quantity, remaining - added);
+                  newItems.push({
+                    productId: ci.productId, quantity: take,
+                    locationId: b.locationId, contractId: ct.id, batchNo: b.batchNo,
+                  });
+                  existingKeys.add(key);
+                  added += take;
+                }
               }
             }
           });
@@ -191,6 +191,18 @@ export default function OutboundNew() {
 
   const getProduct = (id: number) => products?.find((p: Product) => p.id === id);
 
+  // 显示将自动带入的单价（合同价 > 商品默认售价）
+  const getItemPrice = (item: ItemEntry) => {
+    if (item.contractId && multiContractItems) {
+      for (const ct of multiContractItems as any[]) {
+        const ci = (ct.items || []).find((i: any) => i.productId === item.productId);
+        if (ci?.unitPrice != null) return ci.unitPrice;
+      }
+    }
+    const p = getProduct(item.productId);
+    return (p as any)?.salePrice ?? null;
+  };
+
   const getLocationsForProduct = (productId: number) => {
     if (!warehouseInventory) return [];
     return warehouseInventory
@@ -225,7 +237,8 @@ export default function OutboundNew() {
             <Select
               allowClear
               mode="multiple"
-              placeholder="选择合同，自动填入商品"
+              disabled={!selectedWarehouseId}
+              placeholder={selectedWarehouseId ? "选择合同，自动填入商品" : "请先选择仓库"}
               value={selectedContractIds}
               onChange={(v) => setSelectedContractIds(v || [])}
               options={(contracts || []).map((c: any) => ({
@@ -268,6 +281,7 @@ export default function OutboundNew() {
         {items.map((item, idx) => {
           const p = getProduct(item.productId);
           const locOptions = getLocationsForProduct(item.productId);
+          const price = getItemPrice(item);
           return (
             <Space key={idx} style={{ marginBottom: 8 }} wrap>
               <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
@@ -289,6 +303,7 @@ export default function OutboundNew() {
                 disabled={!selectedWarehouseId}
                 notFoundContent={selectedWarehouseId ? '该商品无库存' : '请先选择仓库'}
               />
+              {price != null && <Tag color="green">¥{price.toFixed(2)}</Tag>}
               <Button danger size="small" onClick={() => setItems(items.filter((_, i) => i !== idx))}>删除</Button>
             </Space>
           );
