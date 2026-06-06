@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import prisma, { platformPrisma } from '../utils/prisma';
+import prisma, { platformPrisma, initTenantDatabase } from '../utils/prisma';
 import { AuthRequest, authenticate, JWT_ADMIN_SECRET, INTER_SERVER_SECRET, THIS_HOST } from '../middleware/auth';
 
 const JWT_EXPIRES_IN = '24h';
@@ -339,24 +339,39 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
     const autoSetting = await prisma.setting.findUnique({ where: { key: 'autoApproveRegistrations' } });
     const initialStatus = autoSetting?.value === 'true' ? 'active' : 'pending';
 
-    const [customer] = await prisma.$transaction(async (tx) => {
-      const cust = await tx.customer.create({
-        data: { username, passwordHash, realName: realName || username, phone: phone || null, maxWarehouses: 1, expiresAt, status: initialStatus },
-      });
+    // 1. 在主库创建客户记录 + 仓库（登录流程需要从主库读取 warehouseId）
+    const customer = await prisma.customer.create({
+      data: { username, passwordHash, realName: realName || username, phone: phone || null, maxWarehouses: 1, expiresAt, status: initialStatus },
+    });
+    const mainWh = await prisma.warehouse.create({
+      data: { name: `${realName || username}主仓库`, customerId: customer.id },
+    });
 
-      // 自动创建仓库
-      const wh = await tx.warehouse.create({
-        data: { name: `${realName || username}主仓库`, customerId: cust.id },
-      });
+    // 2. 初始化租户数据库（建表）
+    await initTenantDatabase(customer.id);
 
-      // 创建默认库位
+    // 3. 在租户库中创建仓库和库位
+    const { PrismaClient } = await import('@prisma/client');
+    const { fileURLToPath } = await import('url');
+    const pathMod = await import('path');
+    const _dirname = pathMod.dirname(fileURLToPath(import.meta.url));
+    const dbPath = pathMod.join(_dirname, '../../prisma', `tenant_${customer.id}.db`);
+    const tenantPrisma = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
+    try {
+      await tenantPrisma.customer.create({
+        data: { id: customer.id, username, passwordHash: "tenant_db", realName: realName || username, status: initialStatus },
+      });
+      const wh = await tenantPrisma.warehouse.create({
+        data: { name: `${realName || username}主仓库`, id: mainWh.id, customerId: customer.id },
+      });
       const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
       for (const locName of locNames) {
         const code = 'LOC-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
-        await tx.location.create({ data: { name: locName, warehouseId: wh.id, code } });
+        await tenantPrisma.location.create({ data: { name: locName, warehouseId: wh.id, code } });
       }
-      return [cust];
-    });
+    } finally {
+      await tenantPrisma.$disconnect();
+    }
 
     res.status(201).json({ message: '注册成功，90 天免费试用已开通', username, expiresAt });
   } catch (err) {

@@ -60,7 +60,7 @@ locationsRouter.post('/', authenticate, adminWrite, requireWarehouse, async (req
   const { name, warehouseId } = req.body;
   if (!name) return res.status(400).json({ error: '库位名称必填' });
   let wid: number;
-  if (req.userRole === 'super_admin') {
+  if (req.userRole === 'super_admin' || req.userRole === 'warehouse_admin') {
     wid = warehouseId;
   } else if (req.userRole === 'tenant_admin') {
     wid = warehouseId || req.userWarehouseId;

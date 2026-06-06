@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import prisma from '../utils/prisma';
+import prisma, { initTenantDatabase } from '../utils/prisma';
 import { AuthRequest, authenticate, superAdmin, adminWrite, validateId } from '../middleware/auth';
 
 export const customersRouter = Router();
@@ -112,6 +112,32 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
       }
       return [cust, warehouse];
     });
+
+    // 初始化租户数据库 schema
+    await initTenantDatabase(customer.id);
+
+    // 在租户库中创建仓库和库位
+    const { PrismaClient } = await import('@prisma/client');
+    const { fileURLToPath } = await import('url');
+    const pathMod = await import('path');
+    const _dirname = pathMod.dirname(fileURLToPath(import.meta.url));
+    const dbPath = pathMod.join(_dirname, '../../prisma', `tenant_${customer.id}.db`);
+    const tenantPrisma = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
+    try {
+      await tenantPrisma.customer.create({
+        data: { id: customer.id, username, passwordHash: "tenant_db", realName: realName || username, status: customer.status },
+      });
+      await tenantPrisma.warehouse.create({
+        data: { name: warehouseName || `${realName || username}主仓库`, id: wh.id, customerId: customer.id },
+      });
+      const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
+      for (const locName of locNames) {
+        const code = 'LOC-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
+        await tenantPrisma.location.create({ data: { name: locName, warehouseId: wh.id, code } });
+      }
+    } finally {
+      await tenantPrisma.$disconnect();
+    }
 
     const { passwordHash: _, ...safe } = customer;
     res.status(201).json({ ...safe, warehouses: [wh] });

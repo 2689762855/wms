@@ -28,14 +28,17 @@ export interface AuthRequest extends Request {
 }
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
-  // 优先从 HttpOnly Cookie 读取 token，fallback 到 Authorization header（兼容旧客户端/APK）
-  let token = req.cookies?.wms_token || null;
-  if (!token) {
-    const header = req.headers.authorization;
-    if (!header || !header.startsWith('Bearer ')) {
-      return res.status(401).json({ error: '未登录' });
-    }
+  // 优先从 Authorization header 读取 token（管理员切换视角需要），fallback 到 Cookie
+  let token: string | null = null;
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) {
     token = header.split(' ')[1];
+  }
+  if (!token) {
+    token = req.cookies?.wms_token || null;
+  }
+  if (!token) {
+    return res.status(401).json({ error: '未登录' });
   }
 
   try {

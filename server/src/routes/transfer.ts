@@ -21,7 +21,13 @@ async function executeTransfer(
       where: { productId: item.productId, warehouseId: order.fromWarehouseId },
       _sum: { quantity: true },
     }))._sum.quantity || 0;
+    // toTotalBefore 必须在循环外计算（bug #134 同类），避免多批次时读到前一轮的增量
+    const toTotalBefore = (await tx.inventory.aggregate({
+      where: { productId: item.productId, warehouseId: order.toWarehouseId },
+      _sum: { quantity: true },
+    }))._sum.quantity || 0;
     let remaining = item.quantity;
+    let toAccumulated = 0;
     for (const inv of fromInvs) {
       if (remaining <= 0) break;
       const deduct = Math.min(inv.quantity, remaining);
@@ -31,10 +37,6 @@ async function executeTransfer(
       });
 
       // 调入方：按批次写入，保留源批次的 batchNo
-      const toTotalBefore = (await tx.inventory.aggregate({
-        where: { productId: item.productId, warehouseId: order.toWarehouseId },
-        _sum: { quantity: true },
-      }))._sum.quantity || 0;
       const toInv = await tx.inventory.findFirst({
         where: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, batchNo: inv.batchNo ?? null },
       });
@@ -43,8 +45,9 @@ async function executeTransfer(
       } else {
         await tx.inventory.create({ data: { productId: item.productId, warehouseId: order.toWarehouseId, locationId: targetLocationId ?? null, quantity: deduct, batchNo: inv.batchNo } });
       }
+      toAccumulated += deduct;
       await tx.stockLog.create({
-        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: deduct, beforeQty: toTotalBefore, afterQty: toTotalBefore + deduct, type: 'transfer_in', refId: order.id },
+        data: { productId: item.productId, warehouseId: order.toWarehouseId, changeQty: deduct, beforeQty: toTotalBefore, afterQty: toTotalBefore + toAccumulated, type: 'transfer_in', refId: order.id },
       });
 
       remaining -= deduct;

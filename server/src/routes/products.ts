@@ -131,10 +131,9 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
       if (!row?.[1]?.toString().trim()) continue;
 
       const name = row[1].toString().trim();
+      let sku = row[0]?.toString().trim() || '';
       if (name === '示例商品请删除此行' || name === '示例商品' || name === '展示商品' || sku === 'SKU001') continue; // 跳过模板占位行
       if (name.length > 200) { errors.push(`第${i + 1}行: 名称过长`); continue; }
-
-      let sku = row[0]?.toString().trim() || '';
       if (!sku) sku = nameSkuMap.get(name) || ''; // 同名商品复用 SKU
 
       let productExists = sku ? !!(await prisma.product.findFirst({ where: { sku }, select: { id: true } })) : false;

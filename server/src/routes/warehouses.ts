@@ -55,7 +55,7 @@ warehousesRouter.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: `仓库数量已达上限 (${customer.maxWarehouses}个)，请联系管理员扩容` });
     }
     customerId = customer.id;
-  } else if (req.userRole === 'super_admin' && req.body.customerId) {
+  } else if ((req.userRole === 'super_admin' || req.userRole === 'warehouse_admin') && req.body.customerId) {
     customerId = req.body.customerId;
   }
 

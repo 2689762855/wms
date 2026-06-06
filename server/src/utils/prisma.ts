@@ -70,3 +70,68 @@ export async function getTotalStock(productId: number, warehouseId: number): Pro
   });
   return result._sum.quantity || 0;
 }
+
+/**
+ * 初始化租户数据库 schema
+ * 如果数据库文件不存在或为空，从主库复制表结构
+ */
+export async function initTenantDatabase(customerId: number): Promise<void> {
+  const dbDir = path.join(__dirname, '../../prisma');
+  const dbPath = path.join(dbDir, `tenant_${customerId}.db`);
+
+  // 检查文件是否存在且非空
+  if (fs.existsSync(dbPath)) {
+    const stats = fs.statSync(dbPath);
+    if (stats.size > 0) {
+      console.log(`[initTenant] tenant_${customerId}.db 已存在，跳过初始化`);
+      return;
+    }
+  }
+
+  console.log(`[initTenant] 初始化 tenant_${customerId}.db`);
+
+  // 使用 better-sqlite3 从主库复制表结构
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Database = require('better-sqlite3');
+  const mainDb = new Database(path.join(dbDir, 'dev.db'));
+
+  // 获取所有表的 CREATE TABLE 语句
+  const tables = mainDb.prepare(
+    `SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_prisma_%' ORDER BY name`
+  ).all() as { name: string; sql: string }[];
+
+  // 获取所有索引的 CREATE INDEX 语句
+  const indexes = mainDb.prepare(
+    `SELECT sql FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%' AND sql IS NOT NULL`
+  ).all() as { sql: string }[];
+
+  mainDb.close();
+
+  // 创建或清空租户数据库
+  const tenantDb = new Database(dbPath);
+  tenantDb.pragma('journal_mode = WAL');
+  tenantDb.pragma('foreign_keys = OFF');
+
+  // 创建表
+  for (const t of tables) {
+    if (t.sql) {
+      try {
+        tenantDb.exec(t.sql);
+      } catch (err) {
+        console.error(`[initTenant] 创建表 ${t.name} 失败:`, err);
+      }
+    }
+  }
+
+  // 创建索引
+  for (const idx of indexes) {
+    try {
+      tenantDb.exec(idx.sql);
+    } catch {}
+  }
+
+  tenantDb.pragma('foreign_keys = ON');
+  tenantDb.close();
+
+  console.log(`[initTenant] tenant_${customerId}.db 初始化完成，${tables.length} 个表`);
+}
