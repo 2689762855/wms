@@ -64,9 +64,36 @@ appRouter.get('/download/latest', (_req: Request, res: Response) => {
   }
 });
 
-// POST /api/app/download-counter — 记录一次下载
-appRouter.post('/download-counter', async (_req: Request, res: Response) => {
+// POST /api/app/download-counter — 记录一次下载（IP 去重 + 机器人过滤）
+const downloadIps = new Map<string, number>(); // IP -> 上次下载时间
+const BOT_PATTERN = /bot|crawler|spider|slurp|ia_archiver|archive|nmap|scanner|curl|wget|python-requests|go-http-client/i;
+
+appRouter.post('/download-counter', async (req: Request, res: Response) => {
   try {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const ua = req.headers['user-agent'] || '';
+
+    // 过滤机器人
+    if (BOT_PATTERN.test(ua)) {
+      return res.json({ count: await getDownloadCount(), filtered: true });
+    }
+
+    // IP 去重：24 小时内同一 IP 只计一次
+    const now = Date.now();
+    const lastDownload = downloadIps.get(ip);
+    if (lastDownload && now - lastDownload < 24 * 60 * 60 * 1000) {
+      return res.json({ count: await getDownloadCount(), deduplicated: true });
+    }
+    downloadIps.set(ip, now);
+
+    // 清理过期 IP（避免内存泄漏）
+    if (downloadIps.size > 10000) {
+      const cutoff = now - 24 * 60 * 60 * 1000;
+      for (const [key, time] of downloadIps) {
+        if (time < cutoff) downloadIps.delete(key);
+      }
+    }
+
     const existing = await prisma.setting.findUnique({ where: { key: 'downloadCount' } });
     const count = Number(existing?.value || '0') + 1;
     if (existing) {
@@ -80,6 +107,11 @@ appRouter.post('/download-counter', async (_req: Request, res: Response) => {
     res.status(500).json({ error: '计数失败' });
   }
 });
+
+async function getDownloadCount(): Promise<number> {
+  const setting = await prisma.setting.findUnique({ where: { key: 'downloadCount' } });
+  return Number(setting?.value || '0');
+}
 
 // GET /api/app/download-counter — 查询下载次数
 appRouter.get('/download-counter', async (_req: Request, res: Response) => {

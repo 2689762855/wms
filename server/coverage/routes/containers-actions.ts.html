@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">3.8% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/184</span>
+                <span class='fraction'>7/184</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">4.54% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/154</span>
+                <span class='fraction'>7/154</span>
             </div>
         
             
@@ -435,10 +435,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -447,7 +448,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -461,7 +461,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -506,8 +506,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -640,7 +640,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -651,12 +651,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -664,7 +664,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -800,11 +800,11 @@ import { syncContractFulfillment } from '../utils/contractFulfillment';
 import { getPresetTemplate } from '../utils/reportPresets';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 &nbsp;
-export const <span class="cstat-no" title="statement not covered" >containersActionsRouter = Router();</span>
+export const containersActionsRouter = Router();
 &nbsp;
 &nbsp;
 // 新增 SKU 到排柜（可选合同）
-<span class="cstat-no" title="statement not covered" >containersActionsRouter.post('/:id/items', validateId, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {</span>
+containersActionsRouter.post('/:id/items', validateId, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
   const id = <span class="cstat-no" title="statement not covered" >parseInt(req.params.id as string);</span>
   const { productId, quantity, contractId } = <span class="cstat-no" title="statement not covered" >req.body;</span>
 <span class="cstat-no" title="statement not covered" >  if (!productId || !quantity) <span class="cstat-no" title="statement not covered" >return res.status(400).json({ error: '请选择商品和数量' });</span></span>
@@ -826,7 +826,7 @@ export const <span class="cstat-no" title="statement not covered" >containersAct
 });
 &nbsp;
 // 装柜：录入实装数
-<span class="cstat-no" title="statement not covered" >containersActionsRouter.put('/:id/load', validateId, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {</span>
+containersActionsRouter.put('/:id/load', validateId, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
   const id = <span class="cstat-no" title="statement not covered" >parseInt(req.params.id as string);</span>
   const { items } = <span class="cstat-no" title="statement not covered" >req.body;</span>
 &nbsp;
@@ -871,7 +871,7 @@ export const <span class="cstat-no" title="statement not covered" >containersAct
 &nbsp;
 // 封柜：记录实装流水 + 甩柜归还库存
 // 注意：出库确认时已扣库存，此处不再重复扣减
-<span class="cstat-no" title="statement not covered" >containersActionsRouter.put('/:id/seal', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {</span>
+containersActionsRouter.put('/:id/seal', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
   const id = <span class="cstat-no" title="statement not covered" >parseInt(req.params.id as string);</span>
 &nbsp;
   const container = <span class="cstat-no" title="statement not covered" >await prisma.container.findUnique({</span>
@@ -1005,7 +1005,7 @@ export const <span class="cstat-no" title="statement not covered" >containersAct
 });
 &nbsp;
 // 修改封柜时间
-<span class="cstat-no" title="statement not covered" >containersActionsRouter.put('/:id/seal-time', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {</span>
+containersActionsRouter.put('/:id/seal-time', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
   const id = <span class="cstat-no" title="statement not covered" >parseInt(req.params.id as string);</span>
   const { sealTime } = <span class="cstat-no" title="statement not covered" >req.body;</span>
 <span class="cstat-no" title="statement not covered" >  if (!sealTime) <span class="cstat-no" title="statement not covered" >return res.status(400).json({ error: '请提供封柜时间' });</span></span>
@@ -1016,7 +1016,7 @@ export const <span class="cstat-no" title="statement not covered" >containersAct
 });
 &nbsp;
 // 作废排柜（仅 pending/loading 可作废，释放排柜号）
-<span class="cstat-no" title="statement not covered" >containersActionsRouter.put('/:id/cancel', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {</span>
+containersActionsRouter.put('/:id/cancel', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
   const id = <span class="cstat-no" title="statement not covered" >parseInt(req.params.id as string);</span>
   const container = <span class="cstat-no" title="statement not covered" >await prisma.container.findUnique({ where: { id } });</span>
 <span class="cstat-no" title="statement not covered" >  if (!container) <span class="cstat-no" title="statement not covered" >return res.status(404).json({ error: '排柜不存在' });</span></span>
@@ -1029,7 +1029,7 @@ export const <span class="cstat-no" title="statement not covered" >containersAct
 });
 &nbsp;
 // 调整装柜数量（支持封柜后修正，海外仓反馈偏差时使用）
-<span class="cstat-no" title="statement not covered" >containersActionsRouter.put('/:id/adjust', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {</span>
+containersActionsRouter.put('/:id/adjust', validateId, adminWrite, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
   const id = <span class="cstat-no" title="statement not covered" >parseInt(req.params.id as string);</span>
   const { items, returnLocations } = <span class="cstat-no" title="statement not covered" >req.body; // items: [{ productId, actualQty }], returnLocations: { pid: locId }</span>
 &nbsp;
@@ -1165,7 +1165,7 @@ export const <span class="cstat-no" title="statement not covered" >containersAct
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-07T06:36:05.877Z
+                at 2026-06-07T06:48:46.620Z
             </div>
         <script src="../prettify.js"></script>
         <script>

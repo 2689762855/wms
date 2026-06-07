@@ -145,6 +145,6 @@ export function requireWarehouse(req: AuthRequest, res: Response, next: NextFunc
 /** 校验 :id 参数为有效整数 */
 export function validateId(req: Request, res: Response, next: NextFunction) {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) return res.status(400).json({ error: '无效ID' });
+  if (isNaN(id)) return res.status(400).json({ error: '无效 ID' });
   next();
 }

@@ -10,12 +10,20 @@ productWarehousesRouter.get('/', async (req: AuthRequest, res: Response) => {
   let warehouseId = req.query.warehouseId ? parseInt(req.query.warehouseId as string) : undefined;
   const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
 
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  let tenantWhIds: number[] | undefined;
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    tenantWhIds = whs.map(w => w.id);
+    if (warehouseId && !tenantWhIds.includes(warehouseId)) {
+      return res.status(403).json({ error: '无权查看此仓库' });
+    }
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
     warehouseId = req.userWarehouseId;
   }
 
   const where: Record<string, unknown> = {};
   if (warehouseId) where.warehouseId = warehouseId;
+  else if (tenantWhIds) where.warehouseId = { in: tenantWhIds };
   if (productId) where.productId = productId;
 
   const data = await prisma.productWarehouse.findMany({
@@ -36,7 +44,15 @@ productWarehousesRouter.put('/', adminWrite, async (req: AuthRequest, res: Respo
     return res.status(400).json({ error: 'productId 和 warehouseId 必填' });
   }
 
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  // 权限校验
+  const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+  if (!wh) return res.status(404).json({ error: '仓库不存在' });
+
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    if (wh.customerId !== req.customerId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
     if (warehouseId !== req.userWarehouseId) {
       return res.status(403).json({ error: '无权操作此仓库' });
     }
@@ -57,7 +73,13 @@ productWarehousesRouter.delete('/', adminWrite, async (req: AuthRequest, res: Re
     return res.status(400).json({ error: 'productId 和 warehouseId 必填' });
   }
 
-  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  // 权限校验
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+    if (!wh || wh.customerId !== req.customerId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
     if (warehouseId !== req.userWarehouseId) {
       return res.status(403).json({ error: '无权操作此仓库' });
     }

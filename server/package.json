@@ -12,6 +12,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^11.7.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.4.1",
