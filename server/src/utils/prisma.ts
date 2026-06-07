@@ -30,8 +30,9 @@ export function assertTenantContext(role?: string) {
   }
 }
 
+const dbUrl = process.env.DATABASE_URL || `file:${path.join(__dirname, '../../prisma/dev.db')}`;
 const mainPrisma = new PrismaClient({
-  datasources: { db: { url: `file:${path.join(__dirname, '../../prisma/dev.db')}` } },
+  datasources: { db: { url: dbUrl } },
 });
 
 // 平台库（User/Customer/Setting），不走租户路由
