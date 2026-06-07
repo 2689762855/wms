@@ -18,6 +18,9 @@ model User {
   warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
   createdById  Int?
   createdBy    User?    @relation("CreatedUsers", fields: [createdById], references: [id])
+  operatorType String?  // warehouse=库人员(仅移动端), clerk=文员(仅桌面端合同)
+  desktopTokenVersion Int @default(0)  // 桌面端登录版本号
+  mobileTokenVersion  Int @default(0)  // 移动端登录版本号
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -29,15 +32,21 @@ model User {
   outboundOrders     OutboundOrder[]   @relation("OutboundOperator")
   transferOrders     TransferOrder[]   @relation("TransferOperator")
   checkTasks         CheckTask[]       @relation("CheckOperator")
+
+  @@index([warehouseId])
+  @@index([createdById])
+  @@index([role])
 }
 
 model Warehouse {
-  id        Int      @id @default(autoincrement())
-  name      String
-  address   String?
-  managerId Int?
-  manager   User?    @relation("WarehouseManager", fields: [managerId], references: [id])
-  createdAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  name       String
+  address    String?
+  managerId  Int?
+  manager    User?     @relation("WarehouseManager", fields: [managerId], references: [id])
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  createdAt  DateTime  @default(now())
 
   users           User[]
   productWarehouses ProductWarehouse[]
@@ -48,29 +57,38 @@ model Warehouse {
   fromTransfers   TransferOrder[]   @relation("FromWarehouse")
   toTransfers     TransferOrder[]   @relation("ToWarehouse")
   checkTasks      CheckTask[]
+
+  @@index([customerId])
 }
 
 model Category {
-  id       Int        @id @default(autoincrement())
-  name     String
-  parentId Int?
-  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryTree")
-  products Product[]
+  id         Int        @id @default(autoincrement())
+  name       String
+  parentId   Int?
+  parent     Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryTree")
+  customerId Int?
+  customer   Customer?  @relation(fields: [customerId], references: [id])
+  products   Product[]
+
+  @@index([parentId])
+  @@index([customerId])
 }
 
 model Product {
   id         Int      @id @default(autoincrement())
-  sku        String   @unique
+  sku        String
   name       String
-  spec       String?  // 规格
-  unit       String   @default("pcs") // 单位
+  spec       String?
+  unit       String   @default("pcs")
   barcode    String?
   categoryId Int?
   category   Category? @relation(fields: [categoryId], references: [id])
-  safetyStock Int    @default(0) // 安全库存
-  costPrice  Float?  // 成本价
-  salePrice  Float?  // 售价
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  safetyStock Int    @default(0)
+  costPrice  Float?
+  salePrice  Float?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   imageUrl   String?   // 商品图片路径（本地上传）
@@ -78,13 +96,33 @@ model Product {
   expiryWarningDays Int      @default(30) // 提前预警天数
 
   productWarehouses ProductWarehouse[]
-
+  contractItems  ContractItem[]
+  containerItems ContainerItem[]
   inventories    Inventory[]
   inboundItems   InboundItem[]
   outboundItems  OutboundItem[]
   transferItems  TransferItem[]
   stockLogs      StockLog[]
   checkItems     CheckItem[]
+
+  @@index([name])
+  @@index([barcode])
+  @@index([categoryId])
+  @@index([customerId])
+}
+
+model ProductWarehouse {
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouseId Int
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  safetyStock Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([productId, warehouseId])
+  @@index([warehouseId])
 }
 
 model Inventory {
@@ -96,14 +134,19 @@ model Inventory {
   locationId  Int?
   location    Location? @relation(fields: [locationId], references: [id])
   quantity    Int       @default(0)
+  batchNo     String?   // 批次号，如 CON001-20260528
   updatedAt   DateTime  @updatedAt
 
-  @@unique([productId, warehouseId, locationId])
+  @@unique([productId, warehouseId, locationId, batchNo])
+
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([quantity])
 }
 
 model InboundOrder {
   id          Int      @id @default(autoincrement())
-  orderNo     String   @unique
+  orderNo     String
   warehouseId Int
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
   supplier    String?
@@ -116,6 +159,10 @@ model InboundOrder {
   createdAt   DateTime @default(now())
 
   items InboundItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model InboundItem {
@@ -128,11 +175,17 @@ model InboundItem {
   unitPrice  Float?
   locationId Int?
   location   Location?    @relation(fields: [locationId], references: [id])
+  expiryDate DateTime?
+  contractId  Int?
+  contract    Contract?  @relation(fields: [contractId], references: [id])
+  batchNo     String?
+
+  @@index([inboundId])
 }
 
 model OutboundOrder {
   id          Int      @id @default(autoincrement())
-  orderNo     String   @unique
+  orderNo     String
   warehouseId Int
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
   receiver    String?  // 领用人/部门
@@ -141,10 +194,18 @@ model OutboundOrder {
   status      String   @default("draft") // draft, confirmed
   locationId  Int?
   location    Location? @relation(fields: [locationId], references: [id])
+  containerId Int?
+  container   Container? @relation(fields: [containerId], references: [id])
+  containerNo String?   // 排柜编号（文本匹配用）
   note        String?
   createdAt   DateTime @default(now())
 
   items OutboundItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([containerId])
 }
 
 model OutboundItem {
@@ -156,11 +217,17 @@ model OutboundItem {
   quantity   Int
   locationId Int?
   location   Location?    @relation(fields: [locationId], references: [id])
+  contractId Int?
+  contract   Contract?    @relation(fields: [contractId], references: [id])
+  batchNo    String?
+
+  @@index([outboundId])
+  @@index([contractId])
 }
 
 model TransferOrder {
   id              Int      @id @default(autoincrement())
-  orderNo         String   @unique
+  orderNo         String
   fromWarehouseId Int
   fromWarehouse   Warehouse @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
   toWarehouseId   Int
@@ -176,6 +243,10 @@ model TransferOrder {
   createdAt       DateTime @default(now())
 
   items TransferItem[]
+
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
 }
 
 model TransferItem {
@@ -185,6 +256,10 @@ model TransferItem {
   productId  Int
   product    Product       @relation(fields: [productId], references: [id])
   quantity   Int
+  locationId Int?
+  location   Location?     @relation(fields: [locationId], references: [id])
+
+  @@index([transferId])
 }
 
 model StockLog {
@@ -195,9 +270,14 @@ model StockLog {
   changeQty   Int      // 变动数量（正=入库，负=出库）
   beforeQty   Int
   afterQty    Int
-  type        String   // inbound, outbound, transfer_in, transfer_out, check_adjust
+  type        String   // inbound, outbound, transfer_in, transfer_out, check_adjust, container_return, container_adjust
   refId       Int?     // 关联单据 ID
+  refNo       String?  // 关联单据编号（如排柜编号、单号）
   createdAt   DateTime @default(now())
+
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([createdAt])
 }
 
 model CheckTask {
@@ -217,6 +297,9 @@ model CheckTask {
   createdAt    DateTime   @default(now())
 
   items CheckItem[]
+
+  @@index([warehouseId])
+  @@index([parentTaskId])
 }
 
 model CheckItem {
@@ -228,6 +311,8 @@ model CheckItem {
   systemQty Int
   actualQty Int?
   diffQty   Int?
+
+  @@index([taskId])
 }
 
 model Location {
@@ -235,7 +320,7 @@ model Location {
   warehouseId Int
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
   name        String
-  code        String   @unique
+  code        String
   createdAt   DateTime @default(now())
 
   inventories     Inventory[]
@@ -243,7 +328,43 @@ model Location {
   inboundItems    InboundItem[]
   outboundOrders  OutboundOrder[]
   outboundItems   OutboundItem[]
+  transferItems   TransferItem[]
   checkTasks      CheckTask[]
+  containerItemsSource  ContainerItem[] @relation("ContainerItemSource")
+  containerItemsReturn  ContainerItem[] @relation("ContainerItemReturn")
+
+  @@index([warehouseId])
+}
+
+model Customer {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  passwordHash  String
+  realName      String?
+  phone         String?
+  status        String    @default("active") // active | suspended
+  maxWarehouses Int       @default(1)
+  expiresAt     DateTime? // null=永久，到期自动暂停
+  serverHost    String?   // null=本机, s2.cgklxt.top=其他服务器
+  createdBy     Int?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime? // null=正常, 非null=软删除（7天后彻底清理）
+  reportTemplate String?   // 装柜报表自定义HTML模板，null=默认
+  templatePreset String?   // 预设模板: manifest | packing-list | shipping-detail
+  excelPreset    String?   // Excel导出预设: manifest | packing-list | shipping-detail（独立于HTML模板）
+  desktopTokenVersion Int @default(0)
+  mobileTokenVersion  Int @default(0)
+  loginCount    Int       @default(0)
+  lastLoginAt   DateTime?
+  exportTemplate String?   // Excel导出自定义列配置JSON，null=用预设
+
+  warehouses Warehouse[]
+  categories Category[]
+  products   Product[]
+  contracts  Contract[]
+  containers  Container[]
+
+  @@index([createdBy])
 }
 
 model Sequence {
@@ -251,16 +372,104 @@ model Sequence {
   nextVal  Int    @default(1)
 }
 
-model ProductWarehouse {
-  id          Int       @id @default(autoincrement())
-  productId   Int
-  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  warehouseId Int
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-  safetyStock Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model Setting {
+  key   String @id
+  value String
+}
 
-  @@unique([productId, warehouseId])
-  @@index([warehouseId])
+model Contract {
+  id                 Int              @id @default(autoincrement())
+  contractNo         String
+  customerId         Int
+  customer           Customer         @relation(fields: [customerId], references: [id])
+  businessCustomerId Int              @default(0)
+  status             String           @default("active") // active, completed, cancelled
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  items              ContractItem[]
+  inboundItems       InboundItem[]
+  outboundItems      OutboundItem[]
+  containerContracts ContainerContract[]
+
+  @@unique([contractNo, customerId])
+  @@index([customerId])
+  @@index([businessCustomerId])
+  @@index([status])
+}
+
+model ContractItem {
+  id          Int      @id @default(autoincrement())
+  contractId  Int
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  plannedQty  Int
+  receivedQty Int      @default(0)
+  unitPrice   Float?   // 合同批次单价
+
+  @@unique([contractId, productId])
+}
+
+model Container {
+  id                 Int              @id @default(autoincrement())
+  containerNo        String
+  actualContainerNo  String?          // 真实车辆货柜号，封柜时填写
+  toYardTime         DateTime?
+  sealTime           DateTime?
+  status             String           @default("pending") // pending, loading, sealed, cancelled
+  note               String?
+  customerId         Int
+  customer           Customer         @relation(fields: [customerId], references: [id])
+  businessCustomerId Int               @default(0)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  items              ContainerItem[]
+  outbounds          OutboundOrder[]
+  contracts          ContainerContract[]
+
+  @@unique([containerNo, customerId])
+  @@index([customerId])
+  @@index([businessCustomerId])
+  @@index([status])
+}
+
+model ContainerContract {
+  id          Int       @id @default(autoincrement())
+  containerId Int
+  container   Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
+  contractId  Int
+  contract    Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([containerId, contractId])
+  @@index([contractId])
+}
+
+model ContainerItem {
+  id          Int       @id @default(autoincrement())
+  containerId Int
+  container   Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
+  outboundId  Int
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id])
+  plannedQty  Int
+  actualQty   Int?
+  returnedQty    Int       @default(0)
+  locationId     Int?
+  location       Location? @relation("ContainerItemSource", fields: [locationId], references: [id])
+  returnLocationId Int?
+  returnLocation Location? @relation("ContainerItemReturn", fields: [returnLocationId], references: [id])
+  batchNo        String?
+
+  @@index([outboundId])
+  @@index([containerId])
+}
+
+model BusinessCustomer {
+  id        Int      @id @default(autoincrement())
+  realName  String
+  tenantId  Int
+  createdAt DateTime @default(now())
+
+  @@unique([realName, tenantId])
+  @@index([tenantId])
 }

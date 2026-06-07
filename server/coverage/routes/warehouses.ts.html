@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">11.66% </span>
+                <span class="strong">23.33% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>7/60</span>
+                <span class='fraction'>14/60</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">2.22% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/45</span>
+                <span class='fraction'>1/45</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>3/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">14% </span>
+                <span class="strong">26% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>7/50</span>
+                <span class='fraction'>13/50</span>
             </div>
         
             
@@ -164,12 +164,11 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -178,7 +177,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -187,11 +187,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">77x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
@@ -255,12 +255,12 @@ export const warehousesRouter = Router();
 warehousesRouter.use(authenticate);
 warehousesRouter.use(adminWrite);
 &nbsp;
-warehousesRouter.get('/', <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
-  const where: Record&lt;string, unknown&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
-<span class="cstat-no" title="statement not covered" >  if (req.customerId) {</span>
+warehousesRouter.get('/', async (req: AuthRequest, res: Response) =&gt; {
+  const where: Record&lt;string, unknown&gt; = {};
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (req.customerId) {
 <span class="cstat-no" title="statement not covered" >    where.customerId = req.customerId;</span>
   }
-  const list = <span class="cstat-no" title="statement not covered" >await prisma.warehouse.findMany({</span>
+  const list = await prisma.warehouse.findMany({
     where,
     include: {
       _count: { select: { users: true, inventories: true, inboundOrders: true, outboundOrders: true } },
@@ -270,7 +270,7 @@ warehousesRouter.get('/', <span class="fstat-no" title="function not covered" >a
     orderBy: { createdAt: 'desc' },
   });
 &nbsp;
-  const result = <span class="cstat-no" title="statement not covered" >list.<span class="fstat-no" title="function not covered" >map(w</span> =&gt; (<span class="cstat-no" title="statement not covered" >{</span></span>
+  const result = list.map(w =&gt; ({
     id: w.id,
     name: w.name,
     address: w.address,
@@ -279,11 +279,11 @@ warehousesRouter.get('/', <span class="fstat-no" title="function not covered" >a
     inventoryCount: w._count.inventories,
     totalInbound: w._count.inboundOrders,
     totalOutbound: w._count.outboundOrders,
-    totalQuantity: w.inventories.<span class="fstat-no" title="function not covered" >reduce((s</span>, inv) =&gt; <span class="cstat-no" title="statement not covered" >s + inv.quantity, 0</span>),
+    totalQuantity: w.inventories.reduce((s, inv) =&gt; s + inv.quantity, 0),
     users: w.users,
   }));
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  res.json(result);</span>
+  res.json(result);
 });
 &nbsp;
 warehousesRouter.post('/', <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
@@ -346,7 +346,7 @@ warehousesRouter.delete('/:id', validateId, <span class="fstat-no" title="functi
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-07T06:17:43.830Z
+                at 2026-06-07T06:26:19.195Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20.87% </span>
+                <span class="strong">23.78% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>43/206</span>
+                <span class='fraction'>49/206</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">11.02% </span>
+                <span class="strong">15.44% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>15/136</span>
+                <span class='fraction'>21/136</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">27.27% </span>
+                <span class="strong">45.45% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>3/11</span>
+                <span class='fraction'>5/11</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">21.42% </span>
+                <span class="strong">24.48% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>42/196</span>
+                <span class='fraction'>48/196</span>
             </div>
         
             
@@ -460,7 +460,7 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -490,16 +490,16 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -520,18 +520,18 @@
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -844,8 +844,8 @@ const COOKIE_MAX_AGE = 24 * 60 * 60 * 1000; // 24h ms
 &nbsp;
 const isProduction = process.env.NODE_ENV === 'production';
 &nbsp;
-function <span class="fstat-no" title="function not covered" >setTokenCookie(r</span>es: Response, token: string) {
-<span class="cstat-no" title="statement not covered" >  res.cookie('wms_token', token, {</span>
+function setTokenCookie(res: Response, token: string) {
+  res.cookie('wms_token', token, {
     httpOnly: true,
     secure: isProduction,
     sameSite: 'strict',
@@ -883,8 +883,8 @@ function recordFailedLogin(username: string) {
   failedLogins.set(username, entry);
 }
 &nbsp;
-function <span class="fstat-no" title="function not covered" >clearFailedLogins(u</span>sername: string) {
-<span class="cstat-no" title="statement not covered" >  failedLogins.delete(username);</span>
+function clearFailedLogins(username: string) {
+  failedLogins.delete(username);
 }
 &nbsp;
 // 统一登录（自动识别 User 或 Customer）
@@ -904,19 +904,19 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) =&gt; {
     const user = await prisma.user.findUnique({ where: { username } });
     <span class="missing-if-branch" title="else path not taken" >E</span>if (user) {
       const valid = await bcrypt.compare(password, user.passwordHash);
-      <span class="missing-if-branch" title="else path not taken" >E</span>if (!valid) {
+      if (!valid) {
         recordFailedLogin(username);
         return res.status(401).json({ error: '用户名或密码错误' });
       }
-      let customerId = <span class="cstat-no" title="statement not covered" >null;</span>
-<span class="cstat-no" title="statement not covered" >      if (user.warehouseId) {</span>
+      let customerId = null;
+      <span class="missing-if-branch" title="if path not taken" >I</span>if (user.warehouseId) {
         const wh = <span class="cstat-no" title="statement not covered" >await prisma.warehouse.findUnique({ where: { id: user.warehouseId }, select: { customerId: true } });</span>
 <span class="cstat-no" title="statement not covered" >        customerId = wh?.customerId ?? null;</span>
       }
-      const tokenVersionField = <span class="cstat-no" title="statement not covered" >deviceType === 'mobile' ? 'mobileTokenVersion' : 'desktopTokenVersion';</span>
-      const tokenVersion = (deviceType === 'mobile' ? user.mobileTokenVersion : user.desktopTokenVersion) + 1;
+      const tokenVersionField = deviceType === 'mobile' ? <span class="branch-0 cbranch-no" title="branch not covered" >'mobileTokenVersion' : '</span>desktopTokenVersion';
+      const tokenVersion = (deviceType === 'mobile' ? <span class="branch-0 cbranch-no" title="branch not covered" >user.mobileTokenVersion : u</span>ser.desktopTokenVersion) + 1;
       await platformPrisma.user.update({ where: { id: user.id }, data: { [tokenVersionField]: tokenVersion } });
-      const token = <span class="cstat-no" title="statement not covered" >jwt.sign(</span>
+      const token = jwt.sign(
         { userId: user.id, role: user.role, warehouseId: user.warehouseId, customerId, operatorType: user.operatorType ?? null, tokenVersion, device: deviceType },
         JWT_ADMIN_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
@@ -1225,7 +1225,7 @@ authRouter.post('/register', <span class="fstat-no" title="function not covered"
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-07T06:17:43.830Z
+                at 2026-06-07T06:26:19.195Z
             </div>
         <script src="../prettify.js"></script>
         <script>

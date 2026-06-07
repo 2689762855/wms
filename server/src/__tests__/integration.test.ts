@@ -17,11 +17,14 @@ function setupTestDb() {
     try { fs.unlinkSync(testDbPath + '-wal') } catch {}
     try { fs.unlinkSync(testDbPath + '-shm') } catch {}
   }
-  // 直接复制主库文件（schema + 种子数据都在）
-  const mainDbPath = path.join(testDbDir, 'dev.db')
-  if (fs.existsSync(mainDbPath)) {
-    fs.copyFileSync(mainDbPath, testDbPath)
-    console.log('[test] 测试数据库已复制')
+  // 优先用脱敏夹具，否则用本地 dev.db
+  const fixturePath = path.join(testDbDir, 'test-fixture.db')
+  if (fs.existsSync(fixturePath)) {
+    fs.copyFileSync(fixturePath, testDbPath)
+    console.log('[test] 使用脱敏夹具 test-fixture.db')
+  } else {
+    fs.copyFileSync(path.join(testDbDir, 'dev.db'), testDbPath)
+    console.log('[test] 使用本地 dev.db')
   }
 }
 
@@ -90,22 +93,19 @@ describe('WMS API 集成测试', () => {
   })
 
   it('登录后访问认证 API', async () => {
-    // 使用服务器密码测试（仅当本地 dev.db 密码匹配时通过）
     const loginRes = await request(app)
       .post('/api/auth/login')
-      .send({ username: 'admin', password: '18776973763', device: 'desktop' })
-
-    if (loginRes.status !== 200) {
-      // 本地 dev.db 密码不匹配，跳过
-      console.log('[test] 本地admin密码不匹配，跳过认证测试')
-      return
-    }
+      .send({ username: 'admin', password: 'test123', device: 'desktop' })
+    expect(loginRes.status).toBe(200)
+    expect(loginRes.body).toHaveProperty('token')
 
     const token = loginRes.body.token
+
     const warehousesRes = await request(app)
       .get('/api/warehouses')
       .set('Authorization', `Bearer ${token}`)
     expect(warehousesRes.status).toBe(200)
+    expect(Array.isArray(warehousesRes.body)).toBe(true)
   })
 
   it('OPTIONS 预检返回 204（CORS）', async () => {
