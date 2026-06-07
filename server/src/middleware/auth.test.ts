@@ -30,7 +30,7 @@ describe('validateId', () => {
     const { req, res, next } = createMockReqRes('abc')
     validateId(req, res, next)
     expect(res.status).toHaveBeenCalledWith(400)
-    expect(res.json).toHaveBeenCalledWith({ error: '无效 ID' })
+    expect(res.json).toHaveBeenCalledWith({ error: '无效ID' })
     expect(next).not.toHaveBeenCalled()
   })
 

@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">12.5% </span>
+                <span class="strong">21.42% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>7/56</span>
+                <span class='fraction'>12/56</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">15% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/40</span>
+                <span class='fraction'>6/40</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">25% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>1/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">15.55% </span>
+                <span class="strong">26.66% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>7/45</span>
+                <span class='fraction'>12/45</span>
             </div>
         
             
@@ -135,31 +135,31 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -186,7 +186,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -217,14 +217,14 @@ categoriesRouter.get('/', <span class="fstat-no" title="function not covered" >a
 <span class="cstat-no" title="statement not covered" >  res.json(list);</span>
 });
 &nbsp;
-categoriesRouter.post('/', <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
-  const { name, parentId } = <span class="cstat-no" title="statement not covered" >req.body;</span>
-<span class="cstat-no" title="statement not covered" >  if (!name) <span class="cstat-no" title="statement not covered" >return res.status(400).json({ error: '分类名称必填' });</span></span>
-<span class="cstat-no" title="statement not covered" >  if (name.length &gt; 100) <span class="cstat-no" title="statement not covered" >return res.status(400).json({ error: '分类名称不能超过 100 字符' });</span></span>
-  const category = <span class="cstat-no" title="statement not covered" >await prisma.category.create({</span>
+categoriesRouter.post('/', async (req: AuthRequest, res: Response) =&gt; {
+  const { name, parentId } = req.body;
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (!name) <span class="cstat-no" title="statement not covered" >return res.status(400).json({ error: '分类名称必填' });</span>
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (name.length &gt; 100) <span class="cstat-no" title="statement not covered" >return res.status(400).json({ error: '分类名称不能超过 100 字符' });</span>
+  const category = await prisma.category.create({
     data: { name, parentId: parentId || null, customerId: req.customerId || null },
   });
-<span class="cstat-no" title="statement not covered" >  res.status(201).json(category);</span>
+  res.status(201).json(category);
 });
 &nbsp;
 categoriesRouter.put('/:id', validateId, <span class="fstat-no" title="function not covered" >async (r</span>eq: AuthRequest, res: Response) =&gt; {
@@ -274,7 +274,7 @@ categoriesRouter.delete('/:id', validateId, <span class="fstat-no" title="functi
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-07T06:26:19.195Z
+                at 2026-06-07T06:36:05.877Z
             </div>
         <script src="../prettify.js"></script>
         <script>
