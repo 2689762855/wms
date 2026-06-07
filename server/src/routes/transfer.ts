@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
-import prisma from '../utils/prisma';
+import prisma, { PRODUCT_INCLUDE } from '../utils/prisma';
 import { getPagination } from '../utils/pagination';
-import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth'
+import { applyWarehouseScope } from '../utils/warehouseScope';
 import { nextOrderNo } from '../utils/sequence';
 
 // 执行调拨库存转移（confirm 和 approve 共用）
@@ -80,7 +81,7 @@ transferRouter.get('/', async (req: AuthRequest, res: Response) => {
   const [data, total] = await Promise.all([
     prisma.transferOrder.findMany({
       where,
-      include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } } }, operator: { select: { id: true, realName: true } }, reviewedBy: { select: { id: true, realName: true } } },
+      include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: PRODUCT_INCLUDE } }, operator: { select: { id: true, realName: true } }, reviewedBy: { select: { id: true, realName: true } } },
       skip, take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
@@ -105,7 +106,7 @@ transferRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
   }
   const order = await prisma.transferOrder.findFirst({
     where,
-    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } } }, operator: { select: { id: true, realName: true } }, reviewedBy: { select: { id: true, realName: true } } },
+    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: PRODUCT_INCLUDE } }, operator: { select: { id: true, realName: true } }, reviewedBy: { select: { id: true, realName: true } } },
   });
   if (!order) return res.status(404).json({ error: '不存在或无权访问' });
   res.json(order);
@@ -165,7 +166,7 @@ transferRouter.post('/', async (req: AuthRequest, res: Response) => {
       ...(req.userRole !== 'tenant_admin' ? { operatorId: req.userId } : {}),
       items: { create: items.map((i: { productId: number; quantity: number; locationId?: number }) => ({ productId: i.productId, quantity: i.quantity, locationId: i.locationId ?? null })) },
     },
-    include: { items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } } }, fromWarehouse: true, toWarehouse: true },
+    include: { items: { include: { product: PRODUCT_INCLUDE } }, fromWarehouse: true, toWarehouse: true },
   });
   res.status(201).json(order);
 });
@@ -202,7 +203,7 @@ transferRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
 
   const updated = await prisma.transferOrder.findUnique({
     where: { id },
-    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } } } },
+    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: PRODUCT_INCLUDE } } },
   });
   res.json(updated);
 });
@@ -287,7 +288,7 @@ transferRouter.put('/:id/approve', validateId, adminWrite, async (req: AuthReque
 
   const updated = await prisma.transferOrder.findUnique({
     where: { id },
-    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } } }, reviewedBy: { select: { id: true, realName: true } } },
+    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: PRODUCT_INCLUDE } }, reviewedBy: { select: { id: true, realName: true } } },
   });
   res.json(updated);
 });
@@ -319,7 +320,7 @@ transferRouter.put('/:id/reject', validateId, adminWrite, async (req: AuthReques
   const updated = await prisma.transferOrder.update({
     where: { id },
     data: rejectData,
-    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } } }, reviewedBy: { select: { id: true, realName: true } } },
+    include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: PRODUCT_INCLUDE } }, reviewedBy: { select: { id: true, realName: true } } },
   });
   res.json(updated);
 });

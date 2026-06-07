@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate } from '../middleware/auth'
+import { applyWarehouseScope } from '../utils/warehouseScope';
 
 export const alertsRouter = Router();
 alertsRouter.use(authenticate);

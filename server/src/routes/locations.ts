@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import prisma from '../utils/prisma';
+import prisma, { PRODUCT_INCLUDE } from '../utils/prisma';
 import { AuthRequest, authenticate, adminWrite, requireWarehouse, validateId } from '../middleware/auth';
 
 export const locationsRouter = Router();
@@ -35,7 +35,7 @@ locationsRouter.get('/:id/inventory', validateId, async (req: AuthRequest, res: 
   }
   const inventory = await prisma.inventory.findMany({
     where: { locationId: id, quantity: { gt: 0 } },
-    include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } },
+    include: { product: PRODUCT_INCLUDE },
     orderBy: { product: { name: 'asc' } },
   });
   res.json(inventory);

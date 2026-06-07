@@ -63,6 +63,11 @@ const prisma = new Proxy({} as PrismaClient, handler);
 
 export default prisma;
 
+/** 商品含完整分类树的 include，统一复用避免重复 */
+export const PRODUCT_INCLUDE = {
+  include: { category: { include: { parent: { include: { parent: true } } } } },
+};
+
 /** 获取某商品在指定仓库的全库位总库存 */
 export async function getTotalStock(productId: number, warehouseId: number): Promise<number> {
   const result = await prisma.inventory.aggregate({

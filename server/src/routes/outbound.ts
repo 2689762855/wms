@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
-import prisma from '../utils/prisma';
+import prisma, { PRODUCT_INCLUDE } from '../utils/prisma';
 import { getPagination } from '../utils/pagination';
-import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth'
+import { applyWarehouseScope } from '../utils/warehouseScope';
 import { nextOrderNo } from '../utils/sequence';
 
 export const outboundRouter = Router();
@@ -35,7 +36,7 @@ outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
   const [data, total] = await Promise.all([
     prisma.outboundOrder.findMany({
       where,
-      include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+      include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: PRODUCT_INCLUDE, location: true } } },
       skip, take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
@@ -49,7 +50,7 @@ outboundRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) =
   if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
   const order = await prisma.outboundOrder.findUnique({
     where: { id },
-    include: { warehouse: true, location: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true, contract: { select: { id: true, contractNo: true, items: { include: { product: { select: { id: true } } } } } } } } },
+    include: { warehouse: true, location: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: PRODUCT_INCLUDE, location: true, contract: { select: { id: true, contractNo: true, items: { include: { product: { select: { id: true } } } } } } } } },
   });
   if (!order) return res.status(404).json({ error: '不存在' });
   if (req.userRole !== 'super_admin') {
@@ -103,7 +104,7 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
         })),
       },
     },
-    include: { items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+    include: { items: { include: { product: PRODUCT_INCLUDE, location: true } } },
   });
   // 同步容器合同关联
   if (containerId) {
@@ -337,7 +338,7 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
 
   const updated = await prisma.outboundOrder.findUnique({
     where: { id },
-    include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
+    include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: PRODUCT_INCLUDE, location: true } } },
   });
   res.json(updated);
 });

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
+import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth'
+import { applyWarehouseScope } from '../utils/warehouseScope';
 
 export const checkTasksRouter = Router();
 checkTasksRouter.use(authenticate);

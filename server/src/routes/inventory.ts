@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { getPagination } from '../utils/pagination';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate } from '../middleware/auth'
+import { applyWarehouseScope } from '../utils/warehouseScope';
 
 export const inventoryRouter = Router();
 inventoryRouter.use(authenticate);
@@ -92,7 +93,7 @@ inventoryRouter.get('/logs', async (req: AuthRequest, res: Response) => {
     const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
     where.warehouseId = { in: whs.map(w => w.id) };
   } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
-    where.warehouseId = req.userWarehouseId;
+    applyWarehouseScope(req, where); return;
   }
 
   const [data, total] = await Promise.all([
