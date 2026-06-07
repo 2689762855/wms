@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
+import { getPagination } from '../utils/pagination';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
@@ -60,8 +61,7 @@ transferRouter.use(authenticate);
 
 // 调拨单列表：超管看全部，其他看涉及自己仓库的
 transferRouter.get('/', async (req: AuthRequest, res: Response) => {
-  const page = parseInt((req.query.page as string) || '1');
-  const pageSize = Math.min(parseInt((req.query.pageSize as string) || '20'), 100);
+  const { page, pageSize, skip } = getPagination(req);
   const status = req.query.status as string;
 
   const where: Record<string, unknown> = {};
@@ -81,7 +81,7 @@ transferRouter.get('/', async (req: AuthRequest, res: Response) => {
     prisma.transferOrder.findMany({
       where,
       include: { fromWarehouse: true, toWarehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } } } }, operator: { select: { id: true, realName: true } }, reviewedBy: { select: { id: true, realName: true } } },
-      skip: (page - 1) * pageSize, take: pageSize,
+      skip, take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.transferOrder.count({ where }),

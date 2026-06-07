@@ -4,6 +4,7 @@ import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, Date
 import dayjs from 'dayjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { useAuth } from '../stores/AuthContext';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ProductSelector from '../components/ProductSelector';
 import { getCategoryPath } from '../utils/categoryTree';
@@ -18,6 +19,7 @@ interface ItemEntry {
 }
 
 export default function InboundNew() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
@@ -109,7 +111,7 @@ export default function InboundNew() {
       if (ci?.unitPrice != null) return ci.unitPrice;
     }
     const p = getProduct(item.productId);
-    return (p as any)?.salePrice ?? null;
+    return p?.salePrice ?? null;
   };
 
   return (
@@ -187,7 +189,7 @@ export default function InboundNew() {
             <Space key={idx} style={{ marginBottom: 8 }} wrap>
               <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
               <InputNumber min={1} value={item.quantity} onChange={(v) => updateItem(idx, 'quantity', v || 1)} placeholder="数量" style={{ width: 80 }} />
-              {price != null && <Tag color="green">¥{price.toFixed(2)}</Tag>}
+              {price != null && user?.operatorType !== 'warehouse' && <Tag color="green">¥{price.toFixed(2)}</Tag>}
               <Select allowClear placeholder="入库库位" value={item.locationId} onChange={(v) => updateItem(idx, 'locationId', v ?? null)}
                 style={{ width: 160 }} options={locations?.map((l: Location) => ({ label: l.name, value: l.id }))}
                 disabled={!selectedWarehouseId} notFoundContent={selectedWarehouseId ? '该仓库无库位' : '请先选择仓库'} />

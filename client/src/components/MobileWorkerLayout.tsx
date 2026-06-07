@@ -75,7 +75,7 @@ export default function MobileWorkerLayout() {
         </div>
         <Space size={4}>
           {isInCustomerView && (
-            <Button size="small" icon={<RollbackOutlined />} onClick={() => { logout(); navigate('/m/admin'); }} style={{ color: '#1677ff' }}>
+            <Button size="small" icon={<RollbackOutlined />} onClick={async () => { await logout(); navigate('/m/admin'); }} style={{ color: '#1677ff' }}>
               返回平台
             </Button>
           )}

@@ -47,3 +47,5 @@ Thumbs.db
 # 日志
 *.log
 npm-debug.log*
+WMS-Package-v2.3*
+node_modules/

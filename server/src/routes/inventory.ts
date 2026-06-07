@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
+import { getPagination } from '../utils/pagination';
 import { AuthRequest, authenticate } from '../middleware/auth';
 
 export const inventoryRouter = Router();
@@ -82,8 +83,7 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
 
 // 库存流水
 inventoryRouter.get('/logs', async (req: AuthRequest, res: Response) => {
-  const page = parseInt((req.query.page as string) || '1');
-  const pageSize = parseInt((req.query.pageSize as string) || '50');
+  const { page, pageSize, skip } = getPagination(req, 50);
   const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
 
   const where: Record<string, unknown> = {};
@@ -99,7 +99,7 @@ inventoryRouter.get('/logs', async (req: AuthRequest, res: Response) => {
     prisma.stockLog.findMany({
       where,
       include: { product: true },
-      skip: (page - 1) * pageSize,
+      skip,
       take: Math.min(pageSize, 100),
       orderBy: { createdAt: 'desc' },
     }),

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import prisma, { platformPrisma, initTenantDatabase } from '../utils/prisma';
+import prisma, { platformPrisma, initTenantDatabase, resetTenantDatabase } from '../utils/prisma';
 import { AuthRequest, authenticate, JWT_ADMIN_SECRET, INTER_SERVER_SECRET, THIS_HOST } from '../middleware/auth';
 
 const JWT_EXPIRES_IN = '24h';
@@ -349,6 +349,8 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
 
     // 2. 初始化租户数据库（建表）
     await initTenantDatabase(customer.id);
+    // 清空可能残留的旧注册数据（SQLite ID 复用场景）
+    resetTenantDatabase(customer.id);
 
     // 3. 在租户库中创建仓库和库位
     const { PrismaClient } = await import('@prisma/client');
@@ -365,9 +367,10 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
         data: { name: `${realName || username}主仓库`, id: mainWh.id, customerId: customer.id },
       });
       const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
-      for (const locName of locNames) {
-        const code = 'LOC-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
-        await tenantPrisma.location.create({ data: { name: locName, warehouseId: wh.id, code } });
+      const ts = Date.now().toString(36).toUpperCase();
+      for (let i = 0; i < locNames.length; i++) {
+        const code = 'LOC-' + ts + '-' + i.toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
+        await tenantPrisma.location.create({ data: { name: locNames[i], warehouseId: wh.id, code } });
       }
     } finally {
       await tenantPrisma.$disconnect();

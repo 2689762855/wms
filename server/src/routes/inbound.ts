@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
+import { getPagination } from '../utils/pagination';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
@@ -19,8 +20,7 @@ inboundRouter.use(authenticate);
 
 // 入库单列表
 inboundRouter.get('/', async (req: AuthRequest, res: Response) => {
-  const page = parseInt((req.query.page as string) || '1');
-  const pageSize = Math.min(parseInt((req.query.pageSize as string) || '20'), 100);
+  const { page, pageSize, skip } = getPagination(req);
   const where: Record<string, unknown> = {};
   if (req.userRole !== 'super_admin') {
     if (req.userRole === 'tenant_admin') {
@@ -46,7 +46,7 @@ inboundRouter.get('/', async (req: AuthRequest, res: Response) => {
     prisma.inboundOrder.findMany({
       where,
       include: { warehouse: true, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true, contract: { select: { id: true, contractNo: true } } } } },
-      skip: (page - 1) * pageSize, take: pageSize,
+      skip, take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.inboundOrder.count({ where }),

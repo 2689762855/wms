@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
+import { getPagination } from '../utils/pagination';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 import { nextOrderNo } from '../utils/sequence';
 
@@ -7,8 +8,7 @@ export const outboundRouter = Router();
 outboundRouter.use(authenticate);
 
 outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
-  const page = parseInt((req.query.page as string) || '1');
-  const pageSize = Math.min(parseInt((req.query.pageSize as string) || '20'), 100);
+  const { page, pageSize, skip } = getPagination(req);
   const where: Record<string, unknown> = {};
   const unlinkedOnly = req.query.unlinkedOnly === 'true';
   if (unlinkedOnly) where.containerId = null;
@@ -36,7 +36,7 @@ outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
     prisma.outboundOrder.findMany({
       where,
       include: { warehouse: true, container: { select: { id: true, containerNo: true, status: true } }, items: { include: { product: { include: { category: { include: { parent: { include: { parent: true } } } } } }, location: true } } },
-      skip: (page - 1) * pageSize, take: pageSize,
+      skip, take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.outboundOrder.count({ where }),

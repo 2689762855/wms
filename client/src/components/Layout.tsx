@@ -201,7 +201,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
           <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {isInCustomerView && (
-              <Button size="small" icon={<RollbackOutlined />} onClick={() => { logout(); navigate('/admin'); }} style={{ color: '#1677ff' }}>
+              <Button size="small" icon={<RollbackOutlined />} onClick={async () => { await logout(); navigate('/admin'); }} style={{ color: '#1677ff' }}>
                 返回平台管理
               </Button>
             )}

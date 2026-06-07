@@ -55,19 +55,22 @@ export function AuthProvider({ children }: { children: any }) {
     setLoading(false);
   };
 
-  const logout = () => {
+  const logout = async () => {
     // 如果是客户视角，先尝试恢复超管身份
     const adminToken = localStorage.getItem('admin_token');
     if (adminToken) {
       localStorage.removeItem('admin_token');
       localStorage.setItem('token', adminToken);
       setToken(adminToken);
-      // 清除客户视角标记，让新的 /auth/me 不被拦截
-      apiClient.get('/auth/me').then(res => setUser(res.data as User)).catch(() => {
+      // 清除客户视角标记，等 /auth/me 返回后再继续
+      try {
+        const res = await apiClient.get('/auth/me');
+        setUser(res.data as User);
+      } catch {
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
-      });
+      }
       return;
     }
     // 退出前清理可能残留的 admin_token

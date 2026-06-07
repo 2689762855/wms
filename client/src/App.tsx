@@ -85,6 +85,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (user?.operatorType === 'clerk' && !loc.startsWith('/contracts') && !loc.startsWith('/m')) {
     return <Navigate to="/contracts" replace />;
   }
+  // 库人员不可访问合同
+  if (user?.operatorType === 'warehouse' && loc.startsWith('/contracts')) {
+    return <Navigate to="/inbound" replace />;
+  }
   return <>{children}</>;
 }
 

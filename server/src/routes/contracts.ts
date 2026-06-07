@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
+import { getPagination } from '../utils/pagination';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth';
 
 export const contractsRouter = Router();
@@ -53,8 +54,7 @@ contractsRouter.delete('/business-customers/:id', validateId, async (req: AuthRe
 
 // 合同列表
 contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
-  const page = parseInt((req.query.page as string) || '1');
-  const pageSize = parseInt((req.query.pageSize as string) || '20');
+  const { page, pageSize, skip } = getPagination(req);
   const keyword = (req.query.keyword as string) || '';
   const status = req.query.status as string;
   const customerId = req.query.customerId ? parseInt(req.query.customerId as string) : undefined;
@@ -84,7 +84,7 @@ contractsRouter.get('/', async (req: AuthRequest, res: Response) => {
         customer: { select: { id: true, username: true, realName: true } },
         items: { include: { product: { select: { id: true, sku: true, name: true, spec: true, unit: true } } } },
       },
-      skip: (page - 1) * pageSize,
+      skip,
       take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),

@@ -287,7 +287,7 @@ export default function ContainerDetail() {
         <Descriptions.Item label="关联合同">
           {linkedContracts.length > 0
             ? linkedContracts.map((cc: any) => (
-                <Tag key={cc.contractId} color="blue" style={{ cursor: 'pointer' }} onClick={() => navigate(`/contracts/${cc.contractId}`)}>{cc.contract?.contractNo}</Tag>
+                <Tag key={cc.contractId} color="blue" style={user?.operatorType === 'warehouse' ? undefined : { cursor: 'pointer' }} onClick={user?.operatorType === 'warehouse' ? undefined : () => navigate(`/contracts/${cc.contractId}`)}>{cc.contract?.contractNo}</Tag>
               ))
             : '-'}
         </Descriptions.Item>
@@ -326,7 +326,7 @@ export default function ContainerDetail() {
       {container.status === 'sealed' && (
         <Space style={{ marginBottom: 16 }}>
           <Button icon={<PrinterOutlined />} onClick={printReport}>打印装柜报表</Button>
-          <Button icon={<AuditOutlined />} onClick={() => setReconciliationOpen(true)}>对账</Button>
+          {user?.operatorType !== 'warehouse' && <Button icon={<AuditOutlined />} onClick={() => setReconciliationOpen(true)}>对账</Button>}
           <Button
             type="primary"
             onClick={() => {

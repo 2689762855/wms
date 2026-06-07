@@ -200,7 +200,7 @@ export default function OutboundNew() {
       }
     }
     const p = getProduct(item.productId);
-    return (p as any)?.salePrice ?? null;
+    return p?.salePrice ?? null;
   };
 
   const getLocationsForProduct = (productId: number) => {
@@ -303,7 +303,7 @@ export default function OutboundNew() {
                 disabled={!selectedWarehouseId}
                 notFoundContent={selectedWarehouseId ? '该商品无库存' : '请先选择仓库'}
               />
-              {price != null && <Tag color="green">¥{price.toFixed(2)}</Tag>}
+              {price != null && user?.operatorType !== 'warehouse' && <Tag color="green">¥{price.toFixed(2)}</Tag>}
               <Button danger size="small" onClick={() => setItems(items.filter((_, i) => i !== idx))}>删除</Button>
             </Space>
           );

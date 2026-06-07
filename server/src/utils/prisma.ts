@@ -135,3 +135,32 @@ export async function initTenantDatabase(customerId: number): Promise<void> {
 
   console.log(`[initTenant] tenant_${customerId}.db 初始化完成，${tables.length} 个表`);
 }
+
+/**
+ * 清空租户数据库中所有用户表的数据（保留表结构）
+ * 用于新客户注册/创建时清理可能残留的旧注册数据
+ * 仅在创建新客户的流程中调用，不会影响活跃客户
+ */
+export function resetTenantDatabase(customerId: number): void {
+  const dbDir = path.join(__dirname, '../../prisma');
+  const dbPath = path.join(dbDir, `tenant_${customerId}.db`);
+
+  if (!fs.existsSync(dbPath)) return; // 文件不存在，无需清空
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Database = require('better-sqlite3');
+  const db = new Database(dbPath);
+  db.pragma('foreign_keys = OFF');
+
+  const tables = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_prisma_%'`
+  ).all() as { name: string }[];
+
+  for (const t of tables) {
+    db.exec(`DELETE FROM "${t.name}"`);
+  }
+
+  db.pragma('foreign_keys = ON');
+  db.close();
+  console.log(`[resetTenant] 已清空 tenant_${customerId}.db 中 ${tables.length} 个表`);
+}

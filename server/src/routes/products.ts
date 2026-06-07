@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
+import { getPagination } from '../utils/pagination';
 import multer from 'multer';
 import path from 'path';
 // CSV 解析：替代 xlsx，零依赖，兼容 UTF-8 和 GBK 编码
@@ -59,8 +60,7 @@ const uploadImage = multer({
 
 // 商品列表（分页、搜索、分类筛选）
 productsRouter.get('/', async (req: AuthRequest, res: Response) => {
-  const page = parseInt((req.query.page as string) || '1');
-  const pageSize = parseInt((req.query.pageSize as string) || '20');
+  const { page, pageSize, skip } = getPagination(req);
   const keyword = (req.query.keyword as string) || '';
   const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
 
@@ -81,7 +81,7 @@ productsRouter.get('/', async (req: AuthRequest, res: Response) => {
     prisma.product.findMany({
       where,
       include: { category: { include: { parent: { include: { parent: true } } } }, productWarehouses: { include: { warehouse: { select: { name: true } } } } },
-      skip: (page - 1) * pageSize,
+      skip,
       take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),

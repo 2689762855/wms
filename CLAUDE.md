@@ -166,16 +166,43 @@ APK 使用 `server.url` 加载 Vite 开发服务器实现热更新。原生扫�
 - Vite 代理仅转发 `localhost:3001`
 - 生产部署需设置环境变量 `JWT_ADMIN_SECRET`、`JWT_CUSTOMER_SECRET`
 
+## 反模式自动检查
+
+> 每次修改 WMS 代码前，用以下命令扫描目标文件，确认无已知反模式。详见 `wiki/concepts/WMS 反模式清单.md`。
+
+```bash
+# 1. batchNo: null 硬编码（已出现 4 次）
+grep -n "batchNo: null\|batchNo:null" <目标文件>
+
+# 2. findUnique/upsert 对照 schema（已出现 3 次）
+grep -n "findUnique\|upsert" <目标文件>
+
+# 3. super_admin 遗漏 warehouse_admin（已出现 3 次）
+grep -n "super_admin" <目标文件>
+# → 每处确认是否需要加 || req.userRole === 'warehouse_admin'
+
+# 4. 可选链后方法调用（?.filter().map() 模式）
+grep -n "?\.filter\|?\.map\|?\.reduce" <目标文件>
+
+# 5. aggregate 在 update 之后
+grep -n "aggregate" <目标文件>
+# → 确认 aggregate 是否在 update/decrement/increment 之前
+```
+
 ## Wiki 知识库
 
 修改代码前，先检索 Wiki（`E:\claude\my-wiki\wiki\`）中相关的踩坑记录和决策日志，避免重复排查已记录的问题。重点关注：
-- `wiki/synthesis/库存管理系统开发总结.md` — 踩坑记录
+- `wiki/synthesis/库存管理系统开发总结.md` — 181 条踩坑记录
+- `wiki/concepts/WMS 反模式清单.md` — 7 个高频反模式 + grep 排查命令
 - `wiki/synthesis/技术选型决策日志.md` — 技术决策 + 可复用模式
-- `wiki/Changelog.md` — 历次操作记录
+- `wiki/concepts/WMS 架构决策记录.md` — ADR 格式的架构决策
+- `wiki/synthesis/WMS 代码地图.md` — 按功能模块快速定位代码，完整数据链路，改前必查
 
 **知识复利闭环**：每次解决新的 WMS 问题或做出技术决策后，同步更新 Wiki：
 - 新踩坑 → 追加到 `库存管理系统开发总结.md` 的踩坑记录
+- 新反模式 → 追加到 `WMS 反模式清单.md`
 - 新技术取舍 → 追加到 `技术选型决策日志.md` 的决策记录
+- **代码链路变化 → 更新 `WMS 代码地图.md`**（新增路由/工具函数/数据表关联）
 - 所有操作 → 追加到 `Changelog.md`
 
 ## Git 工作流
@@ -183,7 +210,7 @@ APK 使用 `server.url` 加载 Vite 开发服务器实现热更新。原生扫�
 - 私有仓库：`git@gitee.com:fjm_grkj_kyzz/wms-platform.git`（remote: `platform`）
 - **大修改前必须先存档**：`git add -A && git commit -m "改xxx之前的存档" && git push platform master`
 - 改坏回退：`git reset --hard <commit-hash>`
-- 服务器部署：本地改源码 → `scp` 到 `root@69.165.67.241:/opt/wms/server/`
+- 服务器部署：本地改源码 → `scp` 到 `root@69.165.75.127:/opt/wms/server/`
 - APK 更新：构建后 cp 到 `server/apk/`，更新 `version.json`，scp 到服务器
 
 ## 营销落地页

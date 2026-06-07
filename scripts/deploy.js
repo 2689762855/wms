@@ -304,6 +304,10 @@ echo [信息] 初始化数据库...
 set "FIRST_RUN="
 if not exist "prisma\\dev.db" set "FIRST_RUN=1"
 
+:: 清理异常关机残留的 WAL/SHM 文件（SQLite 会自动从主库恢复）
+if exist "prisma\\dev.db-wal" del /f /q "prisma\\dev.db-wal"
+if exist "prisma\\dev.db-shm" del /f /q "prisma\\dev.db-shm"
+
 :: 清理上次 Prisma 生成的引擎文件（Windows 文件锁可能导致残留）
 if exist "node_modules\\.prisma" (
     rd /s /q "node_modules\\.prisma" 2>nul
