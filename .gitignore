@@ -49,3 +49,8 @@ Thumbs.db
 npm-debug.log*
 WMS-Package-v2.3*
 node_modules/
+server/public/demo.mp4
+nodejs/
+*.apk
+apk/*.apk
+server/public/

@@ -8,24 +8,12 @@ alertsRouter.use(authenticate);
 // 库存预警：低库存 + 临期，按商品+仓库维度
 alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
   let warehouseId = req.query.warehouseId ? parseInt(req.query.warehouseId as string) : undefined;
-  let tenantWhIds: number[] | undefined;
-  if (req.userRole === 'tenant_admin' && req.customerId) {
-    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
-    tenantWhIds = whs.map(w => w.id);
-    if (warehouseId && !tenantWhIds.includes(warehouseId)) {
-      return res.status(403).json({ error: '无权查看此仓库的预警' });
-    }
-  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+  if (req.userRole !== 'super_admin' && req.userWarehouseId) {
     warehouseId = req.userWarehouseId;
   }
 
   // 查出所有已配置仓库安全库存的记录
   const pwWhere: Record<string, unknown> = {};
-  if (req.customerId) {
-    // tenant_admin：只看自己客户的仓库
-    if (!tenantWhIds || tenantWhIds.length === 0) return res.json([]);
-    pwWhere.warehouseId = { in: tenantWhIds };
-  }
   if (warehouseId) pwWhere.warehouseId = warehouseId;
   else if (req.userRole !== 'super_admin' && req.userWarehouseId) pwWhere.warehouseId = req.userWarehouseId;
 
@@ -36,22 +24,35 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
       warehouse: { select: { id: true, name: true } },
     },
   });
-  if (!productWarehouses.length) return res.json([]);
 
-  // 查所有配置对的库存
-  const pwProductIds = [...new Set(productWarehouses.map(pw => pw.productId))];
-  const pwWarehouseIds = [...new Set(productWarehouses.map(pw => pw.warehouseId))];
-
-  const inventories = await prisma.inventory.findMany({
-    where: {
-      productId: { in: pwProductIds },
-      warehouseId: { in: pwWarehouseIds },
-      quantity: { gt: 0 },
-    },
-    include: {
-      location: { select: { id: true, name: true, code: true } },
-    },
+  // 也查使用全局安全库存的商品
+  const globalProducts = await prisma.product.findMany({
+    where: { safetyStock: { gt: 0 } },
+    include: { category: true },
   });
+
+  // 查所有相关商品在各仓库的库存
+  const pwProductIds = productWarehouses.map(pw => pw.productId);
+  const allProductIds = [...new Set([...pwProductIds, ...globalProducts.map(p => p.id)])];
+  const allWarehouseIds = [...new Set(productWarehouses.map(pw => pw.warehouseId))];
+
+  let inventories: any[] = [];
+  if (allProductIds.length > 0) {
+    const invWhere: Record<string, unknown> = {
+      productId: { in: allProductIds },
+      quantity: { gt: 0 },
+    };
+    if (warehouseId) invWhere.warehouseId = warehouseId;
+    else if (req.userRole !== 'super_admin' && req.userWarehouseId) invWhere.warehouseId = req.userWarehouseId;
+
+    inventories = await prisma.inventory.findMany({
+      where: invWhere,
+      include: {
+        warehouse: { select: { id: true, name: true } },
+        location: { select: { id: true, name: true, code: true } },
+      },
+    });
+  }
 
   // 按 productId + warehouseId 汇总库存
   const stockMap = new Map<string, { qty: number; locations: { name: string; code: string; qty: number }[] }>();
@@ -69,7 +70,16 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     }
   }
 
-  // 按配置生成预警：只检查已配置的商品×仓库对
+  // 仓库名缓存
+  const whCache = new Map<number, string>();
+  for (const inv of inventories) {
+    if (inv.warehouse && !whCache.has(inv.warehouseId)) {
+      whCache.set(inv.warehouseId, inv.warehouse.name);
+    }
+  }
+  const allWh = await prisma.warehouse.findMany({ select: { id: true, name: true } });
+  for (const wh of allWh) whCache.set(wh.id, wh.name);
+
   const result: {
     product: Record<string, unknown>;
     warehouseId: number;
@@ -81,6 +91,7 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     alertType?: string;
   }[] = [];
 
+  // Per-warehouse safety stock alerts
   for (const pw of productWarehouses) {
     const key = `${pw.productId}-${pw.warehouseId}`;
     const stock = stockMap.get(key);
@@ -106,13 +117,44 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     }
   }
 
+  // Global safety stock alerts (for products without per-warehouse config)
+  const pwProductIds2 = new Set(pwProductIds);
+  for (const product of globalProducts) {
+    if (pwProductIds2.has(product.id)) continue; // 跳过已有按仓库配置的
+    const relevantWarehouseIds = warehouseId
+      ? [warehouseId]
+      : (req.userRole !== 'super_admin' && req.userWarehouseId ? [req.userWarehouseId] : allWh.map(w => w.id));
+
+    for (const whId of relevantWarehouseIds) {
+      const key = `${product.id}-${whId}`;
+      const stock = stockMap.get(key);
+      const currentQty = stock?.qty || 0;
+      if (currentQty < product.safetyStock) {
+        result.push({
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            spec: product.spec,
+            unit: product.unit,
+            barcode: product.barcode,
+            category: product.category,
+          },
+          warehouseId: whId,
+          warehouseName: whCache.get(whId) || '',
+          currentQty,
+          safetyStock: product.safetyStock,
+          shortage: product.safetyStock - currentQty,
+          locations: stock?.locations || [],
+        });
+      }
+    }
+  }
+
   // 临期预警：查有保质期且到期日临近的商品
   const now = new Date();
   const expiryProducts = await prisma.product.findMany({
-    where: {
-      expiryDate: { not: null },
-      ...(req.customerId ? { customerId: req.customerId } : {}),
-    },
+    where: { expiryDate: { not: null } },
     include: { category: true },
   });
 
@@ -120,13 +162,11 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     const daysLeft = Math.floor((product.expiryDate!.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
     if (daysLeft > product.expiryWarningDays) continue;
 
-    // 查该商品在各仓库的库存
     const invWhere2: Record<string, unknown> = {
       productId: product.id,
       quantity: { gt: 0 },
     };
     if (warehouseId) invWhere2.warehouseId = warehouseId;
-    else if (tenantWhIds) invWhere2.warehouseId = { in: tenantWhIds };
     else if (req.userRole !== 'super_admin' && req.userWarehouseId) invWhere2.warehouseId = req.userWarehouseId;
 
     const stocks = await prisma.inventory.findMany({
@@ -136,7 +176,6 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
 
     if (!stocks.length) continue;
 
-    // 按仓库汇总（同时缓存仓库名）
     const whMap2 = new Map<number, { qty: number; whName: string; locations: { name: string; code: string; qty: number }[] }>();
     for (const s of stocks) {
       const e = whMap2.get(s.warehouseId);

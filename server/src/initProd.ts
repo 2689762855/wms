@@ -5,8 +5,7 @@ import crypto from 'crypto';
 async function init() {
   console.log('=== 初始化系统 ===\n');
 
-  // 密码来源：CLI 参数 > 环境变量 > 随机生成
-  const password = process.argv[2] || process.env.ADMIN_PASSWORD || crypto.randomBytes(8).toString('base64url');
+  const password = crypto.randomBytes(8).toString('base64url');
   const hash = await bcrypt.hash(password, 10);
   await prisma.user.upsert({
     where: { username: 'admin' },
@@ -14,12 +13,13 @@ async function init() {
     create: {
       username: 'admin',
       passwordHash: hash,
-      role: 'super_admin',
-      realName: '系统管理员',
+      role: 'warehouse_admin',
+      realName: '管理员',
     },
   });
-  console.log(`管理员: admin / ${password}`);
-  console.log('请牢记密码，首次登录后建议修改。');
+  console.log(`默认管理员: admin / ${password}`);
+  console.log('请妥善保存此密码，登录后可在系统内修改。');
+  console.log('登录后请先创建仓库和商品。');
 
   await prisma.$disconnect();
 }
