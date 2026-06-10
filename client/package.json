@@ -23,6 +23,7 @@
     "axios": "^1.15.2",
     "dayjs": "^1.11.20",
     "html5-qrcode": "^2.3.8",
+    "jsbarcode": "^3.12.3",
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

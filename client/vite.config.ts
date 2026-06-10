@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   build: {
     sourcemap: false,
+    target: 'es2015',
   },
   plugins: [
     react(),

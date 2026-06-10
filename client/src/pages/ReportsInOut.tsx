@@ -24,8 +24,8 @@ export default function ReportsInOut() {
       </Select>
 
       <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={6}><Card size="small"><Statistic title="入库总数" value={data?.totalInboundQty || 0} prefix={<ArrowUpOutlined />} valueStyle={{ color: '#3f8600' }} /></Card></Col>
-        <Col xs={12} sm={6}><Card size="small"><Statistic title="出库总数" value={data?.totalOutboundQty || 0} prefix={<ArrowDownOutlined />} valueStyle={{ color: '#cf1322' }} /></Card></Col>
+        <Col xs={12} sm={6}><Card size="small"><Statistic title="入库总数" value={data?.totalInboundQty || 0} prefix={<ArrowUpOutlined />} styles={{ content: { color: '#3f8600' } }} /></Card></Col>
+        <Col xs={12} sm={6}><Card size="small"><Statistic title="出库总数" value={data?.totalOutboundQty || 0} prefix={<ArrowDownOutlined />} styles={{ content: { color: '#cf1322' } }} /></Card></Col>
         <Col xs={12} sm={6}><Card size="small"><Statistic title="入库单数" value={data?.totalInbounds || 0} /></Card></Col>
         <Col xs={12} sm={6}><Card size="small"><Statistic title="出库单数" value={data?.totalOutbounds || 0} /></Card></Col>
       </Row>

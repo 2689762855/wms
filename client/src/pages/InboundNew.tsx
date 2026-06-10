@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag } from 'antd';
+import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete } from 'antd';
 import dayjs from 'dayjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -27,6 +27,13 @@ export default function InboundNew() {
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
+  const [supplierOptions, setSupplierOptions] = useState<{ value: string }[]>([]);
+
+  useEffect(() => {
+    apiClient.get('/suppliers').then(res => {
+      setSupplierOptions(res.data.map((s: any) => ({ value: s.name })));
+    }).catch(() => {});
+  }, []);
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(res => res.data) });
   const { data: allProducts } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(res => res.data.data) });
@@ -121,7 +128,7 @@ export default function InboundNew() {
           <Form.Item name="warehouseId" label="入库仓库" rules={[{ required: true }]} style={{ minWidth: 180 }}>
             <Select placeholder="选择仓库">{warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}</Select>
           </Form.Item>
-          <Form.Item name="supplier" label="供应商"><Input style={{ width: 180 }} /></Form.Item>
+          <Form.Item name="supplier" label="供应商"><AutoComplete options={supplierOptions} placeholder="输入或选择供应商" style={{ width: 200 }} allowClear filterOption={(inputValue, option) => option!.value.toLowerCase().includes(inputValue.toLowerCase())} /></Form.Item>
           <Form.Item label="关联合同（可选）" style={{ minWidth: 240 }}>
             <Select
               allowClear

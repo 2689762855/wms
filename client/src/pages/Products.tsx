@@ -1,15 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select, DatePicker } from 'antd';
 import locale from 'antd/es/date-picker/locale/zh_CN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 dayjs.locale('zh-cn');
-import { PlusOutlined, UploadOutlined, DownloadOutlined, InboxOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, DownloadOutlined, InboxOutlined, BarcodeOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../stores/AuthContext';
 import apiClient from '../api/client';
 import type { Product, Category, Warehouse, ProductWarehouse } from '../types';
 import { buildTree, toCascaderOptions, findPath, getCategoryPath } from '../utils/categoryTree';
+import JsBarcode from 'jsbarcode';
+
 export default function Products() {
   const { user } = useAuth();
   const isOperator = user?.role === 'operator';
@@ -20,6 +22,8 @@ export default function Products() {
   const [importWarehouseId, setImportWarehouseId] = useState<number | undefined>();
   const [imageFileList, setImageFileList] = useState<any[]>([]);
   const [warehouseConfigs, setWarehouseConfigs] = useState<{ warehouseId?: number; safetyStock: number }[]>([{ warehouseId: undefined, safetyStock: 0 }]);
+  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
+  const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
   const queryClient = useQueryClient();
 
   const { data: warehouses } = useQuery({
@@ -103,6 +107,19 @@ export default function Products() {
     setOpen(true);
   };
 
+  useEffect(() => {
+    if (barcodeProduct) {
+      const code = barcodeProduct.barcode || barcodeProduct.sku;
+      setTimeout(() => {
+        if (barcodeCanvasRef.current) {
+          JsBarcode(barcodeCanvasRef.current, code, {
+            format: 'CODE128', width: 2, height: 80, displayValue: true, fontSize: 14, margin: 10,
+          });
+        }
+      }, 50);
+    }
+  }, [barcodeProduct]);
+
   const columns = [
     { title: 'SKU', dataIndex: 'sku', key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: 'name', key: 'name' },
@@ -130,6 +147,7 @@ export default function Products() {
       render: (_: unknown, record: Product) => (
         isOperator ? <span style={{ color: '#999' }}>—</span> : (
         <Space>
+          <Button size="small" icon={<BarcodeOutlined />} onClick={() => setBarcodeProduct(record)}>条码</Button>
           <Button size="small" onClick={() => openEdit(record)}>编辑</Button>
           <Popconfirm title="确认删除?" onConfirm={() => deleteMutation.mutate(record.id)}>
             <Button size="small" danger>删除</Button>
@@ -285,6 +303,32 @@ export default function Products() {
             </Form.Item>
           </Space>
         </Form>
+      </Modal>
+
+      <Modal title="商品条码" open={!!barcodeProduct} onCancel={() => setBarcodeProduct(null)} footer={null} style={{ maxWidth: 420 }}>
+        {barcodeProduct && (
+          <div style={{ textAlign: 'center' }}>
+            <canvas ref={barcodeCanvasRef} style={{ maxWidth: '100%' }} />
+            <Typography.Title level={5} style={{ marginTop: 8 }}>{barcodeProduct.name}</Typography.Title>
+            <Typography.Text type="secondary">SKU: {barcodeProduct.sku}</Typography.Text>
+            <div style={{ marginTop: 12 }}>
+              <Button icon={<PrinterOutlined />} type="primary" onClick={() => {
+                const imgSrc = barcodeCanvasRef.current?.toDataURL() || '';
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{text-align:center;padding:20px;font-family:sans-serif}img{display:block;margin:0 auto}</style></head><body><h2>${barcodeProduct.name}</h2><p>SKU: ${barcodeProduct.sku}</p><img src="${imgSrc}" style="max-width:100%"/></body></html>`;
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const w = window.open(url, '_blank');
+                const printAndClose = () => { if (w && !w.closed) w.print(); URL.revokeObjectURL(url); };
+                if (w) {
+                  try { w.onload = printAndClose; } catch {}
+                  setTimeout(printAndClose, 300);
+                } else {
+                  URL.revokeObjectURL(url);
+                }
+              }}>打印条码</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </Card>
   );

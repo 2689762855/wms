@@ -1,7 +1,13 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import prisma, { initTenantDatabase, resetTenantDatabase } from '../utils/prisma';
+import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
 import { AuthRequest, authenticate, superAdmin, adminWrite, validateId } from '../middleware/auth';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const customersRouter = Router();
 customersRouter.use(authenticate);
@@ -18,7 +24,6 @@ customersRouter.get('/', async (req: AuthRequest, res: Response) => {
     where: includeDeleted ? {} : { deletedAt: null },
     include: {
       warehouses: { select: { id: true, name: true, createdAt: true } },
-      _count: { select: { products: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -29,10 +34,23 @@ customersRouter.get('/', async (req: AuthRequest, res: Response) => {
     : [];
   const creatorMap = new Map(creators.map(u => [u.id, u]));
 
+  // 从各租户库统计商品数（主库 Product 表不是客户数据）
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const productCounts: Record<number, number> = {};
+  for (const c of customers) {
+    try {
+      const dbPath = path.join(__dirname, '../../prisma', `tenant_${c.id}.db`);
+      if (!fs.existsSync(dbPath)) { productCounts[c.id] = 0; continue; }
+      const tp = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
+      productCounts[c.id] = await tp.product.count();
+      await tp.$disconnect();
+    } catch { productCounts[c.id] = 0; }
+  }
+
   const result = customers.map(c => {
     const { passwordHash: _, ...rest } = c;
     const creator = c.createdBy ? creatorMap.get(c.createdBy) : null;
-    return { ...rest, createdByUser: creator || null };
+    return { ...rest, createdByUser: creator || null, _count: { products: productCounts[c.id] || 0 } };
   });
   res.json(result);
 });
@@ -44,12 +62,21 @@ customersRouter.get('/:id', validateId, async (req: AuthRequest, res: Response) 
     where: { id, deletedAt: null },
     include: {
       warehouses: { include: { _count: { select: { inventories: true, users: true } } } },
-      _count: { select: { products: true } },
     },
   });
   if (!customer) return res.status(404).json({ error: '客户不存在' });
+  // 从租户库查询商品数
+  let productCount = 0;
+  try {
+    const dbPath = path.join(__dirname, '../../prisma', `tenant_${customer.id}.db`);
+    if (fs.existsSync(dbPath)) {
+      const tp = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
+      productCount = await tp.product.count();
+      await tp.$disconnect();
+    }
+  } catch {}
   const { passwordHash: _, ...rest } = customer;
-  res.json(rest);
+  res.json({ ...rest, _count: { products: productCount } });
 });
 
 // 创建客户（自动创建专属仓库）
@@ -116,14 +143,11 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
     // 初始化租户数据库 schema
     await initTenantDatabase(customer.id);
     // 清空可能残留的旧注册数据（SQLite ID 复用场景）
-    resetTenantDatabase(customer.id);
+    await resetTenantDatabase(customer.id);
 
     // 在租户库中创建仓库和库位
     const { PrismaClient } = await import('@prisma/client');
-    const { fileURLToPath } = await import('url');
-    const pathMod = await import('path');
-    const _dirname = pathMod.dirname(fileURLToPath(import.meta.url));
-    const dbPath = pathMod.join(_dirname, '../../prisma', `tenant_${customer.id}.db`);
+    const dbPath = path.join(__dirname, '../../prisma', `tenant_${customer.id}.db`);
     const tenantPrisma = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
     try {
       await tenantPrisma.customer.create({
@@ -186,7 +210,31 @@ customersRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) 
       if (count >= limit) {
         return res.status(400).json({ error: `仓库数量已达上限 (${limit}个)` });
       }
-      await prisma.warehouse.create({ data: { name: addWarehouseName, customerId: id } });
+      const wh = await prisma.warehouse.create({ data: { name: addWarehouseName, customerId: id } });
+
+      // 同步到租户数据库
+      const { PrismaClient } = await import('@prisma/client');
+      const dbPath = path.join(__dirname, '../../prisma', `tenant_${id}.db`);
+      const tenantPrisma = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
+      try {
+        await tenantPrisma.warehouse.create({ data: { id: wh.id, name: addWarehouseName, customerId: id } });
+        const locNames = ['A区-01架', 'A区-02架', 'B区-01架', 'B区-02架'];
+        const ts = Date.now().toString(36).toUpperCase();
+        for (let i = 0; i < locNames.length; i++) {
+          const code = 'LOC-' + ts + '-' + i.toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
+          await tenantPrisma.location.create({ data: { name: locNames[i], warehouseId: wh.id, code } });
+        }
+      } catch (tenantErr) {
+        console.error(`[customers] 租户库同步失败，回滚主库仓库 wh=${wh.id}:`, tenantErr);
+        try {
+          await prisma.warehouse.delete({ where: { id: wh.id } });
+        } catch (rollbackErr) {
+          console.error(`[customers] ⚠️ 回滚失败！主库残留孤儿仓库 wh=${wh.id}，需手动清理:`, rollbackErr);
+        }
+        return res.status(500).json({ error: '仓库创建失败，请重试' });
+      } finally {
+        await tenantPrisma.$disconnect();
+      }
     }
 
     const updated = await prisma.customer.findUnique({

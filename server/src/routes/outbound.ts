@@ -33,6 +33,10 @@ outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
     if (startDate) (where.createdAt as any).gte = new Date(startDate);
     if (endDate) (where.createdAt as any).lte = new Date(endDate);
   }
+  const receiver = req.query.receiver as string;
+  if (receiver) {
+    where.receiver = { contains: receiver };
+  }
   const [data, total] = await Promise.all([
     prisma.outboundOrder.findMany({
       where,

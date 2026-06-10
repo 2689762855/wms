@@ -65,14 +65,25 @@ public class AppUpdatePlugin extends Plugin {
                     apkFile.delete();
                 }
 
+                int fileSize = conn.getContentLength();
+                int total = 0;
+                long lastNotify = 0;
                 try (InputStream in = conn.getInputStream();
                      FileOutputStream out = new FileOutputStream(apkFile)) {
                     byte[] buf = new byte[8192];
                     int len;
-                    int total = 0;
                     while ((len = in.read(buf)) > 0) {
                         out.write(buf, 0, len);
                         total += len;
+                        long now = System.currentTimeMillis();
+                        if (now - lastNotify >= 300) {
+                            lastNotify = now;
+                            JSObject progress = new JSObject();
+                            progress.put("percent", fileSize > 0 ? (int)((long)total * 100 / fileSize) : -1);
+                            progress.put("downloaded", total);
+                            progress.put("total", fileSize);
+                            notifyListeners("progress", progress);
+                        }
                     }
                 } finally {
                     conn.disconnect();

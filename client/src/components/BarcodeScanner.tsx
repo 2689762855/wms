@@ -13,6 +13,7 @@ export default function BarcodeScanner({ onScan }: Props) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scanningRef = useRef(false);
   const onScanRef = useRef(onScan);
+  const inputRef = useRef<any>(null);
   onScanRef.current = onScan;
   const containerId = 'scanner-reader';
 
@@ -27,8 +28,47 @@ export default function BarcodeScanner({ onScan }: Props) {
     setScanning(false);
   }, []);
 
+  // 全局硬件扫码枪监听（新大陆 MT69 等工业 PDA 模拟键盘输入）
   useEffect(() => {
+    let buffer = '';
+    let lastTime = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // 用户在 input/textarea/select 中正常输入时不拦截
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const now = Date.now();
+      const gap = now - lastTime;
+      lastTime = now;
+
+      // 间隔 > 80ms 不是扫码枪速度 → 清空 buffer 重新开始
+      if (gap > 80 && buffer.length > 0) {
+        buffer = '';
+      }
+
+      if (e.key === 'Enter' && buffer.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        onScanRef.current(buffer.trim());
+        buffer = '';
+        message.success('扫码成功');
+        return;
+      }
+
+      // 收集可打印字符
+      if (e.key.length === 1) {
+        buffer += e.key;
+      }
+
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { buffer = ''; }, 200);
+    };
+
+    document.addEventListener('keydown', onKeyDown);
     return () => {
+      document.removeEventListener('keydown', onKeyDown);
       if (scanningRef.current && scannerRef.current) {
         scannerRef.current.stop().catch(() => {});
       }
@@ -67,13 +107,21 @@ export default function BarcodeScanner({ onScan }: Props) {
     if (!manualValue.trim()) return;
     onScan(manualValue.trim());
     setManualValue('');
+    refocusInput();
+  };
+
+  // 扫码完成后重新聚焦输入框
+  const refocusInput = () => {
+    setTimeout(() => { inputRef.current?.focus(); }, 50);
   };
 
   return (
     <Space orientation="vertical" style={{ width: '100%' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <Input
-          placeholder="手动输入条码"
+          ref={inputRef}
+          autoFocus
+          placeholder="扫码后自动填入"
           value={manualValue}
           onChange={e => setManualValue(e.target.value)}
           onPressEnter={handleManualSubmit}

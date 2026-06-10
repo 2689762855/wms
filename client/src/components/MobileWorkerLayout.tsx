@@ -73,7 +73,7 @@ export default function MobileWorkerLayout() {
           <InboxOutlined style={{ fontSize: 22, color: '#1677ff' }} />
           <span style={{ fontSize: 16, fontWeight: 600 }}>仓储操作</span>
         </div>
-        <Space size={4}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
           {isInCustomerView && (
             <Button size="small" icon={<RollbackOutlined />} onClick={async () => { await logout(); navigate('/m/admin'); }} style={{ color: '#1677ff' }}>
               返回平台
@@ -81,13 +81,14 @@ export default function MobileWorkerLayout() {
           )}
           <ServerConfigModal />
           <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
-            <Button type="text" icon={<UserOutlined />} size="small">
+            <Button type="text" icon={<UserOutlined />} size="small"
+              style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 4px' }}>
               {user?.realName || user?.username}
-              {plan === 'standard' && <Tag color="blue" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px' }}>标准版</Tag>}
-              {plan === 'professional' && <Tag color="gold" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px' }}>专业版</Tag>}
+              {plan === 'standard' && <Tag color="blue" style={{ marginLeft: 2, fontSize: 9, lineHeight: '14px' }}>标准</Tag>}
+              {plan === 'professional' && <Tag color="gold" style={{ marginLeft: 2, fontSize: 9, lineHeight: '14px' }}>专业</Tag>}
             </Button>
           </Dropdown>
-        </Space>
+        </div>
       </div>
 
       {isInCustomerView && (

@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import prisma from './utils/prisma';
 
 const RETENTION_DAYS = 7;
@@ -50,10 +52,38 @@ async function cleanup() {
       await prisma.category.deleteMany({ where: { customerId: id } });
       await prisma.customer.delete({ where: { id } });
 
+      // 删除租户数据库文件（含 WAL/SHM 残留）
+      const dbDir = path.join(__dirname, '../prisma');
+      const dbBase = path.join(dbDir, `tenant_${id}.db`);
+      for (const ext of ['', '-wal', '-shm']) {
+        const file = dbBase + ext;
+        if (fs.existsSync(file)) {
+          fs.unlinkSync(file);
+          console.log(`  已删除租户库文件: ${path.basename(file)}`);
+        }
+      }
+
       console.log(`  已彻底删除: ${username} (id=${id})`);
       totalDeleted++;
     } catch (err) {
       console.error(`  删除 ${username} (id=${id}) 失败:`, err);
+    }
+  }
+
+  // 扫描并清理孤立的租户数据库文件（db 记录已删除但文件残留）
+  const dbDir = path.join(__dirname, '../prisma');
+  if (fs.existsSync(dbDir)) {
+    const existingIds = new Set((await prisma.customer.findMany({ select: { id: true } })).map(c => c.id));
+    for (const file of fs.readdirSync(dbDir)) {
+      const match = file.match(/^tenant_(\d+)\.db(?:-wal|-shm)?$/);
+      if (match) {
+        const tenantId = parseInt(match[1]);
+        if (!existingIds.has(tenantId)) {
+          const fullPath = path.join(dbDir, file);
+          fs.unlinkSync(fullPath);
+          console.log(`  已清理孤儿文件: ${file}`);
+        }
+      }
     }
   }
 

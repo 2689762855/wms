@@ -5,7 +5,8 @@ const config: CapacitorConfig = {
   appName: '库存管理',
   webDir: 'dist',
   server: {
-    // 不设置 url，加载本地打包文件；用户在登录页设置服务器地址
+    url: 'https://ckglxt.top/login',
+    cleartext: false,
     androidScheme: 'https',
     iosScheme: 'capacitor',
   },

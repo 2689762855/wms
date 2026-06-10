@@ -17,7 +17,55 @@
         border-top-color: #1677ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
       #preloader .text { margin-top: 16px; font-size: 14px; color: #999; }
       @keyframes spin { to { transform: rotate(360deg); } }
+      #error-info { display: none; padding: 20px; color: #ff4d4f; text-align: center; font-size: 13px; }
     </style>
+    <script>
+      // 旧 Android WebView Polyfills (Chrome 66+)
+      if (typeof globalThis === 'undefined') {
+        (function() {
+          if (typeof self !== 'undefined') { self.globalThis = self; }
+          else if (typeof window !== 'undefined') { window.globalThis = window; }
+          else if (typeof global !== 'undefined') { global.globalThis = global; }
+          else { this.globalThis = this; }
+        })();
+      }
+      if (!Array.prototype.flat) {
+        Array.prototype.flat = function(depth) {
+          depth = depth === undefined ? 1 : depth;
+          return depth > 0
+            ? this.reduce(function(acc, val) { return acc.concat(Array.isArray(val) ? val.flat(depth - 1) : val); }, [])
+            : this.slice();
+        };
+      }
+      if (!Array.prototype.flatMap) {
+        Array.prototype.flatMap = function(cb, thisArg) { return this.map(cb, thisArg).flat(); };
+      }
+      if (!Object.fromEntries) {
+        Object.fromEntries = function(entries) {
+          var obj = {};
+          for (var i = 0; i < entries.length; i++) { obj[entries[i][0]] = entries[i][1]; }
+          return obj;
+        };
+      }
+      window.__jsErrors = [];
+      window.addEventListener('error', function(e) {
+        var msg = e.message || (e.target && e.target.src ? 'Failed to load: ' + e.target.src : 'Unknown error');
+        window.__jsErrors.push(msg);
+        var el = document.getElementById('error-info');
+        if (el) { el.style.display = 'block'; el.textContent = 'Error: ' + msg; }
+        // 上报到服务器
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/csp-report', true);
+          xhr.setRequestHeader('Content-Type', 'application/csp-report');
+          xhr.send(JSON.stringify({ 'js-error': msg, 'userAgent': navigator.userAgent }));
+        } catch(e) {}
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        var msg = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+        window.__jsErrors.push('Promise: ' + msg);
+      });
+    </script>
   </head>
   <body>
     <div id="root">
@@ -28,15 +76,14 @@
     </div>
     <script>
       (function(){
-        var V = '6';
-        if (localStorage.getItem('sw_ver') !== V) {
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(regs) {
-              regs.forEach(function(reg) { reg.unregister(); });
-            });
-            caches.keys().then(function(keys) { keys.forEach(function(k) { caches.delete(k); }); });
-          }
-          localStorage.setItem('sw_ver', V);
+        // 每次页面加载清除 SW 和缓存，防止 PDA/不同浏览器缓存差异导致白屏
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) { reg.unregister(); });
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(keys) { keys.forEach(function(k) { caches.delete(k); }); });
         }
       })();
     </script>

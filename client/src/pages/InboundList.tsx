@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Tag, Space, Card, Typography, DatePicker } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import SupplierManager from '../components/SupplierManager';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import type { InboundOrder } from '../types';
@@ -40,7 +41,7 @@ export default function InboundList() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>入库管理</Typography.Title>} extra={<Space><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inbound/new')}>新建入库单</Button></Space>}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>入库管理</Typography.Title>} extra={<Space><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><SupplierManager /><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inbound/new')}>新建入库单</Button></Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
         pagination={{ current: page, total: data?.total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 条` }}
         scroll={{ x: 800 }}

@@ -473,3 +473,16 @@ model BusinessCustomer {
   @@unique([realName, tenantId])
   @@index([tenantId])
 }
+
+model Supplier {
+  id         Int      @id @default(autoincrement())
+  name       String
+  contact    String?
+  phone      String?
+  customerId Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([name, customerId])
+  @@index([customerId])
+}

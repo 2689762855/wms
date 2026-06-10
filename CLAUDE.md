@@ -115,6 +115,11 @@ SQLite (`server/prisma/dev.db`)，通过 Prisma ORM 操作。
 
 ## APK 构建
 
+**每次构建前必须检查：**
+1. `client/android/app/build.gradle` — `versionCode` 和 `versionName` 是否已更新
+2. `server/apk/version.json` — 版本号是否与 build.gradle 一致
+3. `cap sync` 不会自动更新版本号，必须手动改
+
 ```bash
 cd client
 npx vite build && npx cap sync android

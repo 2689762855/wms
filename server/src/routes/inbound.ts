@@ -19,6 +19,18 @@ async function genBatchNo(tx: any, contractId?: number): Promise<string | null> 
 export const inboundRouter = Router();
 inboundRouter.use(authenticate);
 
+// 获取历史供应商列表（用于 PDA 自动完成）
+inboundRouter.get('/suppliers', async (req: AuthRequest, res: Response) => {
+  const suppliers = await prisma.inbound.groupBy({
+    by: ['supplier'],
+    where: { supplier: { not: null }, warehouse: { customerId: req.customerId } },
+    _count: { id: true },
+    orderBy: { _count: { id: 'desc' } },
+    take: 30,
+  });
+  res.json(suppliers.map(s => s.supplier).filter(Boolean));
+});
+
 // 入库单列表
 inboundRouter.get('/', async (req: AuthRequest, res: Response) => {
   const { page, pageSize, skip } = getPagination(req);

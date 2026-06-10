@@ -139,7 +139,7 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
 
       const tokenVersionField = deviceType === 'mobile' ? 'mobileTokenVersion' : 'desktopTokenVersion';
       const tokenVersion = (deviceType === 'mobile' ? customer.mobileTokenVersion : customer.desktopTokenVersion) + 1;
-      await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField]: tokenVersion, loginCount: { increment: 1 }, lastLoginAt: new Date() } });
+      await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField]: tokenVersion } });
       const token = jwt.sign(
         { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
         JWT_ADMIN_SECRET,
@@ -254,7 +254,7 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
       return res.json({ serverRedirect: `https://${serverHost}`, transferToken });
     }
 
-    await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField2]: tokenVersion, loginCount: { increment: 1 }, lastLoginAt: new Date() } });
+    await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField2]: tokenVersion } });
     const token = jwt.sign(
       { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
       JWT_ADMIN_SECRET,
@@ -316,6 +316,9 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
     if (username.length < 3 || username.length > 50) {
       return res.status(400).json({ error: '用户名 3-50 字符' });
     }
+    if (!/^[a-zA-Z0-9_一-鿿]+$/.test(username)) {
+      return res.status(400).json({ error: '用户名只能包含字母、数字、下划线和中文' });
+    }
     if (password.length < 6 || password.length > 128) {
       return res.status(400).json({ error: '密码 6-128 位' });
     }
@@ -335,6 +338,15 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90天试用
+
+    // 每日注册上限保护：当天注册超过 5 人自动关闭审批
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayCount = await prisma.customer.count({ where: { createdAt: { gte: todayStart } } });
+    if (todayCount >= 5) {
+      await prisma.setting.upsert({ where: { key: 'autoApproveRegistrations' }, create: { key: 'autoApproveRegistrations', value: 'false' }, update: { value: 'false' } });
+      console.log(`[注册保护] 今日注册 ${todayCount} 人，已自动关闭审批`);
+    }
 
     // 检查是否开启自动审批
     const autoSetting = await prisma.setting.findUnique({ where: { key: 'autoApproveRegistrations' } });

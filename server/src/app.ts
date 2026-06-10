@@ -27,6 +27,7 @@ import { appRouter } from './routes/app';
 import { productWarehousesRouter } from './routes/productWarehouses';
 import { contractsRouter } from './routes/contracts';
 import { containersRouter } from './routes/containers';
+import { suppliersRouter } from './routes/suppliers';
 import { errorHandler } from './middleware/errorHandler';
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -58,8 +59,8 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://cloudflareinsights.com"],
+      imgSrc: ["'self'", "data:", "blob:", "android-webview-video-poster:"],
+      connectSrc: ["'self'", "https://ckglxt.top", "https://cgklxt.top", "http://ckglxt.top", "http://cgklxt.top", "https://cloudflareinsights.com"],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -69,22 +70,44 @@ app.use(helmet({
     },
   },
 }));
-// CORS：仅允许受信任的域名（不能放过任意来源）
-const allowedOrigins = [
+// CORS：同源请求放行 + 受信任域名白名单（PDA/移动端 WebView HTTP 访问兼容）
+const STATIC_ALLOWED_ORIGINS = [
   'https://ckglxt.top',
+  'https://www.ckglxt.top',
   'https://cgklxt.top',
   'https://localhost',
   'capacitor://localhost',
   'http://localhost:5173',   // 本地开发
   'http://192.168.1.4:5173', // 内网开发
 ];
+
+// 同源检测：PDA/移动端 WebView 可能发送 HTTP Origin，与 Host 一致时显式放行
+app.use((req, _res, next) => {
+  const origin = req.headers.origin as string | undefined;
+  if (origin) {
+    try {
+      const originHost = new URL(origin).host;
+      const reqHost = (req.headers.host || '').split(':')[0];
+      if (originHost === reqHost) {
+        _res.setHeader('Access-Control-Allow-Origin', origin);
+        _res.setHeader('Access-Control-Allow-Credentials', 'true');
+        if (req.method === 'OPTIONS') {
+          _res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE');
+          _res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type,Authorization');
+          return _res.status(204).end();
+        }
+      }
+    } catch { /* invalid origin URL, let cors() handle it */ }
+  }
+  next();
+});
+
 app.use(cors({
   origin(origin, callback) {
-    // 无 origin 的请求（如 curl、服务器间调用）放行
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    // 允许任意 ckglxt.top 子域名
+    if (STATIC_ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
     if (origin.endsWith('.ckglxt.top') || origin.endsWith('.cgklxt.top')) return callback(null, true);
+    // 同源请求已在上方中间件处理，走到这里才是真正的跨域拒绝
     callback(new Error('Not allowed by CORS'));
   },
 }));
@@ -93,7 +116,7 @@ app.use(cookieParser());
 morgan.token('tenant', (req: any) => req.customerId ? `cust=${req.customerId}` : '-');
 morgan.token('user-id', (req: any) => req.userId ? `uid=${req.userId}` : '-');
 app.use(morgan(':remote-addr :method :url :status :response-time ms :tenant :user-id'));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '1mb', type: ['application/json', 'application/csp-report'] }));
 
 // 限速：登录接口严格限制
 const loginLimiter = rateLimit({
@@ -111,16 +134,22 @@ app.use('/api', rateLimit({
   message: { error: '请求过于频繁，请稍后再试' },
 }));
 
-// CSP 违规报告（记录可能的 XSS 攻击）
+// CSP 违规报告 + JS 运行时错误上报（PDA/旧浏览器兼容诊断）
 app.post('/api/csp-report', (req, res) => {
   const report = req.body?.['csp-report'];
   if (report) {
-    console.error('[CSP] 违规报告:', JSON.stringify({
+    const detail = JSON.stringify({
       blockedUri: report['blocked-uri'],
       violatedDirective: report['violated-directive'],
       documentUri: report['document-uri'],
       scriptSample: report['script-sample']?.substring(0, 100),
-    }));
+    });
+    console.log('[CSP]', detail);
+    console.error('[CSP]', detail);
+  }
+  const jsErr = req.body?.['js-error'];
+  if (jsErr) {
+    console.error('[JS-ERROR]', JSON.stringify({ error: jsErr, ua: req.body?.userAgent || 'unknown' }));
   }
   res.status(204).end();
 });
@@ -146,6 +175,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/product-warehouses', productWarehousesRouter);
 app.use('/api/contracts', contractsRouter);
 app.use('/api/containers', containersRouter);
+app.use('/api/suppliers', suppliersRouter);
 app.use('/api/app', appRouter);
 
 // API 404 处理：返回 JSON 而非 HTML（必须在 SPA fallback 之前）
@@ -201,8 +231,37 @@ app.use((_req, res, next) => {
 app.use(errorHandler);
 
 const PORT = Number(process.env.PORT) || 3001;
-app.listen(PORT, isProduction ? '127.0.0.1' : '0.0.0.0', () => {
+app.listen(PORT, isProduction ? '127.0.0.1' : '0.0.0.0', async () => {
+  // 确保所有活跃客户的租户库已初始化并同步数据
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const { platformPrisma, initTenantDatabase } = await import('./utils/prisma');
+    const activeCustomers = await platformPrisma.customer.findMany({
+      where: { deletedAt: null },
+      include: { warehouses: { include: { locations: true } } },
+    });
+    for (const customer of activeCustomers) {
+      const dbPath = path.join(__dirname, '../prisma', `tenant_${customer.id}.db`);
+      await initTenantDatabase(customer.id);
+      const tenantPrisma = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
+      try {
+        if (!await tenantPrisma.customer.findUnique({ where: { id: customer.id } })) {
+          await tenantPrisma.customer.create({ data: { id: customer.id, username: customer.username, passwordHash: 'synced', realName: customer.realName, status: customer.status } });
+        }
+        for (const wh of customer.warehouses) {
+          if (!await tenantPrisma.warehouse.findUnique({ where: { id: wh.id } })) {
+            await tenantPrisma.warehouse.create({ data: { id: wh.id, name: wh.name, address: wh.address, customerId: wh.customerId } });
+          }
+          for (const loc of wh.locations) {
+            if (!await tenantPrisma.location.findUnique({ where: { id: loc.id } })) {
+              await tenantPrisma.location.create({ data: { id: loc.id, name: loc.name, code: loc.code, warehouseId: loc.warehouseId } });
+            }
+          }
+        }
+      } finally { await tenantPrisma.$disconnect(); }
+    }
+    console.log('[init] 租户数据库同步完成');
+  } catch (err) { console.error('[init] 租户数据库初始化失败:', err); }
   console.log(`库存管理系统已启动: http://localhost:${PORT}`);
 });
-
 export default app;

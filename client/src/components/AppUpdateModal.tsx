@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Modal, Button, Alert, Space, Typography } from 'antd';
+import { useState, useEffect } from 'react';
+import { Modal, Button, Alert, Space, Typography, Progress } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import type { AppVersion } from '../types';
+import AppUpdate from '../native/AppUpdate';
 import { downloadAndInstall } from '../utils/updateChecker';
 
 const { Text, Paragraph } = Typography;
@@ -16,12 +17,25 @@ interface Props {
 export default function AppUpdateModal({ open, serverVersion, forceUpdate, onDismiss }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [installing, setInstalling] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let handler: any = null;
+    AppUpdate.addListener('progress', (data) => {
+      if (data.percent >= 0) setProgress(data.percent);
+    }).then(h => { handler = h; }).catch(() => {});
+    return () => { if (handler?.remove) handler.remove(); };
+  }, [open]);
 
   const handleDownload = async () => {
     setLoading(true);
     setError('');
+    setProgress(0);
     try {
       await downloadAndInstall(serverVersion.downloadUrl);
+      setInstalling(true);
     } catch (e: any) {
       setError(e?.message || '下载失败，请重试');
     } finally {
@@ -52,6 +66,15 @@ export default function AppUpdateModal({ open, serverVersion, forceUpdate, onDis
           <Paragraph style={{ whiteSpace: 'pre-line', marginBottom: 0 }}>
             {serverVersion.changelog}
           </Paragraph>
+        )}
+        {loading && !installing && (
+          <div>
+            <Progress percent={progress} status="active" format={p => p < 0 ? '准备中...' : `${p}%`} />
+            <Text type="secondary" style={{ fontSize: 12 }}>正在下载更新包（约 5MB）...</Text>
+          </div>
+        )}
+        {installing && (
+          <Alert type="info" message="下载完成，正在跳转安装..." showIcon />
         )}
         {forceUpdate && (
           <Alert type="warning" message="此版本为强制更新，请立即更新后再使用" showIcon />

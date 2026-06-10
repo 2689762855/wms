@@ -73,12 +73,12 @@ export default function Dashboard() {
         </Col>
         <Col xs={12} sm={8} md={4}>
           <Card hoverable onClick={() => navigate('/inbound')} size="small">
-            <Statistic title="入库总量" value={reports?.totalInboundQty || 0} prefix={<ImportOutlined />} valueStyle={{ color: '#3f8600' }} />
+            <Statistic title="入库总量" value={reports?.totalInboundQty || 0} prefix={<ImportOutlined />} styles={{ content: { color: '#3f8600' } }} />
           </Card>
         </Col>
         <Col xs={12} sm={8} md={4}>
           <Card hoverable onClick={() => navigate('/outbound')} size="small">
-            <Statistic title="出库总量" value={reports?.totalOutboundQty || 0} prefix={<ExportOutlined />} valueStyle={{ color: '#cf1322' }} />
+            <Statistic title="出库总量" value={reports?.totalOutboundQty || 0} prefix={<ExportOutlined />} styles={{ content: { color: '#cf1322' } }} />
           </Card>
         </Col>
         <Col xs={12} sm={8} md={4}>
@@ -88,7 +88,7 @@ export default function Dashboard() {
         </Col>
         <Col xs={12} sm={8} md={4}>
           <Card hoverable onClick={() => navigate('/alerts')} size="small" style={{ border: alertCount > 0 ? '1px solid #ff4d4f' : undefined }}>
-            <Statistic title="库存预警" value={alertCount} prefix={<AlertOutlined />} valueStyle={{ color: alertCount > 0 ? '#cf1322' : '#3f8600' }} />
+            <Statistic title="库存预警" value={alertCount} prefix={<AlertOutlined />} styles={{ content: { color: alertCount > 0 ? '#cf1322' : '#3f8600' } }} />
           </Card>
         </Col>
       </Row>

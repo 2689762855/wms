@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Typography, Input, InputNumber, Space, Tag, message, Result, Descriptions, Modal, List, Select } from 'antd';
+import { Button, Card, Typography, Input, InputNumber, Space, Tag, message, Result, Descriptions, Modal, List, Select, AutoComplete } from 'antd';
 import { ArrowLeftOutlined, ScanOutlined } from '@ant-design/icons';
 import BarcodeScanner from '../../components/BarcodeScanner';
 import apiClient from '../../api/client';
@@ -22,6 +22,13 @@ export default function MobileInboundNew() {
   const [step, setStep] = useState<'scan-location' | 'add-items' | 'done'>('scan-location');
   const [location, setLocation] = useState<Location | null>(null);
   const [supplier, setSupplier] = useState('');
+  const [supplierOptions, setSupplierOptions] = useState<{ value: string }[]>([]);
+
+  useEffect(() => {
+    apiClient.get('/suppliers').then(res => {
+      setSupplierOptions(res.data.map((s: any) => ({ value: s.name })));
+    }).catch(() => {});
+  }, []);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [lastOrderNo, setLastOrderNo] = useState('');
   const [productModalOpen, setProductModalOpen] = useState(false);
@@ -198,8 +205,19 @@ export default function MobileInboundNew() {
           <Card title="步骤 3：确认入库" style={{ borderRadius: 8, marginBottom: 12 }}>
             <Space orientation="vertical" style={{ width: '100%' }} size={12}>
               <div>
-                <Typography.Text type="secondary">供应商</Typography.Text>
-                <Input placeholder="供应商名称" value={supplier} onChange={e => setSupplier(e.target.value)} size="large" />
+                <Typography.Text type="secondary">供应商（可手输或选择历史）</Typography.Text>
+                <AutoComplete
+                  options={supplierOptions}
+                  value={supplier}
+                  onChange={v => setSupplier(v)}
+                  placeholder="输入或选择供应商"
+                  style={{ width: '100%' }}
+                  size="large"
+                  allowClear
+                  filterOption={(inputValue, option) =>
+                    option!.value.toLowerCase().includes(inputValue.toLowerCase())
+                  }
+                />
               </div>
               <div>
                 <Typography.Text type="secondary">关联合同（可选）</Typography.Text>

@@ -1,1 +1,1 @@
-{"versionCode":39,"versionName":"2.3.24","downloadUrl":"https://ckglxt.top/api/app/download/latest","changelog":"没选合同时自动跳过有批次的商品"}
+{"versionCode":42,"versionName":"2.3.27","downloadUrl":"https://ckglxt.top/api/app/download/latest","changelog":"PDA桌面图标修复(adaptive icon兼容)；CORS同源检测+HTTP兼容；CSP connectSrc/imgSrc补全","forceUpdate":false,"minVersionCode":0}

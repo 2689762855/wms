@@ -3,6 +3,10 @@ import prisma from '../utils/prisma';
 import { getPagination } from '../utils/pagination';
 import multer from 'multer';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // CSV 解析：替代 xlsx，零依赖，兼容 UTF-8 和 GBK 编码
 function parseCSV(buffer: Buffer): string[][] {
   let text = buffer.toString('utf-8');
@@ -169,7 +173,7 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
         }
 
         const newProduct = await prisma.product.create({
-          data: { sku, name, spec, unit, barcode: barcode || null, categoryId, customerId, safetyStock, costPrice, salePrice },
+          data: { sku, name, spec, unit, barcode: barcode || sku, categoryId, customerId, safetyStock, costPrice, salePrice },
         });
         created++;
 
@@ -244,7 +248,7 @@ productsRouter.post('/', adminWrite, async (req: AuthRequest, res: Response) => 
         name,
         spec,
         unit: unit || 'pcs',
-        barcode,
+        barcode: barcode || sku,
         categoryId: categoryId || null,
         customerId: req.customerId || null,
         safetyStock: safetyStock || 0,
