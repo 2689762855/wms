@@ -211,6 +211,44 @@ authRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// 修改密码
+authRouter.put('/change-password', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: '请输入旧密码和新密码' });
+    }
+    if (newPassword.length < 6 || newPassword.length > 128) {
+      return res.status(400).json({ error: '新密码 6-128 位' });
+    }
+    // 操作员由所属租户管理员管理密码，不能自己修改
+    if (req.userRole === 'operator') {
+      return res.status(403).json({ error: '操作员请联系管理员修改密码' });
+    }
+
+    if (req.userRole === 'tenant_admin') {
+      const customer = await platformPrisma.customer.findUnique({ where: { id: req.userId } });
+      if (!customer) return res.status(404).json({ error: '账号不存在' });
+      const valid = await bcrypt.compare(oldPassword, customer.passwordHash);
+      if (!valid) return res.status(400).json({ error: '旧密码错误' });
+      const newHash = await bcrypt.hash(newPassword, 10);
+      await platformPrisma.customer.update({ where: { id: req.userId }, data: { passwordHash: newHash } });
+    } else {
+      const user = await platformPrisma.user.findUnique({ where: { id: req.userId } });
+      if (!user) return res.status(404).json({ error: '用户不存在' });
+      const valid = await bcrypt.compare(oldPassword, user.passwordHash);
+      if (!valid) return res.status(400).json({ error: '旧密码错误' });
+      const newHash = await bcrypt.hash(newPassword, 10);
+      await platformPrisma.user.update({ where: { id: req.userId }, data: { passwordHash: newHash } });
+    }
+
+    res.json({ message: '密码修改成功' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // 客户登录
 authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
   try {

@@ -61,13 +61,19 @@ describe('事务与数据一致性', () => {
     expect(r.status).toBe(201)
   })
 
-  it.skip('#134 — aggregate 在循环外', async () => {
-    const fs = await import('fs')
-    const content = fs.readFileSync(path.join(__dirname, '../routes/transfer.ts'), 'utf-8')
-    // aggregate 应出现在第一个 for 循环之前
-    const firstAgg = content.indexOf('.aggregate(')
-    const firstFor = content.indexOf('for (const item of order.items)')
-    if (firstAgg > 0 && firstFor > 0) expect(firstAgg).toBeLessThan(firstFor)
+  it('#134 — 库存流水中 beforeQty 不会是负数', async () => {
+    // 查询所有库存流水，验证 beforeQty 没有负数
+    // 如果 aggregate 在 update 之后执行，会出现 beforeQty 为负数的情况
+    const logsRes = await request(app).get('/api/inventory/logs?page=1&pageSize=100')
+      .set('Authorization', `Bearer ${token}`)
+    expect(logsRes.status).toBe(200)
+    const logs = logsRes.body.data || []
+    for (const log of logs) {
+      expect(log.beforeQty, `${log.type} log id=${log.id} beforeQty=${log.beforeQty} 不应为负数`)
+        .toBeGreaterThanOrEqual(0)
+      expect(log.afterQty, `${log.type} log id=${log.id} afterQty=${log.afterQty} 不应为负数`)
+        .toBeGreaterThanOrEqual(0)
+    }
   })
 
   it('#106 — $transaction 关键操作用事务', async () => {

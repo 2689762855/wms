@@ -206,7 +206,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
               </Button>
             )}
             <Dropdown menu={{ items: [
-              { key: 'change-pwd', icon: <KeyOutlined />, label: '修改密码', onClick: () => setChangePwdOpen(true) },
+              ...(user?.role !== 'operator' ? [{ key: 'change-pwd', icon: <KeyOutlined />, label: '修改密码', onClick: () => setChangePwdOpen(true) }] : []),
               { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout },
             ] }}>
               <Button type="text" icon={<UserOutlined />}>

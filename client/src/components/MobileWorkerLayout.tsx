@@ -11,10 +11,12 @@ import {
   LogoutOutlined,
   InboxOutlined,
   RollbackOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import PullToRefresh from './PullToRefresh';
 import ServerConfigModal from './ServerConfigModal';
 import ErrorBoundary from './ErrorBoundary';
+import ChangePasswordModal from './ChangePasswordModal';
 import { useAuth } from '../stores/AuthContext';
 
 const tabs = [
@@ -34,6 +36,7 @@ export default function MobileWorkerLayout() {
   const isInCustomerView = isTenant && !!localStorage.getItem('admin_token');
   const plan = isTenant && user?.maxWarehouses != null ? (user.maxWarehouses >= 3 ? 'professional' : 'standard') : null;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [changePwdOpen, setChangePwdOpen] = useState(false);
 
   useEffect(() => {
     const onFocusIn = (e: FocusEvent) => {
@@ -80,7 +83,10 @@ export default function MobileWorkerLayout() {
             </Button>
           )}
           <ServerConfigModal />
-          <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout }] }}>
+          <Dropdown menu={{ items: [
+            ...(user?.role !== 'operator' ? [{ key: 'change-pwd', icon: <KeyOutlined />, label: '修改密码', onClick: () => setChangePwdOpen(true) }] : []),
+            { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout },
+          ] }}>
             <Button type="text" icon={<UserOutlined />} size="small"
               style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 4px' }}>
               {user?.realName || user?.username}
@@ -105,6 +111,7 @@ export default function MobileWorkerLayout() {
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>
+            <ChangePasswordModal open={changePwdOpen} onClose={() => setChangePwdOpen(false)} />
           </div>
         </PullToRefresh>
       </div>

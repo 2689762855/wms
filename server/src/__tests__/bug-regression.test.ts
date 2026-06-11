@@ -58,11 +58,18 @@ describe('Bug 回归测试', () => {
     expect(r.body.length).toBeLessThan(10)
   })
 
-  it.skip('#144 — cleanup.ts 覆盖所有级联表', async () => {
+  it('#144 — cleanup.ts 覆盖所有级联表', async () => {
     const fs = await import('fs')
     const content = fs.readFileSync(path.join(__dirname, '../cleanup.ts'), 'utf-8')
-    // 验证关键表的 deleteMany 存在
-    for (const table of ['stockLog', 'inventory', 'productWarehouse', 'warehouse', 'customer']) {
+    // 必须在 cleanup 中出现的所有表（新增模型时必须同步更新此列表）
+    const requiredTables = [
+      'stockLog', 'checkItem', 'checkTask', 'transferItem', 'transferOrder',
+      'outboundItem', 'outboundOrder', 'inboundItem', 'inboundOrder',
+      'productWarehouse', 'inventory', 'user', 'location', 'warehouse',
+      'containerItem', 'containerContract', 'contractItem', 'container', 'contract',
+      'businessCustomer', 'product', 'category', 'customer',
+    ]
+    for (const table of requiredTables) {
       expect(content).toContain(table)
     }
   })
@@ -78,47 +85,125 @@ describe('Bug 回归测试', () => {
     expect([401, 403]).toContain(r.status)
   })
 
-  it.skip('#179 — 库人员不可见价格字段', async () => {
-    // 验证新建入库页不含 unitPrice 字段的思路
-    // 通过查看代码确认 warehouse 角色的 operatorType 检查存在
-    const fs = await import('fs')
-    const inboundNew = fs.readFileSync(path.join(__dirname, '../../../../client/src/pages/InboundNew.tsx'), 'utf-8')
-    expect(inboundNew).toContain('operatorType')
+  it('#179 — 操作员 /auth/me 返回 operatorType 供前端判断', async () => {
+    // 创建无客户归属的仓库（避免触发租户路由需要 sqlite3 CLI）
+    const whRes = await request(app).post('/api/warehouses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: `退货仓_${Date.now()}` })
+    const testWhId = whRes.body.id
+    // 创建库人员操作员
+    const opUsername = `wh_op_${Date.now()}`
+    await request(app).post('/api/users')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: opUsername, password: 'test123', role: 'operator', warehouseId: testWhId, operatorType: 'warehouse' })
+    // 登录
+    const loginRes = await request(app).post('/api/auth/login')
+      .send({ username: opUsername, password: 'test123', device: 'desktop' })
+    expect(loginRes.status).toBe(200)
+    // /auth/me 应返回 operatorType
+    const meRes = await request(app).get('/api/auth/me')
+      .set('Authorization', `Bearer ${loginRes.body.token}`)
+    expect(meRes.status).toBe(200)
+    expect(meRes.body.operatorType).toBe('warehouse')
   })
 
-  it.skip('#161 — warehouse_admin 不被 requireWarehouse 拦截', async () => {
-    const fs = await import('fs')
-    const authContent = fs.readFileSync(path.join(__dirname, '../../middleware/auth.ts'), 'utf-8')
-    // requireWarehouse 应豁免 warehouse_admin
-    expect(authContent).toContain('requireWarehouse')
+  it('#161 — warehouse_admin 可以正常访问仓库相关 API', async () => {
+    // 创建无客户归属的仓库
+    const whRes = await request(app).post('/api/warehouses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: `管理仓_${Date.now()}` })
+    const testWhId = whRes.body.id
+    // 创建 warehouse_admin 用户
+    const whAdminUser = `wh_admin_${Date.now()}`
+    await request(app).post('/api/users')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: whAdminUser, password: 'test123', role: 'warehouse_admin', warehouseId: testWhId })
+    // 登录
+    const loginRes = await request(app).post('/api/auth/login')
+      .send({ username: whAdminUser, password: 'test123', device: 'desktop' })
+    expect(loginRes.status).toBe(200)
+    const whToken = loginRes.body.token
+    // warehouse_admin 应能访问仓库数据（不被 requireWarehouse 拦截）
+    const invRes = await request(app).get('/api/inventory')
+      .set('Authorization', `Bearer ${whToken}`)
+    expect(invRes.status).toBe(200)
   })
 
-  it.skip('#140 — 标准版操作员上限检查', async () => {
-    const fs = await import('fs')
-    const usersContent = fs.readFileSync(path.join(__dirname, '../../routes/users.ts'), 'utf-8')
-    // 应包含 maxOperators 或类似的限制逻辑
-    expect(usersContent).toContain('max')
+  it('#140 — 标准版操作员上限为 5 人', async () => {
+    // 确保自动审批开启，注册客户即为 active
+    await request(app).put('/api/settings/auto-approve')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ enabled: true })
+    // 注册标准版客户
+    const custUser = `cust_${Date.now()}`
+    const regRes = await request(app).post('/api/auth/register')
+      .send({ username: custUser, password: 'test123', realName: '上限测试' })
+    // sqlite3 CLI 不可用时注册会 500，跳过测试
+    if (regRes.status === 500) {
+      console.log('[skip] 注册需要 sqlite3 CLI，环境不可用，跳过操作员上限测试')
+      return
+    }
+    expect(regRes.status).toBe(201)
+    // 登录为客户
+    const loginRes = await request(app).post('/api/auth/login')
+      .send({ username: custUser, password: 'test123', device: 'desktop' })
+    expect(loginRes.status).toBe(200)
+    const custToken = loginRes.body.token
+    // 创建 5 个操作员（标准版上限=5，应全部成功）
+    for (let i = 0; i < 5; i++) {
+      const r = await request(app).post('/api/users')
+        .set('Authorization', `Bearer ${custToken}`)
+        .send({ username: `${custUser}_op${i}`, password: 'test123' })
+      expect(r.status, `第${i + 1}个操作员创建失败: ${r.body.error}`).toBe(201)
+    }
+    // 第 6 个应被拒绝
+    const r = await request(app).post('/api/users')
+      .set('Authorization', `Bearer ${custToken}`)
+      .send({ username: `${custUser}_op6`, password: 'test123' })
+    expect(r.status).toBe(400)
+    expect(r.body.error).toMatch(/上限/)
   })
 
   // ===== P2: 业务逻辑 =====
 
-  it.skip('#11 — 单号生成使用唯一性保护', async () => {
-    // nextOrderNo 或 sequence 表应存在
-    const fs = await import('fs')
-    const sequenceUtil = fs.readFileSync(path.join(__dirname, '../../utils/sequence.ts'), 'utf-8')
-    expect(sequenceUtil.length).toBeGreaterThan(0)
-  })
+  // #11 单号唯一性 → 见 transaction.test.ts「并发建单不产生重复单号」
 
-  it.skip('#134 — StockLog beforeQty 在 aggregate 之前获取', async () => {
-    // 检查 transfer.ts 中 aggregate 在循环外
-    const fs = await import('fs')
-    const transferContent = fs.readFileSync(path.join(__dirname, '../../routes/transfer.ts'), 'utf-8')
-    // aggregate 应该在 for 循环之前调用
-    const aggIdx = transferContent.indexOf('aggregate')
-    const forIdx = transferContent.indexOf('for (')
-    // 如果 aggregate 存在，它应该在 for 循环之前
-    if (aggIdx > 0 && forIdx > 0) {
-      expect(aggIdx).toBeLessThan(forIdx)
+  it('#134 — StockLog beforeQty 在库存变更前计算（不会出现负数）', async () => {
+    if (!warehouseId || !productId) return
+    // 1. 先入库创建库存
+    const r1 = await request(app).post('/api/inbound')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ warehouseId, items: [{ productId, quantity: 30 }] })
+    expect(r1.status).toBe(201)
+    await request(app).put(`/api/inbound/${r1.body.id}/confirm`)
+      .set('Authorization', `Bearer ${token}`)
+    // 2. 获取两个仓库
+    const whs = await request(app).get('/api/warehouses').set('Authorization', `Bearer ${token}`)
+    const whIds = whs.body.map((w: any) => w.id)
+    if (whIds.length < 2) return
+    const fromWh = whIds[0], toWh = whIds[1]
+    // 3. 获取目标仓库库位（transfer confirm 需要 targetLocationId）
+    const locsRes = await request(app).get(`/api/locations?warehouseId=${toWh}`)
+      .set('Authorization', `Bearer ${token}`)
+    const locs = Array.isArray(locsRes.body) ? locsRes.body : (locsRes.body.data || [])
+    const targetLocationId = locs[0]?.id
+    if (!targetLocationId) return // 目标仓库无库位则跳过
+    // 4. 创建并确认调拨
+    const r2 = await request(app).post('/api/transfer')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fromWarehouseId: fromWh, toWarehouseId: toWh, items: [{ productId, quantity: 5 }] })
+    expect(r2.status).toBe(201)
+    await request(app).put(`/api/transfer/${r2.body.id}/confirm`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ targetLocationId })
+    // 5. 验证 StockLog 的 beforeQty ≥ 0（aggregate 必须在 update 之前）
+    const logsRes = await request(app).get('/api/inventory/logs?page=1&pageSize=50')
+      .set('Authorization', `Bearer ${token}`)
+    const logs = logsRes.body.data || []
+    const transferLogs = logs.filter((l: any) => l.type === 'transfer')
+    if (transferLogs.length === 0) return // 无调拨日志则跳过
+    for (const l of transferLogs) {
+      expect(l.beforeQty, `transfer log beforeQty=${l.beforeQty} 不应为负数`).toBeGreaterThanOrEqual(0)
     }
   })
 })
