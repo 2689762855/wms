@@ -223,7 +223,7 @@ export default function OutboundNew() {
           </Form.Item>
           <Form.Item name="receiver" label="领用人/部门"><Input style={{ width: 180 }} /></Form.Item>
           <Form.Item name="note" label="备注"><Input style={{ width: 260 }} /></Form.Item>
-          <Form.Item label="排柜编号（可选）" style={{ minWidth: 180 }}>
+          {import.meta.env.VITE_STANDALONE !== 'true' && <Form.Item label="排柜编号（可选）" style={{ minWidth: 180 }}>
             <Input placeholder="输入排柜编号，货柜新建时匹配" value={containerNoText} onChange={(e) => {
               const no = e.target.value;
               setContainerNoText(no);
@@ -232,8 +232,8 @@ export default function OutboundNew() {
               setSelectedContainerId(match?.id ?? null);
             }} />
             {selectedContainerId && <Tag color="blue" style={{ marginTop: 4 }}>已匹配排柜 {selectedContainer?.containerNo}</Tag>}
-          </Form.Item>
-          <Form.Item label="关联合同（可选，可多选）" style={{ minWidth: 280 }}>
+          </Form.Item>}
+          {import.meta.env.VITE_STANDALONE !== 'true' && <Form.Item label="关联合同（可选，可多选）" style={{ minWidth: 280 }}>
             <Select
               allowClear
               mode="multiple"
@@ -246,7 +246,7 @@ export default function OutboundNew() {
                 value: c.id,
               }))}
             />
-          </Form.Item>
+          </Form.Item>}
         </Space>
       </Form>
 

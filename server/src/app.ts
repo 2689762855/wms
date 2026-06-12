@@ -108,7 +108,8 @@ app.use(cors({
     if (STATIC_ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
     if (origin.endsWith('.ckglxt.top') || origin.endsWith('.cgklxt.top')) return callback(null, true);
     // 同源请求已在上方中间件处理，走到这里才是真正的跨域拒绝
-    callback(new Error('Not allowed by CORS'));
+    // 用 callback(null, false) 替代 new Error()，避免恶意跨域请求触发 500
+    callback(null, false);
   },
 }));
 app.use(cookieParser());
@@ -117,6 +118,14 @@ morgan.token('tenant', (req: any) => req.customerId ? `cust=${req.customerId}` :
 morgan.token('user-id', (req: any) => req.userId ? `uid=${req.userId}` : '-');
 app.use(morgan(':remote-addr :method :url :status :response-time ms :tenant :user-id'));
 app.use(express.json({ limit: '1mb', type: ['application/json', 'application/csp-report'] }));
+
+// 畸形 JSON 返回 400 而非 500
+app.use((err: any, _req: any, res: any, next: any) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    return res.status(400).json({ error: '请求格式错误' });
+  }
+  next(err);
+});
 
 // 限速：登录接口严格限制
 const loginLimiter = rateLimit({
@@ -219,7 +228,20 @@ app.use((_req, res, next) => {
   }
   next();
 });
+// ZIP 文件强制下载（浏览器默认会尝试显示二进制内容）
+// Cloudflare 会缓存 .zip 并吞掉 Content-Disposition，加 no-store 禁止缓存
+app.use((req, _res, next) => {
+  if (req.path.endsWith('.zip')) {
+    _res.setHeader('Content-Disposition', 'attachment');
+    _res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
+});
 app.use(express.static(distPath));
+// robots.txt：Cloudflare Managed Content 已注入规则，源站返回纯文本避免 SPA fallback 附加 HTML
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send('User-agent: *\nAllow: /\n');
+});
 // SPA fallback: 非首页、非 API、非 uploads 请求返回 index.html
 app.use((_req, res, next) => {
   if (_req.path === '/' || _req.path.startsWith('/api') || _req.path.startsWith('/uploads')) return next();

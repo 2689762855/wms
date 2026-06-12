@@ -290,8 +290,8 @@ export default function MobileOutboundNew() {
 
       {step === 'scan-add' && (
         <>
-          {/* 排柜 + 合同 选择 */}
-          <Card size="small" style={{ borderRadius: 8, marginBottom: 12, background: '#fafafa' }}>
+          {/* 排柜 + 合同 选择（云版专属） */}
+          {import.meta.env.VITE_STANDALONE !== 'true' && <Card size="small" style={{ borderRadius: 8, marginBottom: 12, background: '#fafafa' }}>
             <Space orientation="vertical" style={{ width: '100%' }} size={8}>
               <div>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>排柜编号（可选）</Typography.Text>
@@ -307,7 +307,7 @@ export default function MobileOutboundNew() {
                   options={contracts?.map((c: any) => ({ label: `${c.contractNo} (${c.businessCustomer?.realName || c.customer?.realName || ''})`, value: c.id }))} />
               </div>
             </Space>
-          </Card>
+          </Card>}
 
           {/* 扫码区：未扫库位时扫库位，已扫库位时扫商品 */}
           <Card title={currentLocation ? '扫码商品' : '扫码库位'} size="small" style={{ borderRadius: 8, marginBottom: 12 }}>

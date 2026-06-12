@@ -37,7 +37,7 @@ const TENANT_TABLE_DELETE_ORDER = [
 /** 使用 sqlite3 CLI 从主库复制表结构到租户库（只复制 CREATE TABLE/INDEX，零数据传输） */
 function cloneSchemaToTenant(mainPath: string, tenantPath: string): void {
   // .schema 输出纯 DDL，管道到新库只建空表，绝不包含数据行
-  execSync(`sqlite3 "${mainPath}" ".schema" | sqlite3 "${tenantPath}"`, { stdio: 'pipe' });
+  execSync(`sqlite3 "${mainPath}" ".schema" | grep -v "sqlite_sequence" | sqlite3 "${tenantPath}"`, { stdio: 'pipe' });
   // 确保新库开启 WAL
   execSync(`sqlite3 "${tenantPath}" "PRAGMA journal_mode=WAL"`, { stdio: 'pipe' });
 }

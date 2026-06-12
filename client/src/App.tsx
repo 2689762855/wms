@@ -81,12 +81,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const loc = window.location.pathname;
   if (loading) return null;
   if (!token) return <Navigate to="/login" replace />;
-  // 文员仅合同管理
-  if (user?.operatorType === 'clerk' && !loc.startsWith('/contracts') && !loc.startsWith('/m')) {
+  // 文员仅合同管理（云版专属）
+  if (!isStandalone && user?.operatorType === 'clerk' && !loc.startsWith('/contracts') && !loc.startsWith('/m')) {
     return <Navigate to="/contracts" replace />;
   }
   // 库人员不可访问合同
-  if (user?.operatorType === 'warehouse' && loc.startsWith('/contracts')) {
+  if (!isStandalone && user?.operatorType === 'warehouse' && loc.startsWith('/contracts')) {
     return <Navigate to="/inbound" replace />;
   }
   return <>{children}</>;
@@ -100,7 +100,7 @@ function HomeRedirect() {
   }
   if (isMobile) return <Navigate to="/m/inbound" replace />;
   if (user?.operatorType === 'warehouse') return <Navigate to="/inbound" replace />;
-  if (user?.operatorType === 'clerk') return <Navigate to="/contracts" replace />;
+  if (!isStandalone && user?.operatorType === 'clerk') return <Navigate to="/contracts" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -126,10 +126,10 @@ function AppRoutes() {
       </Route>
       <Route path="/transfer/:id" element={<ProtectedRoute><AppLayout><TransferDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/warehouses/:id/locations" element={<ProtectedRoute><AppLayout><WarehouseLocations /></AppLayout></ProtectedRoute>} />
-      <Route path="/contracts/:id" element={<ProtectedRoute><AppLayout><ContractDetail /></AppLayout></ProtectedRoute>} />
-      <Route path="/contracts/:id/reconciliation" element={<ProtectedRoute><AppLayout><ContractReconciliation /></AppLayout></ProtectedRoute>} />
-      <Route path="/containers/:id" element={<ProtectedRoute><AppLayout><ContainerDetail /></AppLayout></ProtectedRoute>} />
-      <Route path="/containers/:id/report" element={<ProtectedRoute><ContainerReport /></ProtectedRoute>} />
+      {!isStandalone && <Route path="/contracts/:id" element={<ProtectedRoute><AppLayout><ContractDetail /></AppLayout></ProtectedRoute>} />}
+      {!isStandalone && <Route path="/contracts/:id/reconciliation" element={<ProtectedRoute><AppLayout><ContractReconciliation /></AppLayout></ProtectedRoute>} />}
+      {!isStandalone && <Route path="/containers/:id" element={<ProtectedRoute><AppLayout><ContainerDetail /></AppLayout></ProtectedRoute>} />}
+      {!isStandalone && <Route path="/containers/:id/report" element={<ProtectedRoute><ContainerReport /></ProtectedRoute>} />}
       {!isStandalone && <Route path="/admin" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
       </Route>}
@@ -154,9 +154,9 @@ function AppRoutes() {
         <Route path="alerts" element={<Alerts />} />
         <Route path="reports/in-out" element={<ReportsInOut />} />
         <Route path="reports/turnover" element={<ReportsTurnover />} />
-        <Route path="reports/customer-stats" element={<ReportsCustomerStats />} />
-        <Route path="contracts" element={<Contracts />} />
-        <Route path="containers" element={<Containers />} />
+        {!isStandalone && <Route path="reports/customer-stats" element={<ReportsCustomerStats />} />}
+        {!isStandalone && <Route path="contracts" element={<Contracts />} />}
+        {!isStandalone && <Route path="containers" element={<Containers />} />}
         <Route path="settings/users" element={<Users />} />
         {!isStandalone && <Route path="settings/customers" element={<Customers />} />}
         <Route path="settings/about" element={<About />} />

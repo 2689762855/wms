@@ -1,1 +1,1 @@
-{"versionCode":42,"versionName":"2.3.27","downloadUrl":"https://ckglxt.top/api/app/download/latest","changelog":"PDA桌面图标修复(adaptive icon兼容)；CORS同源检测+HTTP兼容；CSP connectSrc/imgSrc补全","forceUpdate":false,"minVersionCode":0}
+{"versionCode":44,"versionName":"2.3.29","downloadUrl":"https://ckglxt.top/api/app/download/latest","changelog":"商品导入多库位+五字段识别匹配；记住密码自动登录；自适应图标恢复","forceUpdate":false,"minVersionCode":0}

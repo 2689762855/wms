@@ -82,7 +82,7 @@ export default function InboundDetail() {
         </Descriptions.Item>
         <Descriptions.Item label="仓库">{order?.warehouse?.name}</Descriptions.Item>
         <Descriptions.Item label="供应商">{order?.supplier || '-'}</Descriptions.Item>
-        <Descriptions.Item label="关联合同">{(() => { const items = order?.items || []; const contracts = [...new Set(items.filter((i: any) => i.contract).map((i: any) => `${i.contract.contractNo}|${i.contract.id}`))]; return contracts.length > 0 ? contracts.map((s: string) => { const [no, cid] = s.split('|'); return <Tag key={cid} color="blue"><a onClick={() => navigate(`/contracts/${cid}`)} style={{cursor:'pointer'}}>{no}</a></Tag>; }) : '-'; })()}</Descriptions.Item>
+        {import.meta.env.VITE_STANDALONE !== 'true' && <Descriptions.Item label="关联合同">{(() => { const items = order?.items || []; const contracts = [...new Set(items.filter((i: any) => i.contract).map((i: any) => `${i.contract.contractNo}|${i.contract.id}`))]; return contracts.length > 0 ? contracts.map((s: string) => { const [no, cid] = s.split('|'); return <Tag key={cid} color="blue"><a onClick={() => navigate(`/contracts/${cid}`)} style={{cursor:'pointer'}}>{no}</a></Tag>; }) : '-'; })()}</Descriptions.Item>}
         <Descriptions.Item label="备注">{order?.note || '-'}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{dayjs(order?.createdAt).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
       </Descriptions>

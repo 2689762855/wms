@@ -219,11 +219,11 @@ export default function MobileInboundNew() {
                   }
                 />
               </div>
-              <div>
+              {import.meta.env.VITE_STANDALONE !== 'true' && <div>
                 <Typography.Text type="secondary">关联合同（可选）</Typography.Text>
                 <Select allowClear placeholder="选择合同" value={selectedContractId} onChange={(v) => setSelectedContractId(v ?? null)} style={{ width: '100%' }} size="large"
                   options={contractsData?.data?.map((c: any) => ({ label: `${c.contractNo} (${c.customer?.realName || c.customer?.username})`, value: c.id }))} />
-              </div>
+              </div>}
               {selectedContract && (
                 <Card size="small" title={`合同 ${selectedContract.contractNo}`} style={{ background: '#fafafa' }}>
                   {selectedContract.items?.map((ci: any) => {

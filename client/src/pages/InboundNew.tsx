@@ -129,7 +129,7 @@ export default function InboundNew() {
             <Select placeholder="选择仓库">{warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}</Select>
           </Form.Item>
           <Form.Item name="supplier" label="供应商"><AutoComplete options={supplierOptions} placeholder="输入或选择供应商" style={{ width: 200 }} allowClear filterOption={(inputValue, option) => option!.value.toLowerCase().includes(inputValue.toLowerCase())} /></Form.Item>
-          <Form.Item label="关联合同（可选）" style={{ minWidth: 240 }}>
+          {import.meta.env.VITE_STANDALONE !== 'true' && <Form.Item label="关联合同（可选）" style={{ minWidth: 240 }}>
             <Select
               allowClear
               placeholder="选择合同，自动关联入库数量"
@@ -145,7 +145,7 @@ export default function InboundNew() {
                 value: c.id,
               }))}
             />
-          </Form.Item>
+          </Form.Item>}
           <Form.Item name="note" label="备注"><Input style={{ width: 260 }} /></Form.Item>
         </Space>
       </Form>

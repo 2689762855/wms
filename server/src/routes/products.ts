@@ -10,8 +10,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // CSV 解析：替代 xlsx，零依赖，兼容 UTF-8 和 GBK 编码
 function parseCSV(buffer: Buffer): string[][] {
   let text = buffer.toString('utf-8');
-  // 检测乱码：UTF-8 解码后含大量替换字符（U+FFFD），说明是 GBK
-  if (text.includes('')) {
+  // 检测乱码：UTF-8 解码后含大量替换字符（�），说明是 GBK
+  if (text.includes('\uFFFD')) {
     const iconv = require('iconv-lite');
     text = iconv.decode(buffer, 'gbk');
   }
@@ -135,17 +135,34 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
       if (!row?.[1]?.toString().trim()) continue;
 
       const name = row[1].toString().trim();
+      const spec = row[2]?.toString().trim() || undefined;
+      const unit = row[3]?.toString().trim() || 'pcs';
+      const barcode = row[4]?.toString().trim() || undefined;
+      const catName = row[5]?.toString().trim() || undefined;
       let sku = row[0]?.toString().trim() || '';
-      if (name === '示例商品请删除此行' || name === '示例商品' || name === '展示商品' || sku === 'SKU001') continue; // 跳过模板占位行
+      if (name === '示例商品请删除此行' || name === '示例商品' || name === '展示商品' || sku === 'SKU001') continue;
       if (name.length > 200) { errors.push(`第${i + 1}行: 名称过长`); continue; }
-      if (!sku) sku = nameSkuMap.get(name) || ''; // 同名商品复用 SKU
+
+      // 复合键：名称+规格+单位+条码+分类 唯一确定一个商品
+      const matchKey = [name, spec || '', unit, barcode || '', catName || ''].join('|');
+      if (!sku) sku = nameSkuMap.get(matchKey) || '';
 
       let productExists = sku ? !!(await prisma.product.findFirst({ where: { sku }, select: { id: true } })) : false;
 
-      // SKU 为空时按名称+客户查重，防止重复导入
+      // SKU 为空时按五字段查重
       if (!productExists && !sku) {
+        // 只填有值的字段参与匹配，空字段不卡 null（空条码匹配不限制条码）
+        const matchWhere: any = { name, unit, customerId };
+        if (spec) matchWhere.spec = spec;
+        if (barcode) matchWhere.barcode = barcode;
+        if (catName) {
+          const cat = await prisma.category.findFirst({ where: { name: catName, customerId }, select: { id: true } });
+          if (cat) matchWhere.categoryId = cat.id;
+        }
+        // 按已有字段精确匹配；若匹配到多条（如两商品仅条码不同），取第一条
         const existing = await prisma.product.findFirst({
-          where: { name, customerId },
+          where: matchWhere,
+          orderBy: { createdAt: 'asc' },
           select: { sku: true },
         });
         if (existing) {
@@ -154,13 +171,11 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
         }
       }
 
+      let productId: number;
+
       if (!productExists) {
         if (!sku) { sku = await nextOrderNo('SKU'); }
-        nameSkuMap.set(name, sku);
-        const spec = row[2]?.toString().trim() || undefined;
-        const unit = row[3]?.toString().trim() || 'pcs';
-        const barcode = row[4]?.toString().trim() || undefined;
-        const catName = row[5]?.toString().trim();
+        nameSkuMap.set(matchKey, sku);
         const safetyStock = parseInt(row[6] as string) || 0;
         const costPrice = parseFloat(row[7] as string) || undefined;
         const salePrice = parseFloat(row[8] as string) || undefined;
@@ -175,36 +190,44 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
         const newProduct = await prisma.product.create({
           data: { sku, name, spec, unit, barcode: barcode || sku, categoryId, customerId, safetyStock, costPrice, salePrice },
         });
+        productId = newProduct.id;
         created++;
 
         // 仓库安全库存：导入时选中仓库，自动为该仓库设置安全库存
         if (safetyStock > 0 && warehouseId) {
           await prisma.productWarehouse.upsert({
-            where: { productId_warehouseId: { productId: newProduct.id, warehouseId } },
-            create: { productId: newProduct.id, warehouseId, safetyStock },
+            where: { productId_warehouseId: { productId, warehouseId } },
+            create: { productId, warehouseId, safetyStock },
             update: { safetyStock },
           });
         }
+      } else {
+        // 已存在商品：取已有 ID，后续行继续处理该商品不同库位的入库
+        const existing = await prisma.product.findFirst({
+          where: { sku },
+          select: { id: true },
+        });
+        productId = existing!.id;
+      }
 
-        // 仅新建商品时处理库存入库（已存在的商品跳过，防止重复叠加）
-        const locName = row[9]?.toString().trim();
-        const qty = parseInt(row[10] as string);
-        if (locName && !isNaN(qty) && qty > 0 && warehouseId) {
-          let location = await prisma.location.findFirst({ where: { name: locName, warehouseId } });
-          if (!location) {
-            const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
-            location = await prisma.location.create({ data: { name: locName, warehouseId, code } });
-          }
-          const inv = await prisma.inventory.findFirst({
-            where: { productId: newProduct.id, warehouseId, locationId: location.id, batchNo: null },
-          });
-          if (inv) {
-            await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity + qty } });
-          } else {
-            await prisma.inventory.create({ data: { productId: newProduct.id, warehouseId, locationId: location.id, quantity: qty } });
-          }
-          stockAdded++;
+      // 每行独立处理库存入库（同一商品多行=不同库位各自入库）
+      const locName = row[9]?.toString().trim();
+      const qty = parseInt(row[10] as string);
+      if (locName && !isNaN(qty) && qty > 0 && warehouseId) {
+        let location = await prisma.location.findFirst({ where: { name: locName, warehouseId } });
+        if (!location) {
+          const code = 'LOC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
+          location = await prisma.location.create({ data: { name: locName, warehouseId, code } });
         }
+        const inv = await prisma.inventory.findFirst({
+          where: { productId, warehouseId, locationId: location.id, batchNo: null },
+        });
+        if (inv) {
+          await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity + qty } });
+        } else {
+          await prisma.inventory.create({ data: { productId, warehouseId, locationId: location.id, quantity: qty } });
+        }
+        stockAdded++;
       }
     }
 

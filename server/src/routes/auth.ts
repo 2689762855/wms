@@ -377,18 +377,10 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90天试用
 
-    // 每日注册上限保护：当天注册超过 5 人自动关闭审批
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayCount = await prisma.customer.count({ where: { createdAt: { gte: todayStart } } });
-    if (todayCount >= 5) {
-      await prisma.setting.upsert({ where: { key: 'autoApproveRegistrations' }, create: { key: 'autoApproveRegistrations', value: 'false' }, update: { value: 'false' } });
-      console.log(`[注册保护] 今日注册 ${todayCount} 人，已自动关闭审批`);
-    }
-
-    // 检查是否开启自动审批
+    // 自动审批：默认开启，可通过后台 Setting 手动关闭
+    // 注册频率由 express-rate-limit（3次/小时）防护，不再按日计数自动关审批
     const autoSetting = await prisma.setting.findUnique({ where: { key: 'autoApproveRegistrations' } });
-    const initialStatus = autoSetting?.value === 'true' ? 'active' : 'pending';
+    const initialStatus = (!autoSetting || autoSetting.value === 'true') ? 'active' : 'pending';
 
     // 1. 在主库创建客户记录 + 仓库（登录流程需要从主库读取 warehouseId）
     const customer = await prisma.customer.create({
@@ -401,7 +393,7 @@ authRouter.post('/register', async (req: AuthRequest, res: Response) => {
     // 2. 初始化租户数据库（建表）
     await initTenantDatabase(customer.id);
     // 清空可能残留的旧注册数据（SQLite ID 复用场景）
-    resetTenantDatabase(customer.id);
+    await resetTenantDatabase(customer.id);
 
     // 3. 在租户库中创建仓库和库位
     const { PrismaClient } = await import('@prisma/client');

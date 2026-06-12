@@ -125,10 +125,10 @@ export default function OutboundDetail() {
         </Descriptions.Item>
         <Descriptions.Item label="仓库">{order?.warehouse?.name}</Descriptions.Item>
         <Descriptions.Item label="领用人">{order?.receiver || '-'}</Descriptions.Item>
-        <Descriptions.Item label="关联货柜">{order?.container ? <Tag color={order.container.status === 'sealed' ? 'green' : 'blue'}><a onClick={() => navigate(`/containers/${order.container.id}`)} style={{cursor:'pointer'}}>{order.container.containerNo}</a></Tag> : '-'}</Descriptions.Item>
-        <Descriptions.Item label="关联合同">{linkedContracts.length > 0
+        {import.meta.env.VITE_STANDALONE !== 'true' && <Descriptions.Item label="关联货柜">{order?.container ? <Tag color={order.container.status === 'sealed' ? 'green' : 'blue'}><a onClick={() => navigate(`/containers/${order.container.id}`)} style={{cursor:'pointer'}}>{order.container.containerNo}</a></Tag> : '-'}</Descriptions.Item>}
+        {import.meta.env.VITE_STANDALONE !== 'true' && <Descriptions.Item label="关联合同">{linkedContracts.length > 0
           ? <Space wrap size={[0, 4]}>{linkedContracts.map((lc: any) => <Tag key={lc.id} color="purple"><a onClick={() => navigate(`/contracts/${lc.id}`)} style={{cursor:'pointer'}}>{lc.contractNo}</a></Tag>)}</Space>
-          : '-'}</Descriptions.Item>
+          : '-'}</Descriptions.Item>}
         <Descriptions.Item label="备注">{order?.note || '-'}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{dayjs(order?.createdAt).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
       </Descriptions>

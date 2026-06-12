@@ -89,8 +89,8 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     { key: 'transfer', label: '调拨管理', icon: <SwapOutlined />, path: '/transfer' },
     { key: 'check-tasks', label: '盘点管理', icon: <CheckSquareOutlined />, path: '/check-tasks' },
     { key: 'alerts', label: '库存预警', icon: <AlertOutlined />, path: '/alerts' },
-    { key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' },
-    { key: 'containers', label: '货柜管理', icon: <ContainerOutlined />, path: '/containers' },
+    ...(!isStandalone ? [{ key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' }] : []),
+    ...(!isStandalone ? [{ key: 'containers', label: '货柜管理', icon: <ContainerOutlined />, path: '/containers' }] : []),
     {
       key: 'reports-group',
       label: '报表统计',
@@ -98,7 +98,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
       children: [
         { key: 'reports-in-out', label: '出入库报表', path: '/reports/in-out' },
         { key: 'reports-turnover', label: '周转率报表', path: '/reports/turnover' },
-        { key: 'reports-customer-stats', label: '客户统计', path: '/reports/customer-stats' },
+        ...(!isStandalone ? [{ key: 'reports-customer-stats', label: '客户统计', path: '/reports/customer-stats' }] : []),
       ],
     },
     ...(canManageUsers || isTenant ? [{
@@ -114,10 +114,11 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     }] : []),
   ];
 
-  // 文员菜单：仅合同管理
-  const clerkMenuItems = [
-    { key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' },
-  ];
+  // 文员菜单：仅合同管理（云版专属）
+  const clerkMenuItems: any[] = [];
+  if (!isStandalone) {
+    clerkMenuItems.push({ key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' });
+  }
 
   // 库人员桌面菜单：库存/出入库/盘点/预警/排柜
   const warehouseMenuItems = [
@@ -134,7 +135,7 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     { key: 'outbound', label: '出库管理', icon: <ExportOutlined />, path: '/outbound' },
     { key: 'check-tasks', label: '盘点管理', icon: <CheckSquareOutlined />, path: '/check-tasks' },
     { key: 'alerts', label: '库存预警', icon: <AlertOutlined />, path: '/alerts' },
-    { key: 'containers', label: '排柜管理', icon: <ContainerOutlined />, path: '/containers' },
+    ...(!isStandalone ? [{ key: 'containers', label: '排柜管理', icon: <ContainerOutlined />, path: '/containers' }] : []),
   ];
 
   const menuItems = isSuperAdmin ? adminMenuItems : isClerk ? clerkMenuItems : isWarehouse ? warehouseMenuItems : opsMenuItems;

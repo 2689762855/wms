@@ -4,17 +4,76 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>仓库管家 - 外贸仓库管理系统 | 排柜装柜 · 合同追踪 · 扫码出入库</title>
-<meta name="description" content="仓库管家 WMS - 专为外贸仓库设计的库存管理系统。排柜装柜、甩柜自动退库、合同批次追溯、中英文装箱单、手机扫码出入库。90天免费试用。">
+<meta name="description" content="仓库管家 WMS - 专为外贸仓库设计的库存管理系统。排柜装柜、甩柜自动退库、合同批次追溯、中英文装箱单、手机扫码出入库。免费试用90天，也支持私有部署。">
+
+<!-- Open Graph -->
+<meta property="og:title" content="仓库管家 - 外贸仓库管理系统 | 排柜装柜 · 合同追踪 · 扫码出入库">
+<meta property="og:description" content="专为外贸仓库、海外仓、集货仓设计的 WMS。排柜装柜、甩柜自动退库、中英文装箱单、手机扫码出入库。90天免费试用。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ckglxt.top/">
+<meta property="og:site_name" content="仓库管家 WMS">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="仓库管家 - 外贸仓库管理系统">
+<meta name="twitter:description" content="专为外贸仓库设计的 WMS。排柜装柜、合同追踪、扫码出入库。90天免费试用。">
+
+<!-- Canonical -->
+<link rel="canonical" href="https://ckglxt.top/">
+
+<!-- Structured Data: SoftwareApplication -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "仓库管家 WMS",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, Windows, Android",
+  "description": "专为外贸仓库、海外仓、集货仓设计的库存管理系统。支持排柜装柜、合同批次追踪、甩柜自动退库、中英文装箱单、手机扫码出入库。",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "私有部署",
+      "price": "0",
+      "priceCurrency": "CNY"
+    },
+    {
+      "@type": "Offer",
+      "name": "标准版",
+      "price": "1999",
+      "priceCurrency": "CNY",
+      "description": "1个仓库，5个操作员，含合同管理、货柜管理、技术支持"
+    },
+    {
+      "@type": "Offer",
+      "name": "专业版",
+      "price": "4999",
+      "priceCurrency": "CNY",
+      "description": "3个仓库，20个操作员，含合同管理、货柜管理、多仓库调拨、自定义报表、专属技术支持"
+    }
+  ]
+}
+</script>
 <style>
+  :root {
+    --bg: #fff;
+    --bg-alt: #f5f8fc;
+    --bg-card: #fff;
+    --text: #1a1a2e;
+    --text-secondary: #555;
+    --text-muted: #999;
+    --border: #e8ecf0;
+    --shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-    color: #1a1a2e; background: #fff; line-height: 1.6;
+    color: var(--text); background: var(--bg); line-height: 1.6;
   }
   .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
   header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 18px 0; border-bottom: 1px solid #f0f0f0;
+    padding: 18px 0; border-bottom: 1px solid var(--border);
   }
   .logo { font-size: 22px; font-weight: 700; color: #1677ff; }
   .logo span { color: #52c41a; }
@@ -23,10 +82,18 @@
   .nav .btn-nav { background: #1677ff; color: #fff; padding: 8px 20px; border-radius: 6px; }
   .nav .btn-nav:hover { background: #4096ff; color: #fff; }
 
-  .hero { text-align: center; padding: 80px 0 60px; }
-  .hero h1 { font-size: 44px; font-weight: 800; line-height: 1.3; }
-  .hero h1 .green { color: #52c41a; }
-  .hero p { font-size: 18px; color: #666; max-width: 680px; margin: 20px auto 36px; }
+  /* ---- Hero 轻量渐变 ---- */
+  .hero-wrap { position: relative; overflow: hidden; background: linear-gradient(170deg, #e4edfe 0%, #eef4ff 40%, #f6f9ff 70%, #f8faff 100%); }
+  .hero-wrap::after {
+    content: ''; position: absolute;
+    bottom: 0; left: 0; right: 0; height: 60px;
+    background: linear-gradient(to bottom, transparent, #f8faff);
+    pointer-events: none;
+  }
+  .hero { text-align: center; padding: 80px 0 60px; position: relative; z-index: 1; }
+  .hero h1 { font-size: 44px; font-weight: 800; line-height: 1.3; color: var(--text); }
+  .hero h1 .green { color: #389e0d; }
+  .hero p { font-size: 18px; color: var(--text-secondary); max-width: 680px; margin: 20px auto 36px; }
   .hero .btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
   .btn { padding: 14px 36px; border-radius: 8px; font-size: 16px; font-weight: 600; text-decoration: none; cursor: pointer; display: inline-block; border: none; transition: all .2s; }
   .btn-primary { background: #1677ff; color: #fff; }
@@ -36,12 +103,15 @@
   .btn-outline { border: 2px solid #d9d9d9; color: #333; background: #fff; }
   .btn-outline:hover { border-color: #1677ff; color: #1677ff; }
 
-  .features { padding: 80px 0; background: #fafafa; }
-  .section-title { text-align: center; font-size: 32px; font-weight: 700; margin-bottom: 12px; }
-  .section-sub { text-align: center; color: #888; font-size: 16px; margin-bottom: 48px; }
+  .features { padding: 80px 0; background: var(--bg); }
+  .pricing { padding: 80px 0; background: var(--bg-alt); }
+  #custom { padding: 80px 0; background: var(--bg); }
+  .section-title { text-align: center; font-size: 32px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+  .section-sub { text-align: center; color: var(--text-secondary); font-size: 16px; margin-bottom: 48px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
-  .card { background: #fff; border-radius: 12px; padding: 32px 28px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); transition: transform .2s, box-shadow .2s; }
+  .card { background: var(--bg-card); border-radius: 12px; padding: 32px 28px; box-shadow: var(--shadow); transition: transform .2s, box-shadow .2s; }
   .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+  .card p { color: var(--text-secondary); }
   .card .icon { font-size: 36px; margin-bottom: 16px; }
   .card h3 { font-size: 18px; margin-bottom: 8px; }
   .card p { color: #777; font-size: 14px; }
@@ -50,24 +120,32 @@
   .demo-box { display: inline-block; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 12px; padding: 32px 48px; max-width: 500px; }
   .demo-box code { font-size: 28px; font-weight: 700; color: #d48806; letter-spacing: 2px; }
 
-  .pricing { padding: 80px 0; background: #fafafa; }
-  .pricing-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; max-width: 800px; margin: 0 auto; }
-  .price-card { background: #fff; border-radius: 12px; padding: 36px 32px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border: 2px solid transparent; }
-  .price-card.featured { border-color: #1677ff; }
-  .price-card.featured .badge { display: inline-block; background: #1677ff; color: #fff; font-size: 12px; padding: 2px 12px; border-radius: 10px; margin-bottom: 8px; }
-  .price-card h3 { font-size: 22px; margin-bottom: 8px; }
-  .price-card .price { font-size: 36px; font-weight: 800; color: #1677ff; margin: 16px 0; }
-  .price-card .price small { font-size: 16px; color: #888; }
-  .price-card ul { list-style: none; text-align: left; margin: 24px 0; }
-  .price-card ul li { padding: 6px 0; color: #555; font-size: 14px; }
-  .price-card ul li::before { content: '✓ '; color: #52c41a; font-weight: 700; }
-  .price-card ul li.caveat::before { content: '⚠ '; color: #faad14; font-weight: 400; }
+  /* 定价对比表格 */
+  .compare-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); max-width: 960px; margin: 0 auto; }
+  .compare-table th, .compare-table td { padding: 16px 20px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+  .compare-table thead th { background: #fafafa; font-size: 16px; font-weight: 700; padding: 20px; }
+  .compare-table thead th:first-child { text-align: left; font-weight: 400; font-size: 14px; color: #888; }
+  .compare-table thead th.highlight { background: #e6f4ff; color: #1677ff; }
+  .compare-table thead th.highlight .badge { display: inline-block; background: #1677ff; color: #fff; font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-bottom: 6px; }
+  .compare-table tbody td:first-child { text-align: left; font-weight: 500; color: #333; }
+  .compare-table tbody tr:last-child td { border-bottom: none; }
+  .compare-table .price td { font-size: 24px; font-weight: 800; color: #1677ff; }
+  .compare-table .price td:first-child { font-size: 14px; font-weight: 400; color: #333; }
+  .compare-table .price td small { font-size: 14px; color: #999; font-weight: 400; }
+  .compare-table .check { color: #52c41a; font-weight: 700; font-size: 18px; }
+  .compare-table .dash { color: #d9d9d9; }
+  @media (max-width: 768px) {
+    .compare-table { font-size: 13px; }
+    .compare-table th, .compare-table td { padding: 10px 8px; }
+    .compare-table thead th { font-size: 14px; }
+    .compare-table .price td { font-size: 18px; }
+  }
 
-  .cta { text-align: center; padding: 80px 0; }
-  .cta h2 { font-size: 32px; font-weight: 700; margin-bottom: 12px; }
-  .cta p { color: #666; font-size: 17px; margin-bottom: 32px; }
+  .cta { text-align: center; padding: 80px 0; background: var(--bg-alt); }
+  .cta h2 { font-size: 32px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+  .cta p { color: var(--text-secondary); font-size: 17px; margin-bottom: 32px; }
 
-  footer { text-align: center; padding: 32px 0; border-top: 1px solid #f0f0f0; color: #999; font-size: 13px; }
+  footer { text-align: center; padding: 32px 0; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
 
   @media (max-width: 640px) {
     .hero h1 { font-size: 30px; }
@@ -76,29 +154,86 @@
     .demo-box code { font-size: 22px; }
     .video-wrap { display: none; }
   }
+
+  /* 模式切换按钮 */
+  .eye-toggle {
+    background: none; border: none; padding: 0; margin-left: 32px;
+    font-size: 15px; cursor: pointer; color: #555; font-family: inherit;
+    white-space: nowrap; text-decoration: none;
+  }
+  .eye-toggle:hover { color: #1677ff; }
+
+  /* 夜间模式 — 覆盖 CSS 变量 */
+  body.night-mode { --bg: #1a1d23; --bg-alt: #21252f; --bg-card: #252a36; --text: #e4e6eb; --text-secondary: #b0b3b8; --text-muted: #80858e; --border: #333848; --shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  /* 夜间模式 — 硬编码颜色兜底 */
+  body.night-mode { background: #1a1d23; }
+  body.night-mode .hero-wrap { background: linear-gradient(170deg, #1c202d 0%, #202530 40%, #232833 70%, #1a1d23 100%); }
+  body.night-mode .features { background: #1a1d23; }
+  body.night-mode .pricing { background: #21252f; }
+  body.night-mode #custom { background: #1a1d23; }
+  body.night-mode .cta { background: #21252f; }
+  body.night-mode .card { background: #252a36; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  body.night-mode .card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  body.night-mode .compare-table { background: #252a36; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  body.night-mode .compare-table thead th { background: #1e2230; color: #e4e6eb; }
+  body.night-mode .compare-table th, body.night-mode .compare-table td { border-color: #333848; color: #b0b3b8; }
+  body.night-mode .compare-table tbody td:first-child { color: #e4e6eb; }
+  body.night-mode h1, body.night-mode h2, body.night-mode h3 { color: #e4e6eb; }
+  body.night-mode p, body.night-mode li, body.night-mode td { color: #b0b3b8; }
+  body.night-mode .section-sub, body.night-mode footer, body.night-mode .compare-table thead th:first-child { color: #80858e; }
+  body.night-mode .logo { color: #e4e6eb; }
+  body.night-mode .nav a { color: #b0b3b8; }
+  body.night-mode .nav a:hover { color: #fff; }
+  body.night-mode .nav .btn-nav { background: #1677ff; color: #fff; }
+  body.night-mode .btn-outline { border-color: #444a58; color: #b0b3b8; }
+  body.night-mode .btn-outline:hover { border-color: #1677ff; color: #1677ff; }
+  body.night-mode .demo-box { background: #2a2f3d; border-color: #444a58; }
+  body.night-mode .demo-box code { color: #e6a817; }
+  body.night-mode header { border-bottom-color: #333848; }
+  body.night-mode .custom-contact { background: #2a2f3d; border-color: #444a58; }
+  body.night-mode .custom-contact h3 { color: #e4e6eb; }
+  body.night-mode .custom-contact p { color: #b0b3b8; }
+  body.night-mode .custom-bullets li { color: #b0b3b8; border-bottom-color: #333848; }
+  body.night-mode .pricing .container > div[style*="f6ffed"] { background: #1e3520 !important; border-color: #3d5a1e !important; }
+  body.night-mode .pricing .container > div[style*="f6ffed"] strong { color: #5cdb5c !important; }
+  body.night-mode .pricing .container > div[style*="f6ffed"] p { color: #b0b3b8 !important; }
+  body.night-mode .compare-table .price td { color: #5c9eff; }
+  body.night-mode .compare-table .check { color: #5cdb5c; }
+  body.night-mode .compare-table .dash { color: #555; }
+  body.night-mode .compare-table .price td small { color: #80858e; }
+  body.night-mode .compare-table .price td:first-child { color: #e4e6eb; }
+  body.night-mode .demo-box p { color: #b0b3b8; }
+  body.night-mode footer p { color: #80858e; }
+  body.night-mode .cta p { color: #b0b3b8; }
+  body.night-mode #app-download { background: #1e2230 !important; }
+  body.night-mode #regModal > div { background: #252a36 !important; }
 </style>
 </head>
 <body>
 
-<div class="container">
-  <header>
-    <div class="logo">仓库<span>管家</span></div>
-    <nav class="nav">
-      <a href="#features">功能</a>
-      <a href="#pricing">价格</a>
-      <a href="/login" class="btn-nav">登录</a>
-    </nav>
-  </header>
+<div class="hero-wrap">
+  <div class="container">
+    <header>
+      <div class="logo">仓库<span>管家</span></div>
+      <nav class="nav">
+        <a href="#features">功能</a>
+        <button class="eye-toggle" id="eyeToggle">🌙 夜间</button>
+        <a href="#pricing">价格</a>
+        <a href="#custom">定制</a>
+        <a href="/login" class="btn-nav">登录</a>
+      </nav>
+    </header>
 
-  <section class="hero">
-    <h1>外贸仓库，<span class="green">一个系统管到底</span></h1>
-    <p>专为外贸仓、海外仓、集货仓设计。排柜装柜 · 合同批次追踪 · 甩柜自动退库 · 中英文装箱单 · 手机扫码出入库。</p>
-    <div class="btns">
-      <button class="btn btn-success" id="showRegBtn" style="cursor:pointer">免费注册（试用90天）</button>
-      <a href="/login" class="btn btn-primary">登录</a>
-      <a href="#demo" class="btn btn-outline">查看演示</a>
-    </div>
-  </section>
+    <section class="hero">
+      <h1>外贸仓库，<span class="green">一个系统管到底</span></h1>
+      <p>专为外贸仓、海外仓、集货仓设计。排柜装柜 · 合同批次追踪 · 甩柜自动退库 · 中英文装箱单 · 手机扫码出入库。</p>
+      <div class="btns">
+        <button class="btn btn-success" id="showRegBtn" style="cursor:pointer">免费注册（试用90天）</button>
+        <button class="btn btn-primary" id="demoLoginBtn" style="cursor:pointer">⚡ 一键演示</button>
+        <a href="#demo" class="btn btn-outline">查看介绍</a>
+      </div>
+    </section>
+  </div>
 </div>
 
 <section class="features" id="features">
@@ -143,14 +278,14 @@
 <section class="demo" id="demo">
   <div class="container">
     <h2 class="section-title">在线演示</h2>
-    <p class="section-sub">用演示账号登录，无需注册即可体验全部功能</p>
+    <p class="section-sub">点"一键演示"直接进入系统，无需注册即可体验全部功能</p>
     <div class="demo-box">
       <p style="color:#888;margin-bottom:8px;">演示账号</p>
       <code>fjmfjm</code>
       <p style="margin-top:8px;color:#888;">密码</p>
       <code>fjmfjm123</code>
       <p style="margin-top:16px;color:#999;font-size:13px;">可自由体验所有功能，包含真实外贸数据</p>
-      <a href="/login" class="btn btn-success" style="margin-top:16px;">进入演示</a>
+      <button class="btn btn-success" id="demoLoginBtn2" style="margin-top:16px;">进入演示</button>
     </div>
     <div class="video-wrap" style="margin-top:40px;max-width:700px;margin-left:auto;margin-right:auto;">
       <p style="color:#888;font-size:14px;margin-bottom:12px;">原版操作演示视频</p>
@@ -166,52 +301,110 @@
   <div class="container">
     <h2 class="section-title">价格方案</h2>
     <p class="section-sub">前 3 个月免费试用，满意再付费</p>
-    <div class="pricing-cards" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
-      <div class="price-card">
-        <h3>💻 私有部署</h3>
-        <div class="price">免费</div>
-        <ul>
-          <li>原版全部功能</li>
-          <li>出入库 / 调拨 / 盘点</li>
-          <li>库位 + 二维码扫码</li>
-          <li>库存预警 / 报表统计</li>
-          <li>内置运行环境，无需安装</li>
-          <li class="caveat" style="color:#999;font-size:13px;">仅限 Windows 系统</li>
-          <li class="caveat" style="color:#999;font-size:13px;">不含合同管理 / 货柜管理</li>
-          <li class="caveat" style="color:#999;font-size:13px;">需自行备份数据</li>
-        </ul>
-        <a href="/WMS-Package.zip" class="btn btn-outline download-link" style="width:100%">下载安装包</a>
-      </div>
-      <div class="price-card featured">
-        <span class="badge">推荐</span>
-        <h3>☁️ 标准版</h3>
-        <div class="price">¥999<small>/年</small><p style="font-size:13px;color:#999;margin:4px 0 0;">≈ ¥2.7/天</p></div>
-        <ul>
-          <li>1 个仓库</li>
-          <li>原版全部功能</li>
-          <li><strong>📋 合同管理</strong> — 合同关联、批次追踪、收发对账</li>
-          <li><strong>🚢 货柜管理</strong> — 排柜装柜、甩柜退库、装箱单</li>
-          <li>手机扫码操作</li>
-          <li>5 个操作员席位</li>
-          <li><strong>🔧 技术支持</strong> — 使用问题随时联系，远程协助解决</li>
-        </ul>
-        <a href="/login" class="btn btn-primary" style="width:100%">免费试用</a>
-      </div>
-      <div class="price-card">
-        <h3>☁️ 专业版</h3>
-        <div class="price">¥2,299<small>/年</small><p style="font-size:13px;color:#999;margin:4px 0 0;">≈ ¥6.3/天</p></div>
-        <ul>
-          <li>3 个仓库</li>
-          <li>原版全部功能</li>
-          <li><strong>📋 合同管理</strong> — 合同关联、批次追踪、收发对账</li>
-          <li><strong>🚢 货柜管理</strong> — 排柜装柜、甩柜退库、装箱单</li>
-          <li>多仓库调拨联动</li>
-          <li>20 个操作员席位</li>
-          <li><strong>🔧 专属技术支持</strong> — 遇到问题联系客服马上处理，更新速度快</li>
-        </ul>
-        <a href="/login" class="btn btn-outline" style="width:100%">免费试用</a>
-      </div>
-    </div>
+
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>💻 私有部署<br><span style="font-size:13px;color:#999;font-weight:400;">Windows 单机</span></th>
+          <th class="highlight"><span class="badge">推荐</span><br>☁️ 标准版<br><span style="font-size:13px;color:#999;font-weight:400;">云托管</span></th>
+          <th>☁️ 专业版<br><span style="font-size:13px;color:#999;font-weight:400;">云托管</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="price">
+          <td>年费</td>
+          <td style="color:#52c41a;">免费</td>
+          <td>¥1,999<small>/年</small></td>
+          <td>¥4,999<small>/年</small></td>
+        </tr>
+        <tr>
+          <td>使用成本</td>
+          <td style="color:#999;">自备电脑 + 自行维护</td>
+          <td>≈ ¥5.5/天</td>
+          <td>≈ ¥13.7/天</td>
+        </tr>
+        <tr>
+          <td>仓库数</td>
+          <td>不限制</td>
+          <td>1 个</td>
+          <td>3 个</td>
+        </tr>
+        <tr>
+          <td>出入库 / 调拨 / 盘点</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>合同管理 + 批次追踪</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>货柜排柜 / 甩柜退库</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>中英文装箱单</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>手机扫码出入库</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>操作员数</td>
+          <td>不限制</td>
+          <td>5 人</td>
+          <td>20 人</td>
+        </tr>
+        <tr>
+          <td>多仓库调拨</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>自定义报表</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>数据备份</td>
+          <td>自行备份</td>
+          <td>自动备份</td>
+          <td>自动备份</td>
+        </tr>
+        <tr>
+          <td>技术支持</td>
+          <td><span class="dash">—</span></td>
+          <td>标准支持</td>
+          <td>专属支持</td>
+        </tr>
+        <tr>
+          <td>优先定制</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td></td>
+          <td><a href="/WMS-Package.zip" class="btn btn-outline download-link" style="padding:10px 24px;font-size:14px;">下载安装包</a></td>
+          <td><a href="/login" class="btn btn-primary" style="padding:10px 24px;font-size:14px;">免费试用</a></td>
+          <td><a href="/login" class="btn btn-outline" style="padding:10px 24px;font-size:14px;">免费试用</a></td>
+        </tr>
+      </tbody>
+    </table>
+
     <div style="text-align:center;margin-top:24px;background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:16px 24px;max-width:600px;margin-left:auto;margin-right:auto;">
       <span style="font-size:18px;">🎁</span> <strong style="color:#389e0d;">免费商品录入服务</strong> <span style="color:#1677ff;font-weight:bold;">客服微信：fjm2689762855</span>
       <p style="color:#666;margin:4px 0 0;">开通云托管版即可获得 —— 把商品清单发给我们，免费帮您录入系统，开箱即用。</p>
@@ -220,12 +413,52 @@
   </div>
 </section>
 
+<section class="features" id="custom">
+  <div class="container" style="max-width:860px;">
+    <h2 class="section-title">🏭 企业专属定制</h2>
+    <p class="section-sub">标准版不满足需求？我们为你量身打造专属仓库管理系统</p>
+
+    <style>
+      .custom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; }
+      .custom-bullets { list-style: none; }
+      .custom-bullets li { padding: 10px 0; font-size: 15px; color: #333; border-bottom: 1px solid #f5f5f5; }
+      .custom-bullets li:last-child { border-bottom: none; }
+      .custom-bullets li::before { content: '✓ '; color: #52c41a; font-weight: 700; font-size: 16px; }
+      .custom-contact { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 12px; padding: 32px; text-align: center; }
+      .custom-contact h3 { font-size: 20px; margin-bottom: 12px; }
+      .custom-contact p { color: #666; font-size: 14px; margin-bottom: 16px; }
+      @media (max-width: 768px) {
+        .custom-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+
+    <div class="custom-grid">
+      <div>
+        <ul class="custom-bullets">
+          <li><strong>功能定制</strong> — 加你需要的模块，去你不需要的。不绑定、不浪费。</li>
+          <li><strong>流程匹配</strong> — 按你仓库的实际流程设计，不是你迁就系统。</li>
+          <li><strong>多系统对接</strong> — ERP、TMS、电商平台、报关系统，打通数据孤岛。</li>
+          <li><strong>私有部署</strong> — 源码交付、内网部署、数据完全掌控。</li>
+          <li><strong>长期维护</strong> — 一次交付不是终点，持续迭代跟上业务变化。</li>
+          <li><strong>源码授权</strong> — 无后门、无订阅锁定，系统真正属于你。</li>
+        </ul>
+      </div>
+      <div class="custom-contact">
+        <h3>📞 聊聊你的需求</h3>
+        <p>把你的仓库流程、痛点、期望告诉我——我来出方案和报价。<br>轻量定制 ¥3,000 起，按需评估，30 天内交付。</p>
+        <p style="margin-top:8px;font-size:24px;font-weight:700;color:#1677ff;">微信：fjm2689762855</p>
+        <p style="color:#999;font-size:13px;">加好友备注"仓库定制"</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="cta">
   <div class="container">
     <h2>外贸仓库数字化，从一个系统开始</h2>
     <p>排柜装柜 · 合同追踪 · 甩柜管理 · 扫码出入库 · 中英文装箱单</p>
     <a href="/login" class="btn btn-success">免费试用 90 天</a>
-    <p style="margin-top:16px;color:#999;font-size:14px;">也支持私有部署，<a href="/WMS-Package.zip" class="download-link" style="color:#1677ff;">下载安装包</a>一键启动</p>
+    <p style="margin-top:16px;color:#999;font-size:14px;">也支持私有部署，<a href="/WMS-Package.zip" class="download-link" style="color:#1677ff;">下载安装包</a>一键启动 <span style="color:#bbb;font-size:12px;">v2.3.9 · 约 116MB · 含自动备份/条码打印/供应商管理</span></p>
   </div>
 </section>
 
@@ -249,7 +482,7 @@
   <div style="background:#fff;border-radius:12px;padding:36px;max-width:400px;width:90%;position:relative;">
     <span id="closeRegModal" style="position:absolute;top:12px;right:16px;font-size:24px;cursor:pointer;color:#999;">&times;</span>
     <h3 style="margin-bottom:4px;font-size:22px;">免费注册</h3>
-    <p style="color:#888;margin-bottom:20px;font-size:14px;">90天免费试用 · 无需绑定 · 即时开通</p>
+    <p style="color:#888;margin-bottom:20px;font-size:14px;">90天免费试用 · 即时开通 · 无需绑定信用卡</p>
     <form id="regForm">
       <label style="display:block;margin-bottom:4px;font-weight:500;">用户名</label>
       <input name="username" required minlength="3" maxlength="50" placeholder="3-50个字符" style="width:100%;padding:10px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:15px;margin-bottom:14px;box-sizing:border-box;">
@@ -277,11 +510,18 @@
 </div>
 
 <script>
+// 演示自动登录：跳转登录页，自动填入演示账号
+document.getElementById('demoLoginBtn').addEventListener('click', function() {
+  window.location.href = '/login?demo=1';
+});
+document.getElementById('demoLoginBtn2').addEventListener('click', function() {
+  window.location.href = '/login?demo=1';
+});
 // 人机验证：随机数学题
-let captchaAnswer = 0;
+var captchaAnswer = 0;
 function refreshCaptcha() {
-  const a = Math.floor(Math.random() * 9) + 2;
-  const b = Math.floor(Math.random() * 9) + 1;
+  var a = Math.floor(Math.random() * 9) + 2;
+  var b = Math.floor(Math.random() * 9) + 1;
   captchaAnswer = a + b;
   document.getElementById('captchaQuestion').textContent = a + ' + ' + b + ' = ';
   document.getElementById('captchaAnswer').value = '';
@@ -290,11 +530,11 @@ refreshCaptcha();
 
 async function handleRegister(e) {
   e.preventDefault();
-  const btn = document.getElementById('regBtn');
-  const msg = document.getElementById('regMsg');
-  const form = e.target;
+  var btn = document.getElementById('regBtn');
+  var msg = document.getElementById('regMsg');
+  var form = e.target;
 
-  const userAnswer = parseInt(document.getElementById('captchaAnswer').value);
+  var userAnswer = parseInt(document.getElementById('captchaAnswer').value);
   if (isNaN(userAnswer) || userAnswer !== captchaAnswer) {
     msg.style.color = '#ff4d4f';
     msg.textContent = '验证答案错误，请重试';
@@ -307,7 +547,7 @@ async function handleRegister(e) {
   msg.style.color = '#999';
   msg.textContent = '';
 
-  const data = {
+  var data = {
     username: form.username.value.trim(),
     password: form.password.value,
     realName: form.realName.value.trim() || undefined,
@@ -315,17 +555,19 @@ async function handleRegister(e) {
   };
 
   try {
-    const res = await fetch('/api/auth/register', {
+    var res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    const result = await res.json();
+    var result = await res.json();
     if (res.ok) {
       msg.style.color = '#52c41a';
-      msg.textContent = '注册成功！请等待管理员审批通过后即可登录使用。';
+      msg.textContent = '注册成功！正在跳转到登录页...';
       btn.textContent = '已提交';
       btn.style.opacity = '0.6';
+      // 自动跳转到登录页
+      setTimeout(function() { window.location.href = '/login'; }, 1500);
     } else {
       msg.style.color = '#ff4d4f';
       msg.textContent = result.error || '注册失败';
@@ -365,9 +607,9 @@ document.querySelectorAll('.download-link').forEach(function(link) {
     e.preventDefault();
     var href = this.getAttribute('href');
     fetch('/api/app/download-counter', { method: 'POST' }).then(function() {
-      window.location.href = href;
+      var a = document.createElement("a"); a.href = href; a.download = ""; document.body.appendChild(a); a.click(); document.body.removeChild(a);
     }).catch(function() {
-      window.location.href = href;
+      var a = document.createElement("a"); a.href = href; a.download = ""; document.body.appendChild(a); a.click(); document.body.removeChild(a);
     });
   });
 });
@@ -376,6 +618,22 @@ document.querySelectorAll('.download-link').forEach(function(link) {
 if (typeof Capacitor === "undefined" && window.matchMedia("(max-width: 640px)").matches) {
   document.getElementById("app-download").style.display = "block";
 }
+
+// 日间/夜间模式切换
+(function() {
+  var btn = document.getElementById('eyeToggle');
+  var isNight = localStorage.getItem('nightMode') === '1';
+  function apply(state) {
+    if (state) { document.body.classList.add('night-mode'); btn.innerHTML = '☀️ 日间'; }
+    else       { document.body.classList.remove('night-mode'); btn.innerHTML = '🌙 夜间'; }
+  }
+  apply(isNight);
+  btn.addEventListener('click', function() {
+    isNight = !isNight;
+    localStorage.setItem('nightMode', isNight ? '1' : '0');
+    apply(isNight);
+  });
+})();
 </script>
 
 </body>

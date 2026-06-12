@@ -76,6 +76,7 @@ export function AuthProvider({ children }: { children: any }) {
     // 退出前清理可能残留的 admin_token
     localStorage.removeItem('admin_token');
     localStorage.removeItem('token');
+    localStorage.removeItem('remembered_credentials');
     setToken(null);
     setUser(null);
   };
