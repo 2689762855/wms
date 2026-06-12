@@ -55,8 +55,11 @@ appRouter.get('/download/latest', (_req: Request, res: Response) => {
       return;
     }
     const apkPath = path.join(apkDir, files[0]);
+    const stat = fs.statSync(apkPath);
     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
     res.setHeader('Content-Disposition', `attachment; filename="${files[0]}"`);
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
     fs.createReadStream(apkPath).pipe(res);
   } catch (err) {
     console.error('APK 下载失败:', err);

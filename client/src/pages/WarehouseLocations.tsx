@@ -137,15 +137,17 @@ export default function WarehouseLocations() {
                 const imgSrc = labelType === 'qr'
                   ? qrDataUrl
                   : (barcodeCanvasRef.current ? barcodeCanvasRef.current.toDataURL() : '');
-                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{text-align:center;padding:20px;font-family:sans-serif}img{display:block;margin:0 auto}</style></head><body><h2>${selectedLoc.name}</h2><p style="color:#666;margin-bottom:12px">${labelName}</p><img src="${imgSrc}" style="${labelType === 'qr' ? 'width:260px;height:260px' : 'max-width:100%'}"/><p style="font-size:14px">${selectedLoc.code}</p></body></html>`;
+                const imgStyle = labelType === 'qr' ? 'width:260px;height:260px' : 'max-width:100%';
+                const codeHtml = labelType === 'qr' ? `<p style="font-size:14px">${selectedLoc.code}</p>` : '';
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{text-align:center;padding:20px;font-family:sans-serif}img{display:block;margin:0 auto}</style></head><body><h2>${selectedLoc.name}</h2><img src="${imgSrc}" style="${imgStyle}"/>${codeHtml}</body></html>`;
                 const blob = new Blob([html], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 const w = window.open(url, '_blank');
-                const printAndClose = () => { if (w && !w.closed) w.print(); URL.revokeObjectURL(url); };
                 if (w) {
-                  try { w.onload = printAndClose; } catch {}
-                  // 兜底：300ms 后强制弹出打印
-                  setTimeout(printAndClose, 300);
+                  w.onload = () => {
+                    // 给图片一点渲染时间（data URL 解码 + 布局），再调打印
+                    setTimeout(() => { w.print(); w.close(); URL.revokeObjectURL(url); }, 200);
+                  };
                 } else {
                   URL.revokeObjectURL(url);
                 }

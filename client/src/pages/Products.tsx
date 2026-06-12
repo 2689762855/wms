@@ -318,10 +318,10 @@ export default function Products() {
                 const blob = new Blob([html], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 const w = window.open(url, '_blank');
-                const printAndClose = () => { if (w && !w.closed) w.print(); URL.revokeObjectURL(url); };
                 if (w) {
-                  try { w.onload = printAndClose; } catch {}
-                  setTimeout(printAndClose, 300);
+                  w.onload = () => {
+                    setTimeout(() => { w.print(); w.close(); URL.revokeObjectURL(url); }, 200);
+                  };
                 } else {
                   URL.revokeObjectURL(url);
                 }

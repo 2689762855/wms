@@ -57,7 +57,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "blob:", "https://static.cloudflareinsights.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:", "android-webview-video-poster:"],
       connectSrc: ["'self'", "https://ckglxt.top", "https://cgklxt.top", "http://ckglxt.top", "http://cgklxt.top", "https://cloudflareinsights.com"],
@@ -229,11 +229,11 @@ app.use((_req, res, next) => {
   next();
 });
 // ZIP 文件强制下载（浏览器默认会尝试显示二进制内容）
-// Cloudflare 会缓存 .zip 并吞掉 Content-Disposition，加 no-store 禁止缓存
+// max-age=3600：允许 Cloudflare 缓存 1 小时，后续下载从边缘节点直出（无需回源 116MB）
 app.use((req, _res, next) => {
   if (req.path.endsWith('.zip')) {
     _res.setHeader('Content-Disposition', 'attachment');
-    _res.setHeader('Cache-Control', 'no-store');
+    _res.setHeader('Cache-Control', 'public, max-age=3600');
   }
   next();
 });
