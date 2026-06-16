@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete } from 'antd';
 import dayjs from 'dayjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import type { Warehouse, Product, Location } from '../types';
 interface ItemEntry {
   productId: number;
   quantity: number;
+  unitPrice?: number;
   locationId?: number | null;
   expiryDate?: string | null;
   contractId?: number | null;
@@ -21,6 +22,9 @@ interface ItemEntry {
 export default function InboundNew() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('id');
+  const isEdit = !!editId;
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemEntry[]>([]);
@@ -28,6 +32,7 @@ export default function InboundNew() {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ value: string }[]>([]);
+  const [locationErrors, setLocationErrors] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     apiClient.get('/suppliers').then(res => {
@@ -58,18 +63,47 @@ export default function InboundNew() {
     enabled: !!selectedContractId,
   });
 
+  // 加载待编辑的订单
+  const { data: editOrder } = useQuery({
+    queryKey: ['inbound', editId],
+    queryFn: () => apiClient.get(`/inbound/${editId}`).then(res => res.data),
+    enabled: isEdit,
+  });
+
+  // 编辑模式：预填表单
+  useEffect(() => {
+    if (editOrder) {
+      form.setFieldsValue({
+        warehouseId: editOrder.warehouseId,
+        supplier: editOrder.supplier || undefined,
+        note: editOrder.note || undefined,
+      });
+      setItems(editOrder.items.map((i: any) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice ?? undefined,
+        locationId: i.locationId ?? null,
+        expiryDate: i.expiryDate ?? null,
+        contractId: i.contractId ?? null,
+      })));
+    }
+  }, [editOrder]);
+
   const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => apiClient.post('/inbound', data),
+    mutationFn: (data: Record<string, unknown>) => isEdit
+      ? apiClient.put(`/inbound/${editId}`, data)
+      : apiClient.post('/inbound', data),
     onSuccess: (res) => {
-      message.success('入库单已创建');
+      message.success(isEdit ? '入库单已更新' : '入库单已创建');
       queryClient.invalidateQueries({ queryKey: ['inbound'] });
       navigate(`/inbound/${res.data.id}`);
     },
-    onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
+    onError: (err: any) => message.error(err.response?.data?.error || (isEdit ? '更新失败' : '创建失败')),
   });
 
   const addItem = (productId: number) => {
-    setItems([...items, { productId, quantity: 1, contractId: selectedContractId }]);
+    const p = allProducts?.find((pr: Product) => pr.id === productId);
+    setItems([...items, { productId, quantity: 1, unitPrice: p?.costPrice ?? undefined, contractId: selectedContractId }]);
   };
 
   const updateItem = (idx: number, field: keyof ItemEntry, value: unknown) => {
@@ -103,7 +137,7 @@ export default function InboundNew() {
 
   const onProductsSelected = (products: Product[]) => {
     for (const p of products) {
-      setItems(prev => [...prev, { productId: p.id, quantity: 1, contractId: selectedContractId }]);
+      setItems(prev => [...prev, { productId: p.id, quantity: 1, unitPrice: p.costPrice ?? undefined, contractId: selectedContractId }]);
     }
     if (products.length) message.success(`已添加 ${products.length} 个商品`);
     setSelectorOpen(false);
@@ -111,19 +145,25 @@ export default function InboundNew() {
 
   const getProduct = (id: number) => allProducts?.find((p: Product) => p.id === id);
 
-  // 显示将自动带入的单价（合同价 > 商品默认售价）
-  const getItemPrice = (item: ItemEntry) => {
+  // 显示成本价（合同价 > 商品默认成本价）
+  const getItemCostPrice = (item: ItemEntry) => {
     if (item.contractId && selectedContract?.items) {
       const ci = selectedContract.items.find((i: any) => i.productId === item.productId);
       if (ci?.unitPrice != null) return ci.unitPrice;
     }
     const p = getProduct(item.productId);
-    return p?.salePrice ?? null;
+    return p?.costPrice ?? null;
   };
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>新建入库单</Typography.Title>}>
-      <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate({ ...values, items })}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>{isEdit ? '编辑入库单' : '新建入库单'}</Typography.Title>}>
+      <Form form={form} layout="vertical" onFinish={(values) => {
+        const errors = new Set<number>();
+        items.forEach((item, idx) => { if (!item.locationId) errors.add(idx); });
+        if (errors.size > 0) { setLocationErrors(errors); message.warning('请为每个商品选择库位，或指定整单默认库位'); return; }
+        setLocationErrors(new Set());
+        createMutation.mutate({ ...values, items });
+      }}>
         <Space size="large" wrap style={{ width: '100%' }}>
           <Form.Item name="warehouseId" label="入库仓库" rules={[{ required: true }]} style={{ minWidth: 180 }}>
             <Select placeholder="选择仓库">{warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}</Select>
@@ -191,15 +231,20 @@ export default function InboundNew() {
 
         {items.map((item, idx) => {
           const p = getProduct(item.productId);
-          const price = getItemPrice(item);
           return (
             <Space key={idx} style={{ marginBottom: 8 }} wrap>
-              <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
+              <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}${p.spec ? ' · ' + p.spec : ''}${p.unit ? ' · ' + p.unit : ''}` : `商品 #${item.productId}`}</Typography.Text>
               <InputNumber min={1} value={item.quantity} onChange={(v) => updateItem(idx, 'quantity', v || 1)} placeholder="数量" style={{ width: 80 }} />
-              {price != null && user?.operatorType !== 'warehouse' && <Tag color="green">¥{price.toFixed(2)}</Tag>}
-              <Select allowClear placeholder="入库库位" value={item.locationId} onChange={(v) => updateItem(idx, 'locationId', v ?? null)}
-                style={{ width: 160 }} options={locations?.map((l: Location) => ({ label: l.name, value: l.id }))}
-                disabled={!selectedWarehouseId} notFoundContent={selectedWarehouseId ? '该仓库无库位' : '请先选择仓库'} />
+              {user?.operatorType !== 'warehouse' && (
+                <InputNumber min={0} step={0.01} value={item.unitPrice} onChange={(v) => updateItem(idx, 'unitPrice', v)} placeholder="成本价" style={{ width: 100 }} prefix="¥" />
+              )}
+              <div>
+                <Select allowClear placeholder="入库库位" value={item.locationId} onChange={(v) => { updateItem(idx, 'locationId', v ?? null); if (v) { const next = new Set(locationErrors); next.delete(idx); setLocationErrors(next); } }}
+                  status={locationErrors.has(idx) ? 'error' : undefined}
+                  style={{ width: 160 }} options={locations?.map((l: Location) => ({ label: l.name, value: l.id }))}
+                  disabled={!selectedWarehouseId} notFoundContent={selectedWarehouseId ? '该仓库无库位' : '请先选择仓库'} />
+                {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
+              </div>
               <DatePicker allowClear placeholder="保质期至" value={item.expiryDate ? dayjs(item.expiryDate) : null}
                 onChange={(d) => updateItem(idx, 'expiryDate', d ? d.toISOString() : null)} style={{ width: 140 }} />
               <Button danger onClick={() => removeItem(idx)} size="small">删除</Button>
@@ -213,7 +258,7 @@ export default function InboundNew() {
       </Space>
 
       <Divider />
-      <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>保存入库单</Button>
+      <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>{isEdit ? '保存修改' : '保存入库单'}</Button>
       <Button style={{ marginLeft: 16 }} onClick={() => navigate('/inbound')}>取消</Button>
 
       <ProductSelector open={selectorOpen} onCancel={() => setSelectorOpen(false)} onOk={onProductsSelected} />

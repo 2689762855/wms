@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, message, Divider, Tag } from 'antd';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Form, Input, Select, AutoComplete, Button, Card, Typography, Space, InputNumber, message, Divider, Tag } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ProductSelector from '../components/ProductSelector';
+import CustomerManager from '../components/CustomerManager';
 import { useAuth } from '../stores/AuthContext';
 import { getCategoryPath } from '../utils/categoryTree';
 import type { Warehouse, Product, InventoryItem } from '../types';
@@ -12,6 +13,7 @@ import type { Warehouse, Product, InventoryItem } from '../types';
 interface ItemEntry {
   productId: number;
   quantity: number;
+  unitPrice?: number;
   locationId?: number | null;
   contractId?: number | null;
   batchNo?: string | null;
@@ -19,6 +21,9 @@ interface ItemEntry {
 
 export default function OutboundNew() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('id');
+  const isEdit = !!editId;
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [form] = Form.useForm();
@@ -27,13 +32,12 @@ export default function OutboundNew() {
   const [selectedContainerId, setSelectedContainerId] = useState<number | null>(null);
   const [selectedContractIds, setSelectedContractIds] = useState<number[]>([]);
   const [containerNoText, setContainerNoText] = useState('');
+  const [locationErrors, setLocationErrors] = useState<Set<number>>(new Set());
 
-  useEffect(() => {
-    if (user?.realName) form.setFieldValue('receiver', user.realName);
-  }, [user, form]);
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: products } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(r => r.data.data) });
+  const { data: customerList } = useQuery({ queryKey: ['customers'], queryFn: () => apiClient.get('/customers').then(r => r.data) });
 
   // 可选合同列表（进行中+已完成，排除已出完和已取消）
   const { data: contracts } = useQuery({
@@ -159,17 +163,50 @@ export default function OutboundNew() {
 
   useEffect(() => { warehouseInventoryRef.current = warehouseInventory; }, [warehouseInventory]);
 
+  // 加载待编辑的订单
+  const { data: editOrder } = useQuery({
+    queryKey: ['outbound', editId],
+    queryFn: () => apiClient.get(`/outbound/${editId}`).then(res => res.data),
+    enabled: isEdit,
+  });
+
+  // 编辑模式：预填表单
+  useEffect(() => {
+    if (editOrder) {
+      form.setFieldsValue({
+        warehouseId: editOrder.warehouseId,
+        receiver: editOrder.receiver || undefined,
+        receiverPhone: editOrder.receiverPhone || undefined,
+        receiverName2: editOrder.receiverName2 || undefined,
+        receiverPhone2: editOrder.receiverPhone2 || undefined,
+        receiverAddress: editOrder.receiverAddress || undefined,
+        note: editOrder.note || undefined,
+      });
+      setItems(editOrder.items.map((i: any) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice ?? undefined,
+        locationId: i.locationId ?? null,
+        contractId: i.contractId ?? null,
+        batchNo: i.batchNo ?? null,
+      })));
+    }
+  }, [editOrder]);
+
   const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => apiClient.post('/outbound', data),
-    onSuccess: (res) => { message.success('出库单已创建'); queryClient.invalidateQueries({ queryKey: ['outbound'] }); navigate(`/outbound/${res.data.id}`); },
-    onError: (err: any) => message.error(err.response?.data?.error || '创建失败'),
+    mutationFn: (data: Record<string, unknown>) => isEdit
+      ? apiClient.put(`/outbound/${editId}`, data)
+      : apiClient.post('/outbound', data),
+    onSuccess: (res) => { message.success(isEdit ? '出库单已更新' : '出库单已创建'); queryClient.invalidateQueries({ queryKey: ['outbound'] }); navigate(`/outbound/${res.data.id}`); },
+    onError: (err: any) => message.error(err.response?.data?.error || (isEdit ? '更新失败' : '创建失败')),
   });
 
   const addItem = (productId: number) => {
-    setItems([...items, { productId, quantity: 1, contractId: selectedContractIds[0] || null }]);
+    const p = products?.find((pr: Product) => pr.id === productId);
+    setItems([...items, { productId, quantity: 1, unitPrice: p?.salePrice ?? undefined, contractId: selectedContractIds[0] || null }]);
   };
 
-  const updateItem = (idx: number, field: keyof ItemEntry, value: number | null) => {
+  const updateItem = (idx: number, field: keyof ItemEntry, value: unknown) => {
     const newItems = [...items];
     (newItems[idx] as Record<string, unknown>)[field] = value;
     setItems(newItems);
@@ -183,7 +220,7 @@ export default function OutboundNew() {
 
   const onProductsSelected = (selected: Product[]) => {
     for (const p of selected) {
-      setItems(prev => [...prev, { productId: p.id, quantity: 1, contractId: selectedContractIds[0] || null }]);
+      setItems(prev => [...prev, { productId: p.id, quantity: 1, unitPrice: p.salePrice ?? undefined, contractId: selectedContractIds[0] || null }]);
     }
     if (selected.length) message.success(`已添加 ${selected.length} 个商品`);
     setSelectorOpen(false);
@@ -215,13 +252,41 @@ export default function OutboundNew() {
   };
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>新建出库单</Typography.Title>}>
-      <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate({ ...values, items, containerId: selectedContainerId, containerNo: containerNoText || undefined })}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>{isEdit ? '编辑出库单' : '新建出库单'}</Typography.Title>}>
+      <Form form={form} layout="vertical" onFinish={(values) => {
+        const errors = new Set<number>();
+        items.forEach((item, idx) => { if (!item.locationId) errors.add(idx); });
+        if (errors.size > 0) { setLocationErrors(errors); message.warning('请为每个商品选择库位，或指定整单默认库位'); return; }
+        setLocationErrors(new Set());
+        createMutation.mutate({ ...values, items, containerId: selectedContainerId, containerNo: containerNoText || undefined });
+      }}>
         <Space size="large" wrap style={{ width: '100%' }}>
           <Form.Item name="warehouseId" label="出库仓库" rules={[{ required: true }]} style={{ minWidth: 180 }}>
             <Select placeholder="选择仓库">{warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}</Select>
           </Form.Item>
-          <Form.Item name="receiver" label="领用人/部门"><Input style={{ width: 180 }} /></Form.Item>
+          <Form.Item label="选择顾客" style={{ minWidth: 160 }}>
+            <AutoComplete
+              placeholder="输入顾客名搜索"
+              options={(customerList || []).map((c: any) => ({ value: c.name, label: `${c.name}${c.phone ? ' · ' + c.phone : ''}` }))}
+              onSelect={(value) => {
+                const c = (customerList || []).find((x: any) => x.name === value);
+                if (c) {
+                  form.setFieldValue('receiver', c.name);
+                  form.setFieldValue('receiverPhone', c.phone || '');
+                  form.setFieldValue('receiverName2', c.name2 || '');
+                  form.setFieldValue('receiverPhone2', c.phone2 || '');
+                  form.setFieldValue('receiverAddress', c.address || '');
+                }
+              }}
+              style={{ width: 200 }}
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item name="receiver" label="顾客姓名"><Input style={{ width: 120 }} placeholder="选填" /></Form.Item>
+          <Form.Item name="receiverPhone" label="顾客电话"><Input style={{ width: 140 }} placeholder="选填" /></Form.Item>
+          <Form.Item name="receiverName2" label="备用联系人"><Input style={{ width: 110 }} placeholder="选填" /></Form.Item>
+          <Form.Item name="receiverPhone2" label="备用电话"><Input style={{ width: 130 }} placeholder="选填" /></Form.Item>
+          <Form.Item name="receiverAddress" label="顾客地址"><Input style={{ width: 200 }} placeholder="选填" /></Form.Item>
           <Form.Item name="note" label="备注"><Input style={{ width: 260 }} /></Form.Item>
           {import.meta.env.VITE_STANDALONE !== 'true' && <Form.Item label="排柜编号（可选）" style={{ minWidth: 180 }}>
             <Input placeholder="输入排柜编号，货柜新建时匹配" value={containerNoText} onChange={(e) => {
@@ -281,29 +346,35 @@ export default function OutboundNew() {
         {items.map((item, idx) => {
           const p = getProduct(item.productId);
           const locOptions = getLocationsForProduct(item.productId);
-          const price = getItemPrice(item);
           return (
             <Space key={idx} style={{ marginBottom: 8 }} wrap>
-              <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}` : `商品 #${item.productId}`}</Typography.Text>
+              <Typography.Text style={{ minWidth: 300 }}>{p ? `${getCategoryPath(p.category) !== '-' ? getCategoryPath(p.category) + ' · ' : ''}${p.sku} ${p.name}${p.spec ? ' · ' + p.spec : ''}${p.unit ? ' · ' + p.unit : ''}` : `商品 #${item.productId}`}</Typography.Text>
               <InputNumber min={1} value={item.quantity} onChange={(v) => updateItem(idx, 'quantity', v || 1)} style={{ width: 80 }} />
-              <Select
-                allowClear
-                placeholder="出库库位"
-                value={item.locationId != null ? JSON.stringify({ locationId: item.locationId, batchNo: item.batchNo }) : undefined}
-                onChange={(v) => {
-                  if (v) {
-                    const parsed = JSON.parse(v);
-                    const next = [...items]; next[idx] = { ...next[idx], locationId: parsed.locationId, batchNo: parsed.batchNo }; setItems(next);
-                  } else {
-                    const next = [...items]; next[idx] = { ...next[idx], locationId: null, batchNo: null }; setItems(next);
-                  }
-                }}
-                style={{ width: 200 }}
-                options={locOptions}
-                disabled={!selectedWarehouseId}
-                notFoundContent={selectedWarehouseId ? '该商品无库存' : '请先选择仓库'}
-              />
-              {price != null && user?.operatorType !== 'warehouse' && <Tag color="green">¥{price.toFixed(2)}</Tag>}
+              {user?.operatorType !== 'warehouse' && (
+                <InputNumber min={0} step={0.01} value={item.unitPrice} onChange={(v) => updateItem(idx, 'unitPrice', v)} placeholder="售价" style={{ width: 100 }} prefix="¥" />
+              )}
+              <div>
+                <Select
+                  allowClear
+                  placeholder="出库库位"
+                  value={item.locationId != null ? JSON.stringify({ locationId: item.locationId, batchNo: item.batchNo }) : undefined}
+                  onChange={(v) => {
+                    if (v) {
+                      const parsed = JSON.parse(v);
+                      const next = [...items]; next[idx] = { ...next[idx], locationId: parsed.locationId, batchNo: parsed.batchNo }; setItems(next);
+                      const errs = new Set(locationErrors); errs.delete(idx); setLocationErrors(errs);
+                    } else {
+                      const next = [...items]; next[idx] = { ...next[idx], locationId: null, batchNo: null }; setItems(next);
+                    }
+                  }}
+                  status={locationErrors.has(idx) ? 'error' : undefined}
+                  style={{ width: 200 }}
+                  options={locOptions}
+                  disabled={!selectedWarehouseId}
+                  notFoundContent={selectedWarehouseId ? '该商品无库存' : '请先选择仓库'}
+                />
+                {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
+              </div>
               <Button danger size="small" onClick={() => setItems(items.filter((_, i) => i !== idx))}>删除</Button>
             </Space>
           );
@@ -315,7 +386,7 @@ export default function OutboundNew() {
       </Space>
 
       <Divider />
-      <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>保存出库单</Button>
+      <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>{isEdit ? '保存修改' : '保存出库单'}</Button>
       <Button style={{ marginLeft: 16 }} onClick={() => navigate('/outbound')}>取消</Button>
 
       <ProductSelector
