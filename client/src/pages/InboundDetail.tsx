@@ -52,6 +52,15 @@ export default function InboundDetail() {
     { title: '入库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || (order as any)?.location?.name || '-' },
     { title: '保质期至', key: 'expiryDate', width: 110, render: (_: unknown, r: any) => r.expiryDate ? dayjs(r.expiryDate).format('YYYY-MM-DD') : '-' },
     { title: '批次号', dataIndex: 'batchNo', key: 'batchNo', width: 140, render: (v: string | null) => v ? <Tag color="blue">{v}</Tag> : '-' },
+    { title: '图片', dataIndex: 'images', key: 'images', width: 100,
+      render: (v: string | null) => {
+        if (!v) return '-';
+        try {
+          const imgs = JSON.parse(v) as string[];
+          return <Space size={4}>{imgs.map((url, i) => <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} onClick={() => window.open(url)} />)}</Space>;
+        } catch { return '-'; }
+      }
+    },
     { title: 'SN码', dataIndex: 'serialNumbers', key: 'serialNumbers', width: 180,
       render: (v: string | null) => {
         if (!v) return '-';

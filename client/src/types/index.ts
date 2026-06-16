@@ -133,6 +133,7 @@ export interface InboundItem {
   contract?: { id: number; contractNo: string } | null;
   batchNo?: string | null;
   serialNumbers?: string | null;
+  images?: string | null;
 }
 
 export interface OutboundOrder {
@@ -169,6 +170,7 @@ export interface OutboundItem {
   contract?: { id: number; contractNo: string; unitPrice?: number } | null;
   batchNo?: string | null;
   serialNumbers?: string | null;
+  images?: string | null;
 }
 
 export interface TransferOrder {

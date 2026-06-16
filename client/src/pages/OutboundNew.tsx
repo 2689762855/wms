@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, AutoComplete, Button, Card, Typography, Space, InputNumber, message, Divider, Tag, Modal } from 'antd';
+import { Form, Input, Select, AutoComplete, Button, Card, Typography, Space, InputNumber, message, Divider, Tag, Modal, Upload } from 'antd';
+import { CameraOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
@@ -18,6 +19,7 @@ interface ItemEntry {
   contractId?: number | null;
   batchNo?: string | null;
   serialNumbers?: string[];
+  images?: string[];
 }
 
 export default function OutboundNew() {
@@ -409,6 +411,18 @@ export default function OutboundNew() {
                   SN ({item.serialNumbers?.length || 0}/{item.quantity})
                 </Button>
               )}
+              <Upload showUploadList={false} accept="image/*"
+                customRequest={({ file, onSuccess }: any) => {
+                  const formData = new FormData();
+                  formData.append('image', file);
+                  apiClient.post('/upload/item-image', formData).then(res => {
+                    const cur = [...(item.images || []), res.data.url];
+                    updateItem(idx, 'images', cur);
+                    onSuccess?.(res.data, file);
+                  }).catch(() => message.error('上传失败'));
+                }}>
+                <Button size="small" icon={<CameraOutlined />} title="上传图片" />
+              </Upload>
               <Button danger size="small" onClick={() => setItems(items.filter((_, i) => i !== idx))}>删除</Button>
             </Space>
           );

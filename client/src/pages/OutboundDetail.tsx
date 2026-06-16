@@ -57,6 +57,15 @@ export default function OutboundDetail() {
     { title: '规格', dataIndex: ['product', 'spec'], key: 'spec', width: 80, render: (v: string) => v || '-' },
     { title: '单位', dataIndex: ['product', 'unit'], key: 'unit', width: 60, render: (v: string) => v || '-' },
     { title: '出库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
+    { title: '图片', dataIndex: 'images', key: 'images', width: 100,
+      render: (v: string | null) => {
+        if (!v) return '-';
+        try {
+          const imgs = JSON.parse(v) as string[];
+          return <Space size={4}>{imgs.map((url, i) => <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} onClick={() => window.open(url)} />)}</Space>;
+        } catch { return '-'; }
+      }
+    },
     { title: 'SN码', dataIndex: 'serialNumbers', key: 'serialNumbers', width: 180,
       render: (v: string | null) => {
         if (!v) return '-';

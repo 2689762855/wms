@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete, Modal } from 'antd';
+import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete, Modal, Upload } from 'antd';
+import { CameraOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -18,6 +19,7 @@ interface ItemEntry {
   expiryDate?: string | null;
   contractId?: number | null;
   serialNumbers?: string[];
+  images?: string[];
 }
 
 export default function InboundNew() {
@@ -268,6 +270,18 @@ export default function InboundNew() {
               )}
               <DatePicker allowClear placeholder="保质期至" value={item.expiryDate ? dayjs(item.expiryDate) : null}
                 onChange={(d) => updateItem(idx, 'expiryDate', d ? d.toISOString() : null)} style={{ width: 140 }} />
+              <Upload showUploadList={false} accept="image/*"
+                customRequest={({ file, onSuccess }: any) => {
+                  const formData = new FormData();
+                  formData.append('image', file);
+                  apiClient.post('/upload/item-image', formData).then(res => {
+                    const cur = [...(item.images || []), res.data.url];
+                    updateItem(idx, 'images', cur);
+                    onSuccess?.(res.data, file);
+                  }).catch(() => message.error('上传失败'));
+                }}>
+                <Button size="small" icon={<CameraOutlined />} title="上传图片" />
+              </Upload>
               <Button danger onClick={() => removeItem(idx)} size="small">删除</Button>
             </Space>
           );
