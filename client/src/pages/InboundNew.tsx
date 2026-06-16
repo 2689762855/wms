@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete, Modal, Upload } from 'antd';
-import { CameraOutlined } from '@ant-design/icons';
+import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete, Modal, Upload, Image, Spin } from 'antd';
+import { CameraOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -270,18 +270,40 @@ export default function InboundNew() {
               )}
               <DatePicker allowClear placeholder="保质期至" value={item.expiryDate ? dayjs(item.expiryDate) : null}
                 onChange={(d) => updateItem(idx, 'expiryDate', d ? d.toISOString() : null)} style={{ width: 140 }} />
-              <Upload showUploadList={false} accept="image/*"
-                customRequest={({ file, onSuccess }: any) => {
-                  const formData = new FormData();
-                  formData.append('image', file);
-                  apiClient.post('/upload/item-image', formData).then(res => {
-                    const cur = [...(item.images || []), res.data.url];
-                    updateItem(idx, 'images', cur);
-                    onSuccess?.(res.data, file);
-                  }).catch(() => message.error('上传失败'));
-                }}>
-                <Button size="small" icon={<CameraOutlined />} title="上传图片" />
-              </Upload>
+              <Space size={4}>
+                {(item.images || []).map((url, i) => (
+                  <div key={i} style={{ position: 'relative', width: 32, height: 32, borderRadius: 4, overflow: 'hidden', border: '1px solid #d9d9d9' }}>
+                    <Image src={url} width={32} height={32} style={{ objectFit: 'cover' }} preview={{ mask: false }} />
+                    <Button size="small" type="text" danger icon={<DeleteOutlined style={{ fontSize: 10 }} />}
+                      style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, minWidth: 14, padding: 0, background: '#fff', borderRadius: '50%' }}
+                      onClick={() => {
+                        const idx2 = idx; const i2 = i;
+                        setItems(prev => {
+                          const next = [...prev];
+                          next[idx2] = { ...next[idx2], images: (next[idx2].images || []).filter((_, j) => j !== i2) };
+                          return next;
+                        });
+                      }} />
+                  </div>
+                ))}
+                <Upload showUploadList={false} accept="image/*" multiple
+                  customRequest={({ file, onSuccess }: any) => {
+                    const formData = new FormData();
+                    formData.append('image', file);
+                    const idx2 = idx;
+                    apiClient.post('/upload/item-image', formData).then(res => {
+                      setItems(prev => {
+                        const next = [...prev];
+                        next[idx2] = { ...next[idx2], images: [...(next[idx2].images || []), res.data.url] };
+                        return next;
+                      });
+                      onSuccess?.(res.data, file);
+                      message.success('上传成功');
+                    }).catch(() => message.error('上传失败'));
+                  }}>
+                  <Button size="small" icon={<CameraOutlined />} title="上传图片" />
+                </Upload>
+              </Space>
               <Button danger onClick={() => removeItem(idx)} size="small">删除</Button>
             </Space>
           );
