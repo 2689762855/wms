@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete } from 'antd';
+import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete, Modal } from 'antd';
 import dayjs from 'dayjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -34,6 +34,8 @@ export default function InboundNew() {
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ value: string }[]>([]);
   const [locationErrors, setLocationErrors] = useState<Set<number>>(new Set());
+  const [snModalIndex, setSnModalIndex] = useState<number | null>(null);
+  const [snPasteText, setSnPasteText] = useState('');
 
   useEffect(() => {
     apiClient.get('/suppliers').then(res => {
@@ -259,9 +261,10 @@ export default function InboundNew() {
                 {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
               </div>
               {getProduct(item.productId)?.hasSn && (
-                <Select mode="tags" placeholder="SN码（回车分隔）" value={item.serialNumbers || []}
-                  onChange={(vals) => updateItem(idx, 'serialNumbers', vals)}
-                  style={{ width: 180 }} tokenSeparators={[',', ' ']} notFoundContent={null} />
+                <Button size="small" onClick={() => { setSnModalIndex(idx); setSnPasteText((item.serialNumbers || []).join('\n')); }}
+                  style={{ minWidth: 120 }}>
+                  SN ({item.serialNumbers?.length || 0}/{item.quantity})
+                </Button>
               )}
               <DatePicker allowClear placeholder="保质期至" value={item.expiryDate ? dayjs(item.expiryDate) : null}
                 onChange={(d) => updateItem(idx, 'expiryDate', d ? d.toISOString() : null)} style={{ width: 140 }} />
@@ -280,6 +283,34 @@ export default function InboundNew() {
       <Button style={{ marginLeft: 16 }} onClick={() => navigate('/inbound')}>取消</Button>
 
       <ProductSelector open={selectorOpen} onCancel={() => setSelectorOpen(false)} onOk={onProductsSelected} />
+
+      <Modal title="录入SN码" open={snModalIndex !== null}
+        onOk={() => {
+          if (snModalIndex === null) return;
+          const sns = snPasteText.split(/[\n,，\s]+/).map(s => s.trim()).filter(Boolean);
+          updateItem(snModalIndex, 'serialNumbers', sns);
+          setSnModalIndex(null);
+        }}
+        onCancel={() => setSnModalIndex(null)}
+        okText={`确定 (${snPasteText.split(/[\n,，\s]+/).map(s => s.trim()).filter(Boolean).length}个)`}
+        cancelText="取消"
+        width={520}
+      >
+        <BarcodeScanner onScan={(code) => {
+          setSnPasteText(prev => prev.trim() ? prev + '\n' + code : code);
+        }} />
+        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+          扫码自动追加，也可直接粘贴。共需 {snModalIndex !== null ? items[snModalIndex]?.quantity : 0} 个。
+        </Typography.Text>
+        <Input.TextArea
+          placeholder={`SN001\nSN002\nSN003\n...`}
+          value={snPasteText}
+          onChange={e => setSnPasteText(e.target.value)}
+          rows={8}
+          style={{ marginTop: 8, fontFamily: 'monospace' }}
+          autoFocus
+        />
+      </Modal>
     </Card>
   );
 }

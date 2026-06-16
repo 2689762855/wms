@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, AutoComplete, Button, Card, Typography, Space, InputNumber, message, Divider, Tag } from 'antd';
+import { Form, Input, Select, AutoComplete, Button, Card, Typography, Space, InputNumber, message, Divider, Tag, Modal } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
@@ -35,6 +35,7 @@ export default function OutboundNew() {
   const [containerNoText, setContainerNoText] = useState('');
   const [locationErrors, setLocationErrors] = useState<Set<number>>(new Set());
   const [snOptions, setSnOptions] = useState<Record<number, { value: string; label: string }[]>>({});
+  const [snModalIndex, setSnModalIndex] = useState<number | null>(null);
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: products } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(r => r.data.data) });
@@ -403,11 +404,10 @@ export default function OutboundNew() {
                 {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
               </div>
               {getProduct(item.productId)?.hasSn && (
-                <Select mode="multiple" placeholder="选择SN码" value={item.serialNumbers || []}
-                  onChange={(vals) => updateItem(idx, 'serialNumbers', vals)}
-                  style={{ width: 180 }} options={snOptions[item.productId] || []}
-                  maxTagCount={2} allowClear
-                  notFoundContent="暂无可用SN" />
+                <Button size="small" onClick={() => setSnModalIndex(idx)}
+                  style={{ minWidth: 120 }}>
+                  SN ({item.serialNumbers?.length || 0}/{item.quantity})
+                </Button>
               )}
               <Button danger size="small" onClick={() => setItems(items.filter((_, i) => i !== idx))}>删除</Button>
             </Space>
@@ -428,6 +428,44 @@ export default function OutboundNew() {
         onCancel={() => setSelectorOpen(false)}
         onOk={onProductsSelected}
       />
+
+      <Modal title="选择SN码" open={snModalIndex !== null}
+        onCancel={() => setSnModalIndex(null)}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => setSnModalIndex(null)}>
+            确定 ({snModalIndex !== null ? items[snModalIndex]?.serialNumbers?.length || 0 : 0}个)
+          </Button>
+        ]}
+        width={500}
+      >
+        {snModalIndex !== null && (
+          <>
+            <BarcodeScanner onScan={(code) => {
+              const available = snOptions[items[snModalIndex].productId] || [];
+              if (available.some(s => s.value === code)) {
+                const cur = items[snModalIndex].serialNumbers || [];
+                if (!cur.includes(code)) {
+                  updateItem(snModalIndex, 'serialNumbers', [...cur, code]);
+                }
+              } else {
+                message.warning(`SN ${code} 不在可用列表中`);
+              }
+            }} />
+            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+              扫码自动匹配。共需 {items[snModalIndex].quantity} 个。
+            </Typography.Text>
+            <Select
+              mode="multiple"
+              style={{ width: '100%', marginTop: 8 }}
+              placeholder="选择要出库的SN码（扫码或手动选）"
+              value={items[snModalIndex].serialNumbers || []}
+              onChange={(vals) => updateItem(snModalIndex, 'serialNumbers', vals)}
+              options={snOptions[items[snModalIndex].productId] || []}
+              notFoundContent="暂无可选SN"
+            />
+          </>
+        )}
+      </Modal>
     </Card>
   );
 }

@@ -207,6 +207,7 @@ export default function Products() {
         size="small"
       />
       <Modal title={editing ? '编辑商品' : '新增商品'} open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} confirmLoading={saveMutation.isPending} width={undefined} style={{ maxWidth: 600 }}>
+        <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 8 }}>
         <Form form={form} layout="vertical" onFinish={(values) => {
           const data = { ...values };
           if (Array.isArray(data.categoryId)) data.categoryId = data.categoryId[data.categoryId.length - 1];
@@ -310,6 +311,7 @@ export default function Products() {
             <Switch />
           </Form.Item>
         </Form>
+        </div>
       </Modal>
 
       <Modal title="商品条码" open={!!barcodeProduct} onCancel={() => setBarcodeProduct(null)} footer={null} style={{ maxWidth: 420 }}>
