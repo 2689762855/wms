@@ -55,6 +55,7 @@ export interface Product {
   costPrice?: number;
   salePrice?: number;
   imageUrl?: string | null;
+  hasSn?: boolean;
   warehouseSafetyStock?: number;
   productWarehouses?: ProductWarehouse[];
 }
@@ -131,6 +132,7 @@ export interface InboundItem {
   contractId?: number | null;
   contract?: { id: number; contractNo: string } | null;
   batchNo?: string | null;
+  serialNumbers?: string | null;
 }
 
 export interface OutboundOrder {
@@ -139,6 +141,10 @@ export interface OutboundOrder {
   warehouseId: number;
   warehouse?: Warehouse;
   receiver?: string;
+  receiverPhone?: string | null;
+  receiverName2?: string | null;
+  receiverPhone2?: string | null;
+  receiverAddress?: string | null;
   operatorId?: number;
   status: 'draft' | 'confirmed';
   locationId?: number | null;
@@ -156,11 +162,13 @@ export interface OutboundItem {
   productId: number;
   product?: Product;
   quantity: number;
+  unitPrice?: number; // 售价
   locationId?: number | null;
   location?: Location | null;
   contractId?: number | null;
   contract?: { id: number; contractNo: string; unitPrice?: number } | null;
   batchNo?: string | null;
+  serialNumbers?: string | null;
 }
 
 export interface TransferOrder {

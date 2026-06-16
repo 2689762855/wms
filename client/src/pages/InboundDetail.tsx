@@ -47,9 +47,20 @@ export default function InboundDetail() {
     { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => { const p = getCategoryPath(r.product?.category || null); return p === '-' ? '-' : p.split(' - ')[0]; } },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
+    { title: '规格', dataIndex: ['product', 'spec'], key: 'spec', width: 80, render: (v: string) => v || '-' },
+    { title: '单位', dataIndex: ['product', 'unit'], key: 'unit', width: 60, render: (v: string) => v || '-' },
     { title: '入库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || (order as any)?.location?.name || '-' },
     { title: '保质期至', key: 'expiryDate', width: 110, render: (_: unknown, r: any) => r.expiryDate ? dayjs(r.expiryDate).format('YYYY-MM-DD') : '-' },
     { title: '批次号', dataIndex: 'batchNo', key: 'batchNo', width: 140, render: (v: string | null) => v ? <Tag color="blue">{v}</Tag> : '-' },
+    { title: 'SN码', dataIndex: 'serialNumbers', key: 'serialNumbers', width: 180,
+      render: (v: string | null) => {
+        if (!v) return '-';
+        try {
+          const sns = JSON.parse(v) as string[];
+          return <Space wrap size={[2, 2]}>{sns.map((sn, i) => <Tag key={i} color="geekblue">{sn}</Tag>)}</Space>;
+        } catch { return '-'; }
+      }
+    },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
     ...(user?.operatorType !== 'warehouse' ? [
       { title: '单价', dataIndex: 'unitPrice', key: 'unitPrice', width: 80, render: (v: number) => v ? `¥${v.toFixed(2)}` : '-' },
@@ -66,6 +77,7 @@ export default function InboundDetail() {
           {order?.status === 'draft' && (
             <>
               <Button type="primary" onClick={() => confirmMutation.mutate()} loading={confirmMutation.isPending}>确认入库</Button>
+              <Button onClick={() => navigate(`/inbound/new?id=${id}`)}>编辑</Button>
               <Popconfirm title="确认删除该入库单？" onConfirm={() => deleteMutation.mutate()}>
                 <Button danger loading={deleteMutation.isPending}>删除</Button>
               </Popconfirm>

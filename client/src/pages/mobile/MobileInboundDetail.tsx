@@ -19,8 +19,14 @@ export default function MobileInboundDetail() {
 
   const itemColumns = [
     { title: '商品', dataIndex: ['product', 'name'], key: 'name', width: 120 },
+    { title: '规格', dataIndex: ['product', 'spec'], key: 'spec', width: 70, render: (v: string) => v || '-' },
+    { title: '单位', dataIndex: ['product', 'unit'], key: 'unit', width: 50, render: (v: string) => v || '-' },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 100 },
     { title: '库位', key: 'loc', width: 80, render: (_: unknown, r: any) => r.location?.name || order.location?.name || '-' },
+    { title: 'SN', key: 'sn', width: 40, render: (_: unknown, r: any) => {
+      if (!r.serialNumbers) return '-';
+      try { return `${JSON.parse(r.serialNumbers).length}个`; } catch { return '-'; }
+    }},
     { title: '数量', dataIndex: 'quantity', key: 'qty', width: 50, align: 'center' as const },
     { title: '单价', dataIndex: 'unitPrice', key: 'price', width: 60, align: 'center' as const,
       render: (v: number | undefined) => v != null ? `¥${v.toFixed(2)}` : '-' },

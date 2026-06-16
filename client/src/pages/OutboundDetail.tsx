@@ -54,7 +54,18 @@ export default function OutboundDetail() {
     { title: '一级分类', key: 'rootCat', width: 100, render: (_: unknown, r: any) => { const p = getCategoryPath(r.product?.category || null); return p === '-' ? '-' : p.split(' - ')[0]; } },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 140 },
     { title: '商品名称', dataIndex: ['product', 'name'], key: 'name' },
+    { title: '规格', dataIndex: ['product', 'spec'], key: 'spec', width: 80, render: (v: string) => v || '-' },
+    { title: '单位', dataIndex: ['product', 'unit'], key: 'unit', width: 60, render: (v: string) => v || '-' },
     { title: '出库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || '-' },
+    { title: 'SN码', dataIndex: 'serialNumbers', key: 'serialNumbers', width: 180,
+      render: (v: string | null) => {
+        if (!v) return '-';
+        try {
+          const sns = JSON.parse(v) as string[];
+          return <Space wrap size={[2, 2]}>{sns.map((sn, i) => <Tag key={i} color="purple">{sn}</Tag>)}</Space>;
+        } catch { return '-'; }
+      }
+    },
     { title: '出库', dataIndex: 'quantity', key: 'quantity', width: 60 },
     ...(containerItems?.length ? [
       { title: '实装', key: 'actual', width: 60, render: (_: any, r: any) => {
@@ -67,19 +78,18 @@ export default function OutboundDetail() {
       }},
     ] : []),
     ...(user?.operatorType !== 'warehouse' ? [
-      { title: '合同单价', key: 'unitPrice', width: 90,
+      { title: '售价', key: 'unitPrice', width: 90,
         render: (_: any, r: any) => {
-          const price = getItemPrice(r);
+          // 优先使用出库明细自身记录的售价，其次合同价，最后商品默认售价
+          const price = r.unitPrice ?? getItemPrice(r);
           return price ? `¥${price.toFixed(2)}` : <span style={{color:'#ccc'}}>—</span>;
         },
       },
       { title: '金额', key: 'amount', width: 90,
         render: (_: any, r: any) => {
-          const price = getItemPrice(r);
+          const price = r.unitPrice ?? getItemPrice(r);
           if (!price) return <span style={{color:'#ccc'}}>—</span>;
-          const ci = containerItems?.find((ci: any) => ci.productId === r.productId);
-          const netQty = ci ? (ci.actualQty || 0) : r.quantity;
-          return `¥${(price * netQty).toFixed(2)}`;
+          return `¥${(price * r.quantity).toFixed(2)}`;
         },
       },
     ] : []),
@@ -109,6 +119,7 @@ export default function OutboundDetail() {
           {order?.status === 'draft' && (
             <>
               <Button type="primary" onClick={() => confirmMutation.mutate()} loading={confirmMutation.isPending}>确认出库</Button>
+              <Button onClick={() => navigate(`/outbound/new?id=${id}`)}>编辑</Button>
               <Popconfirm title="确认删除该出库单？" onConfirm={() => deleteMutation.mutate()}>
                 <Button danger loading={deleteMutation.isPending}>删除</Button>
               </Popconfirm>
@@ -124,7 +135,10 @@ export default function OutboundDetail() {
           <Tag color={order?.status === 'confirmed' ? 'green' : 'default'}>{order?.status === 'confirmed' ? '已确认' : '草稿'}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="仓库">{order?.warehouse?.name}</Descriptions.Item>
-        <Descriptions.Item label="领用人">{order?.receiver || '-'}</Descriptions.Item>
+        <Descriptions.Item label="顾客姓名">{order?.receiver || '-'}</Descriptions.Item>
+        <Descriptions.Item label="顾客电话">{order?.receiverPhone || '-'}</Descriptions.Item>
+        {(order?.receiverName2 || order?.receiverPhone2) && <Descriptions.Item label="备用联系人">{[order?.receiverName2, order?.receiverPhone2].filter(Boolean).join(' · ')}</Descriptions.Item>}
+        <Descriptions.Item label="顾客地址">{order?.receiverAddress || '-'}</Descriptions.Item>
         {import.meta.env.VITE_STANDALONE !== 'true' && <Descriptions.Item label="关联货柜">{order?.container ? <Tag color={order.container.status === 'sealed' ? 'green' : 'blue'}><a onClick={() => navigate(`/containers/${order.container.id}`)} style={{cursor:'pointer'}}>{order.container.containerNo}</a></Tag> : '-'}</Descriptions.Item>}
         {import.meta.env.VITE_STANDALONE !== 'true' && <Descriptions.Item label="关联合同">{linkedContracts.length > 0
           ? <Space wrap size={[0, 4]}>{linkedContracts.map((lc: any) => <Tag key={lc.id} color="purple"><a onClick={() => navigate(`/contracts/${lc.id}`)} style={{cursor:'pointer'}}>{lc.contractNo}</a></Tag>)}</Space>

@@ -19,6 +19,8 @@ interface CartItem {
   locationName: string;
   batchNo?: string | null;
   contractId?: number | null;
+  serialNumbers?: string[];
+  hasSn?: boolean;
 }
 
 export default function MobileOutboundNew() {
@@ -34,6 +36,9 @@ export default function MobileOutboundNew() {
   const [note, setNote] = useState('');
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
+  const [snSelectItem, setSnSelectItem] = useState<string | null>(null);
+  const [snSelectProductId, setSnSelectProductId] = useState<number | null>(null);
+  const [snSelectWarehouseId, setSnSelectWarehouseId] = useState<number | null>(null);
 
   const { data: productsData, isLoading: loadingProducts } = useQuery({
     queryKey: ['mobile-outbound-products', productSearch],
@@ -79,6 +84,15 @@ export default function MobileOutboundNew() {
   const { data: allInventory } = useQuery({
     queryKey: ['all-inventory-outbound'],
     queryFn: () => apiClient.get('/inventory', { params: { pageSize: 2000 } }).then(r => r.data as InventoryItem[]),
+  });
+
+  // 获取可用 SN 列表
+  const { data: availableSns } = useQuery({
+    queryKey: ['available-sns', snSelectProductId, snSelectWarehouseId],
+    queryFn: () => apiClient.get('/outbound/serial-numbers', {
+      params: { productId: snSelectProductId, warehouseId: snSelectWarehouseId }
+    }).then(r => r.data),
+    enabled: !!snSelectProductId && !!snSelectWarehouseId,
   });
 
   // 匹配排柜号
@@ -229,10 +243,20 @@ export default function MobileOutboundNew() {
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
+      // SN 校验
+      for (const c of cart.filter(c => c.quantity > 0)) {
+        if (c.hasSn) {
+          const sns = c.serialNumbers || [];
+          if (!sns.length || sns.length !== c.quantity) {
+            throw new Error(`商品 ${c.productName}: SN数量(${sns.length})与数量(${c.quantity})不一致`);
+          }
+        }
+      }
       const items = cart.filter(c => c.quantity > 0).map(c => ({
         productId: c.productId, quantity: c.quantity,
         locationId: c.locationId || null, batchNo: c.batchNo || null,
         contractId: c.contractId || null,
+        serialNumbers: c.serialNumbers || undefined,
       }));
       if (items.length === 0) throw new Error('请添加商品');
       const createRes = await apiClient.post('/outbound', {
@@ -350,6 +374,13 @@ export default function MobileOutboundNew() {
                     <InputNumber size="small" value={item.quantity} min={0} style={{ width: 50 }}
                       onChange={v => setCart(prev => prev.map(i => i.key === item.key ? { ...i, quantity: v || 0 } : i))} />
                     <Button size="small" onClick={() => setCart(prev => prev.map(i => i.key === item.key ? { ...i, quantity: i.quantity + 1 } : i))}>+</Button>
+                    {item.hasSn && (
+                      <Button size="small" onClick={() => {
+                        setSnSelectItem(item.key);
+                        setSnSelectProductId(item.productId);
+                        setSnSelectWarehouseId(currentLocation?.warehouseId ?? null);
+                      }}>SN({item.serialNumbers?.length || 0})</Button>
+                    )}
                     <Button size="small" danger onClick={() => setCart(prev => prev.filter(i => i.key !== item.key))}>删</Button>
                   </Space>
                 </div>
@@ -412,6 +443,28 @@ export default function MobileOutboundNew() {
             </List.Item>
           )}
         />
+      </Modal>
+
+      <Modal title="选择序列号" open={!!snSelectItem}
+        onCancel={() => { setSnSelectItem(null); setSnSelectProductId(null); setSnSelectWarehouseId(null); }}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => { setSnSelectItem(null); setSnSelectProductId(null); setSnSelectWarehouseId(null); }}>确定</Button>
+        ]}
+      >
+        <Select
+          mode="multiple"
+          style={{ width: '100%' }}
+          placeholder="选择要出库的SN码"
+          value={cart.find(i => i.key === snSelectItem)?.serialNumbers || []}
+          onChange={(vals) => {
+            setCart(prev => prev.map(i => i.key === snSelectItem ? { ...i, serialNumbers: vals } : i));
+          }}
+          options={(availableSns || []).map((s: any) => ({ label: s.sn, value: s.sn }))}
+          notFoundContent={snSelectProductId ? '暂无可选SN' : ''}
+        />
+        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+          需要选择 {cart.find(i => i.key === snSelectItem)?.quantity || 0} 个SN码
+        </Typography.Text>
       </Modal>
     </div>
   );

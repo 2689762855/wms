@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select, DatePicker } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Cascader, Space, Card, Typography, Upload, message, Popconfirm, Select, DatePicker, Switch } from 'antd';
 import locale from 'antd/es/date-picker/locale/zh_CN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
@@ -73,7 +73,11 @@ export default function Products() {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-all'] });
       queryClient.invalidateQueries({ queryKey: ['stock-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['product-warehouses'] });
       message.success('已删除');
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.error || '删除失败');
     },
   });
 
@@ -302,6 +306,9 @@ export default function Products() {
               <InputNumber min={0} precision={2} prefix="¥" />
             </Form.Item>
           </Space>
+          <Form.Item name="hasSn" label="序列号追踪" valuePropName="checked" tooltip="开启后入库需逐件录入SN码，出库需选择SN码（用于国补记录）">
+            <Switch />
+          </Form.Item>
         </Form>
       </Modal>
 

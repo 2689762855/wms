@@ -17,6 +17,7 @@ interface ItemEntry {
   locationId?: number | null;
   expiryDate?: string | null;
   contractId?: number | null;
+  serialNumbers?: string[];
 }
 
 export default function InboundNew() {
@@ -85,6 +86,7 @@ export default function InboundNew() {
         locationId: i.locationId ?? null,
         expiryDate: i.expiryDate ?? null,
         contractId: i.contractId ?? null,
+        serialNumbers: i.serialNumbers ? JSON.parse(i.serialNumbers) : undefined,
       })));
     }
   }, [editOrder]);
@@ -161,6 +163,17 @@ export default function InboundNew() {
         const errors = new Set<number>();
         items.forEach((item, idx) => { if (!item.locationId) errors.add(idx); });
         if (errors.size > 0) { setLocationErrors(errors); message.warning('请为每个商品选择库位，或指定整单默认库位'); return; }
+        // SN 校验
+        const snErrors: string[] = [];
+        items.forEach((item) => {
+          const p = getProduct(item.productId);
+          if (p?.hasSn) {
+            const sns = item.serialNumbers || [];
+            if (!sns.length) snErrors.push(`${p.name}: 请录入SN码`);
+            else if (sns.length !== item.quantity) snErrors.push(`${p.name}: SN数量(${sns.length})与数量(${item.quantity})不一致`);
+          }
+        });
+        if (snErrors.length > 0) { message.error(snErrors.join('; ')); return; }
         setLocationErrors(new Set());
         createMutation.mutate({ ...values, items });
       }}>
@@ -245,6 +258,11 @@ export default function InboundNew() {
                   disabled={!selectedWarehouseId} notFoundContent={selectedWarehouseId ? '该仓库无库位' : '请先选择仓库'} />
                 {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
               </div>
+              {getProduct(item.productId)?.hasSn && (
+                <Select mode="tags" placeholder="SN码（回车分隔）" value={item.serialNumbers || []}
+                  onChange={(vals) => updateItem(idx, 'serialNumbers', vals)}
+                  style={{ width: 180 }} tokenSeparators={[',', ' ']} notFoundContent={null} />
+              )}
               <DatePicker allowClear placeholder="保质期至" value={item.expiryDate ? dayjs(item.expiryDate) : null}
                 onChange={(d) => updateItem(idx, 'expiryDate', d ? d.toISOString() : null)} style={{ width: 140 }} />
               <Button danger onClick={() => removeItem(idx)} size="small">删除</Button>

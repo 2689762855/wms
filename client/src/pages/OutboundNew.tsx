@@ -17,6 +17,7 @@ interface ItemEntry {
   locationId?: number | null;
   contractId?: number | null;
   batchNo?: string | null;
+  serialNumbers?: string[];
 }
 
 export default function OutboundNew() {
@@ -33,7 +34,7 @@ export default function OutboundNew() {
   const [selectedContractIds, setSelectedContractIds] = useState<number[]>([]);
   const [containerNoText, setContainerNoText] = useState('');
   const [locationErrors, setLocationErrors] = useState<Set<number>>(new Set());
-
+  const [snOptions, setSnOptions] = useState<Record<number, { value: string; label: string }[]>>({});
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: products } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(r => r.data.data) });
@@ -163,6 +164,20 @@ export default function OutboundNew() {
 
   useEffect(() => { warehouseInventoryRef.current = warehouseInventory; }, [warehouseInventory]);
 
+  // 预取 hasSn 商品的可用 SN 列表
+  useEffect(() => {
+    if (!selectedWarehouseId || !products) return;
+    const ids = items.map(i => i.productId).filter((v, i, a) => a.indexOf(v) === i);
+    ids.forEach(pid => {
+      const p = getProduct(pid);
+      if (p?.hasSn && !snOptions[pid]) {
+        apiClient.get('/outbound/serial-numbers', { params: { productId: pid, warehouseId: selectedWarehouseId } }).then(res => {
+          setSnOptions(prev => ({ ...prev, [pid]: (res.data || []).map((s: any) => ({ value: s.sn, label: s.sn })) }));
+        }).catch(() => {});
+      }
+    });
+  }, [selectedWarehouseId, products, items.map(i => i.productId).join(',')]);
+
   // 加载待编辑的订单
   const { data: editOrder } = useQuery({
     queryKey: ['outbound', editId],
@@ -189,6 +204,7 @@ export default function OutboundNew() {
         locationId: i.locationId ?? null,
         contractId: i.contractId ?? null,
         batchNo: i.batchNo ?? null,
+        serialNumbers: i.serialNumbers ? JSON.parse(i.serialNumbers) : undefined,
       })));
     }
   }, [editOrder]);
@@ -257,6 +273,17 @@ export default function OutboundNew() {
         const errors = new Set<number>();
         items.forEach((item, idx) => { if (!item.locationId) errors.add(idx); });
         if (errors.size > 0) { setLocationErrors(errors); message.warning('请为每个商品选择库位，或指定整单默认库位'); return; }
+        // SN 校验
+        const snErrors: string[] = [];
+        items.forEach((item) => {
+          const p = getProduct(item.productId);
+          if (p?.hasSn) {
+            const sns = item.serialNumbers || [];
+            if (!sns.length) snErrors.push(`${p.name}: 请选择SN码`);
+            else if (sns.length !== item.quantity) snErrors.push(`${p.name}: SN数量(${sns.length})与数量(${item.quantity})不一致`);
+          }
+        });
+        if (snErrors.length > 0) { message.error(snErrors.join('; ')); return; }
         setLocationErrors(new Set());
         createMutation.mutate({ ...values, items, containerId: selectedContainerId, containerNo: containerNoText || undefined });
       }}>
@@ -375,6 +402,13 @@ export default function OutboundNew() {
                 />
                 {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
               </div>
+              {getProduct(item.productId)?.hasSn && (
+                <Select mode="multiple" placeholder="选择SN码" value={item.serialNumbers || []}
+                  onChange={(vals) => updateItem(idx, 'serialNumbers', vals)}
+                  style={{ width: 180 }} options={snOptions[item.productId] || []}
+                  maxTagCount={2} allowClear
+                  notFoundContent="暂无可用SN" />
+              )}
               <Button danger size="small" onClick={() => setItems(items.filter((_, i) => i !== idx))}>删除</Button>
             </Space>
           );
