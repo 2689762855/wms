@@ -114,8 +114,31 @@ productsRouter.post('/import', adminWrite, upload.single('file'), async (req: Au
   try {
     if (!req.file) return res.status(400).json({ error: '请上传 CSV 文件' });
 
+    // 拒绝非 CSV 文件（xlsx 被 parseCSV 解析会产生乱码）
+    const ext = req.file.originalname?.split('.').pop()?.toLowerCase();
+    if (ext !== 'csv') return res.status(400).json({ error: '仅支持 CSV 文件，请先下载模板导出为 .csv 格式' });
+
     const rows = parseCSV(req.file.buffer);
     if (rows.length < 2) return res.status(400).json({ error: '模板为空，请填写商品数据' });
+
+    // 校验模板列结构（防止客户误删/改列导致导入错位）
+    const header = rows[0] as string[];
+    if (header.length !== 11) {
+      return res.status(400).json({ error: `模板格式错误：需要 11 列，当前 ${header.length} 列。请重新下载模板` });
+    }
+    const requiredHeaders = [
+      { idx: 1, keyword: '商品名称' },
+      { idx: 3, keyword: '单位' },
+      { idx: 5, keyword: '分类' },
+      { idx: 7, keyword: '成本' },
+      { idx: 8, keyword: '售' },
+      { idx: 10, keyword: '数量' },
+    ];
+    for (const { idx, keyword } of requiredHeaders) {
+      if (!header[idx]?.includes(keyword)) {
+        return res.status(400).json({ error: `模板格式错误：第 ${idx + 1} 列应为"${keyword}"相关内容，当前为"${header[idx] || '空'}"。请重新下载模板` });
+      }
+    }
 
     const customerId = req.customerId || null;
     let warehouseId = req.body.warehouseId ? parseInt(req.body.warehouseId) : req.userWarehouseId;
@@ -346,13 +369,45 @@ productsRouter.put('/:id', validateId, adminWrite, async (req: AuthRequest, res:
 
 // 删除商品
 productsRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id as string);
-  if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
-  const existing = await prisma.product.findUnique({ where: { id } });
-  if (!existing) return res.status(404).json({ error: '商品不存在' });
-  if (req.customerId && existing.customerId !== req.customerId) {
-    return res.status(403).json({ error: '无权操作此商品' });
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: '商品不存在' });
+    if (req.customerId && existing.customerId !== req.customerId) {
+      return res.status(403).json({ error: '无权操作此商品' });
+    }
+    // 检查关联数据
+    const refs = await Promise.all([
+      prisma.inventory.count({ where: { productId: id } }),
+      prisma.inboundItem.count({ where: { productId: id } }),
+      prisma.outboundItem.count({ where: { productId: id } }),
+      prisma.transferItem.count({ where: { productId: id } }),
+      prisma.stockLog.count({ where: { productId: id } }),
+      prisma.checkItem.count({ where: { productId: id } }),
+      prisma.contractItem.count({ where: { productId: id } }),
+      prisma.containerItem.count({ where: { productId: id } }),
+      prisma.productWarehouse.count({ where: { productId: id } }),
+    ]);
+    const totalRefs = refs.reduce((a, b) => a + b, 0);
+    if (totalRefs > 0) {
+      const parts: string[] = [];
+      if (refs[0] > 0) parts.push(`${refs[0]} 条库存`);
+      if (refs[1] > 0) parts.push(`${refs[1]} 条入库明细`);
+      if (refs[2] > 0) parts.push(`${refs[2]} 条出库明细`);
+      if (refs[3] > 0) parts.push(`${refs[3]} 条调拨明细`);
+      if (refs[4] > 0) parts.push(`${refs[4]} 条流水`);
+      if (refs[5] > 0) parts.push(`${refs[5]} 条盘点`);
+      if (refs[6] > 0) parts.push(`${refs[6]} 条合同明细`);
+      if (refs[7] > 0) parts.push(`${refs[7]} 条货柜明细`);
+      if (refs[8] > 0) parts.push(`${refs[8]} 条安全库存配置`);
+      return res.status(400).json({ error: `无法删除：该商品有关联数据（${parts.join('、')}）。请先清理相关记录后再删除。` });
+    }
+    await prisma.product.delete({ where: { id } });
+    res.json({ message: '已删除' });
+  } catch (e: any) {
+    if (e.code === 'P2003') return res.status(400).json({ error: '无法删除：该商品被其他记录引用' });
+    console.error('Delete product error:', e);
+    res.status(500).json({ error: '删除失败' });
   }
-  await prisma.product.delete({ where: { id } });
-  res.json({ message: '已删除' });
 });

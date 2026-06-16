@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, Typography, Select, Statistic, Row, Col } from 'antd';
-import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { ArrowUpOutlined, ArrowDownOutlined, DollarOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -29,8 +29,13 @@ export default function ReportsInOut() {
         <Col xs={12} sm={6}><Card size="small"><Statistic title="入库单数" value={data?.totalInbounds || 0} /></Card></Col>
         <Col xs={12} sm={6}><Card size="small"><Statistic title="出库单数" value={data?.totalOutbounds || 0} /></Card></Col>
       </Row>
+      <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={8}><Card size="small"><Statistic title="入库金额" value={data?.totalInboundValue || 0} precision={2} prefix="¥" styles={{ content: { color: '#3f8600' } }} /></Card></Col>
+        <Col xs={12} sm={8}><Card size="small"><Statistic title="出库金额" value={data?.totalOutboundValue || 0} precision={2} prefix="¥" styles={{ content: { color: '#cf1322' } }} /></Card></Col>
+        <Col xs={12} sm={8}><Card size="small"><Statistic title="利润" value={data?.totalProfit || 0} precision={2} prefix={<DollarOutlined />} styles={{ content: { color: data?.totalProfit >= 0 ? '#1677ff' : '#cf1322' } }} /></Card></Col>
+      </Row>
 
-      <Card title="每日出入库趋势">
+      <Card title="每日出入库趋势" style={{ marginBottom: 24 }}>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={data?.daily || []}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -40,6 +45,21 @@ export default function ReportsInOut() {
             <Legend />
             <Bar dataKey="inboundQty" name="入库数量" fill="#52c41a" />
             <Bar dataKey="outboundQty" name="出库数量" fill="#ff4d4f" />
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
+
+      <Card title="每日金额与利润趋势">
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={data?.daily || []}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+            <YAxis />
+            <Tooltip labelFormatter={(d) => dayjs(d).format('YYYY-MM-DD')} formatter={(v: number) => `¥${v.toFixed(2)}`} />
+            <Legend />
+            <Bar dataKey="inboundValue" name="入库金额" fill="#52c41a" />
+            <Bar dataKey="outboundValue" name="出库金额" fill="#ff4d4f" />
+            <Bar dataKey="profit" name="利润" fill="#1677ff" />
           </BarChart>
         </ResponsiveContainer>
       </Card>

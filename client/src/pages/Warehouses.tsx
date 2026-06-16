@@ -40,6 +40,9 @@ export default function Warehouses() {
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
       message.success('已删除');
     },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.error || '删除失败');
+    },
   });
 
   const openCreate = () => {

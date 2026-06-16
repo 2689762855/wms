@@ -49,11 +49,13 @@ if (!isProduction) {
 }
 
 const app = express();
-// Cloudflare CDN → nginx → Express：信任第一层代理的 X-Forwarded-For
-app.set('trust proxy', 1);
+// Cloudflare → nginx → Express：信任 2 层代理，使 req.ip 获取真实客户端 IP
+// 否则所有请求 IP 都是 127.0.0.1，限速器和审计日志失效
+app.set('trust proxy', 2);
 
 app.use(helmet({
   crossOriginResourcePolicy: false,
+  strictTransportSecurity: false,  // nginx 已设 max-age=63072000，避免重复
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -70,6 +72,11 @@ app.use(helmet({
     },
   },
 }));
+// Permissions-Policy：限制敏感浏览器 API
+app.use((_req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+  next();
+});
 // CORS：同源请求放行 + 受信任域名白名单（PDA/移动端 WebView HTTP 访问兼容）
 const STATIC_ALLOWED_ORIGINS = [
   'https://ckglxt.top',

@@ -143,7 +143,23 @@ if (fs.existsSync(nodeDir)) {
   console.log('  跳过依赖预装（Node.js 便携版未就绪）');
 }
 
-// 4.6 清理敏感文件（确保每次部署都是干净状态）
+// 4.6 清理冗余文件（Prisma 缓存和重复引擎，缩小部署包体积）
+console.log('[清理] 移除冗余文件...');
+const dirsToClean = [
+  'node_modules/.cache',                           // Prisma 引擎缓存（prisma generate 会重建）
+  'node_modules/.prisma',                          // 生成的 Prisma Client（prisma generate 会重建）
+  'node_modules/@prisma/engines/node_modules',     // 嵌套缓存（npm 误装的冗余副本）
+  'node_modules/@types',                           // TypeScript 类型定义（运行时不需要）
+];
+for (const d of dirsToClean) {
+  const p = path.join(serverDir, d);
+  if (fs.existsSync(p)) {
+    fs.rmSync(p, { recursive: true, force: true });
+    console.log(`  已移除: ${d}`);
+  }
+}
+
+// 4.7 清理敏感文件（确保每次部署都是干净状态）
 console.log('[清理] 移除敏感文件...');
 const filesToClean = ['.env', 'prisma/dev.db', 'prisma/dev.db-journal', 'src/routes/app.ts'];
 for (const f of filesToClean) {

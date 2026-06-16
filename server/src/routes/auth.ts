@@ -139,7 +139,7 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
 
       const tokenVersionField = deviceType === 'mobile' ? 'mobileTokenVersion' : 'desktopTokenVersion';
       const tokenVersion = (deviceType === 'mobile' ? customer.mobileTokenVersion : customer.desktopTokenVersion) + 1;
-      await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField]: tokenVersion } });
+      await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField]: tokenVersion, loginCount: { increment: 1 }, lastLoginAt: new Date() } });
       const token = jwt.sign(
         { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
         JWT_ADMIN_SECRET,
@@ -151,8 +151,14 @@ authRouter.post('/login', async (req: AuthRequest, res: Response) => {
     }
 
         recordFailedLogin(username);
+    // 防计时枚举：不存在用户也执行 bcrypt，使响应时间与存在用户一致
+    await bcrypt.compare(password, '$2a$10$dummyhashdummyhashdummyhashdummyhashdummyhashdummy');
     return res.status(401).json({ error: '用户名或密码错误' });
-  } catch (err) {
+  } catch (err: any) {
+    // Prisma 校验错误（如注入的 $ne 操作符导致类型不匹配）→ 统一返回 401
+    if (err?.name === 'PrismaClientValidationError') {
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
     console.error('Login error:', err);
     res.status(500).json({ error: '服务器错误' });
   }
@@ -292,7 +298,7 @@ authRouter.post('/tenant/login', async (req: AuthRequest, res: Response) => {
       return res.json({ serverRedirect: `https://${serverHost}`, transferToken });
     }
 
-    await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField2]: tokenVersion } });
+    await platformPrisma.customer.update({ where: { id: customer.id }, data: { [tokenVersionField2]: tokenVersion, loginCount: { increment: 1 }, lastLoginAt: new Date() } });
     const token = jwt.sign(
       { userId: customer.id, role: 'tenant_admin', warehouseId, customerId: customer.id, tokenVersion, device: deviceType },
       JWT_ADMIN_SECRET,

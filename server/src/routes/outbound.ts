@@ -124,6 +124,59 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
   res.status(201).json(order);
 });
 
+// 编辑草稿出库单
+outboundRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) return res.status(400).json({ error: '无效ID' });
+
+  const order = await prisma.outboundOrder.findUnique({ where: { id }, include: { items: true } });
+  if (!order) return res.status(404).json({ error: '不存在' });
+  if (order.status !== 'draft') return res.status(400).json({ error: '仅草稿状态的单据可编辑' });
+
+  const { warehouseId, receiver, note, items, locationId, containerId, containerNo } = req.body;
+  if (!warehouseId || !items?.length) return res.status(400).json({ error: '仓库和明细必填' });
+  if (receiver && receiver.length > 200) return res.status(400).json({ error: '收货人不能超过 200 字符' });
+  if (note && note.length > 1000) return res.status(400).json({ error: '备注不能超过 1000 字符' });
+  if (items.some((i: { productId: number; quantity: number }) => !i.productId || i.quantity <= 0)) {
+    return res.status(400).json({ error: '商品明细数量必须大于 0' });
+  }
+
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+    } else if (req.userWarehouseId && warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
+  }
+
+  // 删除旧明细（raw SQL 避免 Prisma FK 约束误判）+ 写入新明细
+  await prisma.$executeRaw`DELETE FROM OutboundItem WHERE outboundId = ${id}`;
+
+  const updated = await prisma.outboundOrder.update({
+    where: { id },
+    data: {
+      warehouseId,
+      receiver: receiver ?? null,
+      note: note ?? null,
+      locationId: locationId || null,
+      containerId: containerId || null,
+      containerNo: containerNo || null,
+      items: {
+        create: items.map((i: any) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          locationId: i.locationId ?? null,
+          contractId: i.contractId ?? null,
+          batchNo: i.batchNo ?? null,
+        })),
+      },
+    },
+    include: { items: { include: { product: PRODUCT_INCLUDE, location: true } } },
+  });
+  res.json(updated);
+});
+
 // 关联出库单到排柜
 outboundRouter.put('/:id/link-container', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);

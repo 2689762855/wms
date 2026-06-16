@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Spin, Modal, Input, message, Select, Checkbox, Button, Space } from 'antd';
+import DOMPurify from 'dompurify';
 import apiClient from '../api/client';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -314,7 +315,7 @@ export default function ContainerReport() {
       </Modal>
 
       {htmlContent ? (
-        <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent, { ALLOWED_TAGS: ['table','thead','tbody','tr','th','td','div','span','p','br','hr','h1','h2','h3','h4','h5','h6','strong','b','em','i','u','small','img','a','ul','ol','li','style'], ALLOWED_ATTR: ['class','style','src','alt','width','height','colspan','rowspan','border','cellpadding','cellspacing','href','target','id'] }) }} />
       ) : (
         <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
           <p>该客户尚未设置报表模板</p>

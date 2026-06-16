@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   build: {
     sourcemap: false,
     target: 'es2015',
@@ -46,6 +46,8 @@ export default defineConfig({
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
+      // 单机版不生成 SW（SW 缓存旧文件导致白屏）
+      ...(mode === 'standalone' ? { injectRegister: false, workbox: { maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, globPatterns: [], navigateFallback: null, cleanupOutdatedCaches: false } } : {}),
     }),
   ],
   server: {
@@ -61,4 +63,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

@@ -114,10 +114,15 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
     }] : []),
   ];
 
-  // 文员菜单：仅合同管理（云版专属）
+  // 文员菜单：合同管理（云版）/ 入库出库（单机版）
   const clerkMenuItems: any[] = [];
   if (!isStandalone) {
     clerkMenuItems.push({ key: 'contracts', label: '合同管理', icon: <FileTextOutlined />, path: '/contracts' });
+  } else {
+    clerkMenuItems.push(
+      { key: 'inbound', label: '入库管理', icon: <ImportOutlined />, path: '/inbound' },
+      { key: 'outbound', label: '出库管理', icon: <ExportOutlined />, path: '/outbound' },
+    );
   }
 
   // 库人员桌面菜单：库存/出入库/盘点/预警/排柜

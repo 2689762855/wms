@@ -33,6 +33,23 @@ export default function InboundList() {
       render: (s: string) => <Tag color={s === 'confirmed' ? 'green' : 'default'}>{s === 'confirmed' ? '已确认' : '草稿'}</Tag>,
     },
     { title: '备注', dataIndex: 'note', key: 'note', ellipsis: true },
+    { title: '商品摘要', key: 'summary', width: 200, ellipsis: true,
+      render: (_: unknown, r: any) => {
+        const items = r.items || [];
+        if (!items.length) return '-';
+        const first2 = items.slice(0, 2).map((i: any) => `${i.product?.name || '?'} x${i.quantity}`);
+        return items.length > 2 ? `${first2.join('、')} 等${items.length}项` : first2.join('、');
+      },
+    },
+    { title: '数量', key: 'totalQty', width: 60, align: 'center' as const,
+      render: (_: unknown, r: any) => (r.items || []).reduce((s: number, i: any) => s + i.quantity, 0) || '-',
+    },
+    { title: '金额', key: 'totalAmount', width: 100,
+      render: (_: unknown, r: any) => {
+        const total = (r.items || []).reduce((s: number, i: any) => s + (i.quantity * (i.unitPrice || 0)), 0);
+        return total ? `¥${total.toFixed(2)}` : '-';
+      },
+    },
     { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (t: string) => dayjs(t).format('YYYY-MM-DD HH:mm') },
     {
       title: '操作', key: 'actions', width: 100,

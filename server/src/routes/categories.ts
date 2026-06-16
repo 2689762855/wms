@@ -54,15 +54,25 @@ categoriesRouter.put('/:id', validateId, async (req: AuthRequest, res: Response)
 });
 
 categoriesRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id as string);
-  if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
-  const existing = await prisma.category.findUnique({ where: { id } });
-  if (!existing) return res.status(404).json({ error: '分类不存在' });
-  if (req.customerId && existing.customerId !== req.customerId) {
-    return res.status(403).json({ error: '无权操作此分类' });
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: '分类不存在' });
+    if (req.customerId && existing.customerId !== req.customerId) {
+      return res.status(403).json({ error: '无权操作此分类' });
+    }
+    const [children, products] = await Promise.all([
+      prisma.category.count({ where: { parentId: id } }),
+      prisma.product.count({ where: { categoryId: id } }),
+    ]);
+    if (children > 0) return res.status(400).json({ error: `无法删除：该分类下有 ${children} 个子分类，请先删除子分类` });
+    if (products > 0) return res.status(400).json({ error: `无法删除：该分类下有 ${products} 个商品，请先移动或删除商品` });
+    await prisma.category.delete({ where: { id } });
+    res.json({ message: '已删除' });
+  } catch (e: any) {
+    if (e.code === 'P2003') return res.status(400).json({ error: '无法删除：该分类被其他数据引用' });
+    console.error('Delete category error:', e);
+    res.status(500).json({ error: '删除失败' });
   }
-  const children = await prisma.category.count({ where: { parentId: id } });
-  if (children > 0) return res.status(400).json({ error: '请先删除子分类' });
-  await prisma.category.delete({ where: { id } });
-  res.json({ message: '已删除' });
 });

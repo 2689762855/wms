@@ -153,6 +153,76 @@ inboundRouter.post('/', async (req: AuthRequest, res: Response) => {
   res.status(201).json(order);
 });
 
+// 编辑草稿入库单
+inboundRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) return res.status(400).json({ error: '无效ID' });
+
+  const order = await prisma.inboundOrder.findUnique({ where: { id }, include: { items: true } });
+  if (!order) return res.status(404).json({ error: '不存在' });
+  if (order.status !== 'draft') return res.status(400).json({ error: '仅草稿状态的单据可编辑' });
+
+  const { warehouseId, supplier, note, items, locationId } = req.body;
+  if (!warehouseId || !items?.length) return res.status(400).json({ error: '仓库和明细必填' });
+  if (supplier && supplier.length > 200) return res.status(400).json({ error: '供应商名称不能超过 200 字符' });
+  if (note && note.length > 1000) return res.status(400).json({ error: '备注不能超过 1000 字符' });
+  if (items.some((i: { productId: number; quantity: number }) => !i.productId || i.quantity <= 0)) {
+    return res.status(400).json({ error: '商品明细数量必须大于 0' });
+  }
+
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin' && req.customerId) {
+      const wh = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { customerId: true } });
+      if (!wh || wh.customerId !== req.customerId) return res.status(403).json({ error: '无权操作此仓库' });
+    } else if (req.userWarehouseId && warehouseId !== req.userWarehouseId) {
+      return res.status(403).json({ error: '无权操作此仓库' });
+    }
+  }
+
+  // 删除旧明细（raw SQL 避免 Prisma FK 约束误判）+ 写入新明细
+  await prisma.$executeRaw`DELETE FROM InboundItem WHERE inboundId = ${id}`;
+
+  const updated = await prisma.inboundOrder.update({
+    where: { id },
+    data: {
+      warehouseId,
+      supplier: supplier ?? null,
+      note: note ?? null,
+      locationId: locationId || null,
+      items: {
+        create: await Promise.all(items.map(async (i: any) => {
+          let unitPrice = i.unitPrice;
+          if (unitPrice == null) {
+            if (i.contractId) {
+              const ci = await prisma.contractItem.findUnique({
+                where: { contractId_productId: { contractId: i.contractId, productId: i.productId } },
+                select: { unitPrice: true },
+              });
+              if (ci?.unitPrice != null) unitPrice = ci.unitPrice;
+            } else {
+              const p = await prisma.product.findUnique({
+                where: { id: i.productId },
+                select: { salePrice: true },
+              });
+              if (p?.salePrice != null) unitPrice = p.salePrice;
+            }
+          }
+          return {
+            productId: i.productId,
+            quantity: i.quantity,
+            unitPrice,
+            locationId: i.locationId ?? locationId ?? null,
+            expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
+            contractId: i.contractId ?? null,
+          };
+        })),
+      },
+    },
+    include: { items: { include: { product: PRODUCT_INCLUDE, location: true } } },
+  });
+  res.json(updated);
+});
+
 // 确认入库（更新库存）
 inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);

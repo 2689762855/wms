@@ -81,12 +81,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const loc = window.location.pathname;
   if (loading) return null;
   if (!token) return <Navigate to="/login" replace />;
-  // 文员仅合同管理（云版专属）
-  if (!isStandalone && user?.operatorType === 'clerk' && !loc.startsWith('/contracts') && !loc.startsWith('/m')) {
-    return <Navigate to="/contracts" replace />;
+  // 文员仅合同管理（云版）/ 入库出库（单机版）
+  if (user?.operatorType === 'clerk' && !loc.startsWith('/contracts') && !loc.startsWith('/inbound') && !loc.startsWith('/outbound') && !loc.startsWith('/m')) {
+    return <Navigate to={isStandalone ? '/inbound' : '/contracts'} replace />;
   }
   // 库人员不可访问合同
-  if (!isStandalone && user?.operatorType === 'warehouse' && loc.startsWith('/contracts')) {
+  if (user?.operatorType === 'warehouse' && loc.startsWith('/contracts')) {
     return <Navigate to="/inbound" replace />;
   }
   return <>{children}</>;
@@ -100,7 +100,7 @@ function HomeRedirect() {
   }
   if (isMobile) return <Navigate to="/m/inbound" replace />;
   if (user?.operatorType === 'warehouse') return <Navigate to="/inbound" replace />;
-  if (!isStandalone && user?.operatorType === 'clerk') return <Navigate to="/contracts" replace />;
+  if (user?.operatorType === 'clerk') return <Navigate to={isStandalone ? '/inbound' : '/contracts'} replace />;
   return <Navigate to="/dashboard" replace />;
 }
 

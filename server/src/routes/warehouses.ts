@@ -80,13 +80,40 @@ warehousesRouter.put('/:id', validateId, async (req: AuthRequest, res: Response)
 });
 
 warehousesRouter.delete('/:id', validateId, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id as string);
-  if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
-  const existing = await prisma.warehouse.findUnique({ where: { id } });
-  if (!existing) return res.status(404).json({ error: '仓库不存在' });
-  if (req.userRole === 'tenant_admin') {
-    return res.status(403).json({ error: '客户不能删除仓库，请联系管理员' });
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
+    const existing = await prisma.warehouse.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: '仓库不存在' });
+    if (req.userRole === 'tenant_admin') {
+      return res.status(403).json({ error: '客户不能删除仓库，请联系管理员' });
+    }
+    const [locations, inventories, users, inbounds, outbounds, transfers, checkTasks] = await Promise.all([
+      prisma.location.count({ where: { warehouseId: id } }),
+      prisma.inventory.count({ where: { warehouseId: id } }),
+      prisma.user.count({ where: { warehouseId: id } }),
+      prisma.inboundOrder.count({ where: { warehouseId: id } }),
+      prisma.outboundOrder.count({ where: { warehouseId: id } }),
+      prisma.transferOrder.count({ where: { OR: [{ fromWarehouseId: id }, { toWarehouseId: id }] } }),
+      prisma.checkTask.count({ where: { warehouseId: id } }),
+    ]);
+    const totalRefs = locations + inventories + users + inbounds + outbounds + transfers + checkTasks;
+    if (totalRefs > 0) {
+      const parts: string[] = [];
+      if (locations > 0) parts.push(`${locations} 个库位`);
+      if (inventories > 0) parts.push(`${inventories} 条库存`);
+      if (users > 0) parts.push(`${users} 个用户`);
+      if (inbounds > 0) parts.push(`${inbounds} 条入库单`);
+      if (outbounds > 0) parts.push(`${outbounds} 条出库单`);
+      if (transfers > 0) parts.push(`${transfers} 条调拨单`);
+      if (checkTasks > 0) parts.push(`${checkTasks} 条盘点任务`);
+      return res.status(400).json({ error: `无法删除：该仓库有关联数据（${parts.join('、')}）。请先清理后再删除。` });
+    }
+    await prisma.warehouse.delete({ where: { id } });
+    res.json({ message: '已删除' });
+  } catch (e: any) {
+    if (e.code === 'P2003') return res.status(400).json({ error: '无法删除：该仓库被其他数据引用' });
+    console.error('Delete warehouse error:', e);
+    res.status(500).json({ error: '删除失败' });
   }
-  await prisma.warehouse.delete({ where: { id } });
-  res.json({ message: '已删除' });
 });

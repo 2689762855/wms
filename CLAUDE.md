@@ -1,22 +1,23 @@
 # 库存管理系统 (WMS)
 
-全栈仓库管理系统，React 18 + Ant Design 6 + Express 5 + Prisma 5 + SQLite + Capacitor Android。
+> React 18 + Ant Design 6 + Express 5 + Prisma 5 + SQLite。云端多租户 + 单机版 v2.3.2。
 
-## ⚠️ 改前必做：先读代码地图
+## ⚠️ 收到 WMS 任务 → 先执行这 3 步（不是可选项）
 
-> **每次修改 WMS 代码之前，第一步就是读代码地图。不是可选项——是必须项。**
+```
+第 1 步：grep 知识库（找现成答案）
+  grep -i "<关键词>" E:\claude\my-wiki\wiki\synthesis\WMS 踩坑速查.md
+  命中 → 直接用现成方案。未命中 → 继续。
 
-在动手写任何代码前，执行以下步骤：
+第 2 步：读代码地图（理解影响范围）
+  Read E:\claude\my-wiki\wiki\synthesis\WMS 代码地图.md
+  定位模块 → 看写入链路 → 看下游读取 → 看踩坑记录。
 
-1. **打开** `E:\claude\my-wiki\wiki\synthesis\WMS 代码地图.md`
-2. **定位**出问题的那一两个功能模块
-3. **看全**「写入链路」和「下游读取」列——了解数据流
-4. **看完**「⚠️ 踩坑记录」表——确认不存在已知踩坑模式
-5. **跑一遍**模块下的 grep 命令确认影响范围
+第 3 步：跑反模式检查（5 大根因）
+  根据改动类型跑对应的 grep 命令（见底部「反模式自动检查」）。
+```
 
-**Why:** 2026-06-12 打印弹窗修复反复 5 版才稳定——没先看地图 → 不清楚 CSP 约束、不知道有现成的打印模块入口、不了解跨窗口线程模型。3 分钟读地图能省 30 分钟踩坑。
-
-**对照**：服务器端修改还须执行「[改前画线](#改前画线wms-专项)」三步法。前端修改可跳过画线，但代码地图必读。
+**这 3 步做完才能开始写代码。跳过任一步 = 重复踩坑。**
 
 ## AI 行为准则
 
@@ -189,9 +190,10 @@ APK 使用 `server.url` 加载 Vite 开发服务器实现热更新。原生扫�
 
 ## 反模式自动检查
 
-> 每次修改 WMS 代码前，用以下命令扫描目标文件，确认无已知反模式。详见 `wiki/concepts/WMS 反模式清单.md`。
+> 每次修改 WMS 代码前，用以下命令扫描目标文件。覆盖 5 大根因。
 
 ```bash
+# === 根因 1：假设不验证 ===
 # 1. batchNo: null 硬编码（已出现 4 次）
 grep -n "batchNo: null\|batchNo:null" <目标文件>
 
@@ -208,23 +210,57 @@ grep -n "?\.filter\|?\.map\|?\.reduce" <目标文件>
 # 5. aggregate 在 update 之后
 grep -n "aggregate" <目标文件>
 # → 确认 aggregate 是否在 update/decrement/increment 之前
+
+# === 根因 2：错误静默吞掉 ===
+# 6. catch 块是否只吞不报（排除测试文件）
+grep -n "catch\s*{" <目标文件> | grep -v "\.test\."
+# → 每个 catch 至少要打一行 console.error，不能只写注释
+
+# 7. mutation 缺 onError（前端）
+grep -n "useMutation" <目标文件>
+# → 确认有 onError: (err) => message.error(err?.response?.data?.error)
+
+# === 根因 3：改一半，链不全 ===
+# 8. 新增 Schema 字段后检查全链路
+# → JWT sign → middleware 解析 → 前端 AuthContext → 路由守卫 → UI 组件
+
+# === 根因 4：编码/平台差异 ===
+# 9. ESM 下 require/__dirname
+grep -n "require\|__dirname" <目标文件>
+# → ESM 项目必须用 createRequire + import.meta.url
+
+# === 根因 5：测试滞后 ===
+# → 改完后跑: npx vitest run（关键路径必须有 API 级集成测试）
 ```
+
+## ⚠️ 单机版修改规则（每次必读）
+
+> 单机版和云端版有 4 个核心文件完全不同。**禁止整文件复制**。每次改单机版前：1) 先读 `WMS-Package-v2.3/CLAUDE.md` 2) 读目标原版文件 3) 匹配风格，只插入逻辑。
+
+## 部署前检查（单机版）
+
+每次打包单机版前，逐项确认：
+
+- [ ] `start.bat` 编码为 GBK（`file` 命令显示 ISO-8859，非 UTF-8）
+- [ ] `nodejs/` 目录包含便携 Node.js v18（与 better-sqlite3 ABI 匹配）
+- [ ] `VITE_STANDALONE=true` 构建（禁用 SW、隐藏云端菜单）
+- [ ] `client/dist/sw.js` 已删除（单机版不需要 Service Worker）
+- [ ] `client/dist/landing.html` 指向最新版本号和正确的 zip 文件名
+- [ ] 版本号已更新：`v2.3.x · 约 113MB`（落地页两处）
 
 ## Wiki 知识库
 
-修改代码前，先检索 Wiki（`E:\claude\my-wiki\wiki\`）中相关的踩坑记录和决策日志，避免重复排查已记录的问题。重点关注：
-- `wiki/synthesis/库存管理系统开发总结.md` — 181 条踩坑记录
-- `wiki/concepts/WMS 反模式清单.md` — 7 个高频反模式 + grep 排查命令
-- `wiki/synthesis/技术选型决策日志.md` — 技术决策 + 可复用模式
-- `wiki/concepts/WMS 架构决策记录.md` — ADR 格式的架构决策
-- `wiki/synthesis/WMS 代码地图.md` — 按功能模块快速定位代码，完整数据链路，改前必查
+改代码前检索 Wiki（`E:\claude\my-wiki\wiki\`），改后更新。核心三页：
+- `wiki/synthesis/WMS 踩坑速查.md` — **先看这个**，32 条，按操作类型索引
+- `wiki/synthesis/WMS 代码地图.md` — 功能模块定位 + 数据链路 + grep 命令
+- `wiki/concepts/WMS 反模式清单.md` — 7 个高频反模式 + 排查命令
+- `wiki/synthesis/技术选型决策日志.md` — 25 条可复用模式
 
-**知识复利闭环**：每次解决新的 WMS 问题或做出技术决策后，同步更新 Wiki：
-- 新踩坑 → 追加到 `库存管理系统开发总结.md` 的踩坑记录
-- 新反模式 → 追加到 `WMS 反模式清单.md`
-- 新技术取舍 → 追加到 `技术选型决策日志.md` 的决策记录
-- **代码链路变化 → 更新 `WMS 代码地图.md`**（新增路由/工具函数/数据表关联）
-- 所有操作 → 追加到 `Changelog.md`
+**知识复利闭环**：改代码前先查 → 改后归因更新：
+- 新踩坑 → 追加到 `WMS 踩坑速查.md`，归入 5 大根因之一
+- 新反模式 → 追加到 `WMS 反模式清单.md`（含 grep 命令）
+- 代码链路变化 → 更新 `WMS 代码地图.md`
+- Changelog 只记一周内的操作，旧的自动归档
 
 ## Git 工作流
 
