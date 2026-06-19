@@ -8,6 +8,54 @@ import { nextOrderNo } from '../utils/sequence';
 export const outboundRouter = Router();
 outboundRouter.use(authenticate);
 
+// CSV 导出
+outboundRouter.get('/export', async (req: AuthRequest, res: Response) => {
+  const where: Record<string, unknown> = {};
+  if (req.userRole !== 'super_admin') {
+    if (req.userRole === 'tenant_admin') {
+      const queryWid = parseInt(req.query.warehouseId as string);
+      if (queryWid) where.warehouseId = queryWid;
+      else if (req.customerId) {
+        const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+        where.warehouseId = { in: whs.map(w => w.id) };
+      }
+    } else if (req.userWarehouseId) {
+      where.warehouseId = req.userWarehouseId;
+    }
+  }
+  const startDate = req.query.startDate as string;
+  const endDate = req.query.endDate as string;
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) (where.createdAt as any).gte = new Date(startDate);
+    if (endDate) (where.createdAt as any).lte = new Date(endDate + 'T23:59:59.999Z');
+  }
+
+  const orders = await prisma.outboundOrder.findMany({
+    where,
+    include: { warehouse: true, items: { include: { product: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 5000,
+  });
+
+  // 生成 CSV（BOM for Excel 中文兼容）
+  const BOM = '﻿';
+  const header = '日期,单号,领用人,物料名称,规格,单位,数量,仓库\n';
+  const rows: string[] = [];
+  for (const o of orders) {
+    const dt = new Date(o.createdAt).toISOString().slice(0, 10);
+    const wh = o.warehouse?.name || '';
+    for (const item of o.items || []) {
+      const p = item.product;
+      rows.push(`${dt},${o.orderNo},${o.receiver || ''},${p?.name || ''},${p?.spec || ''},${p?.unit || 'pcs'},${item.quantity},${wh}`);
+    }
+  }
+  const csv = BOM + header + rows.join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="outbound-${new Date().toISOString().slice(0,10)}.csv"`);
+  res.send(csv);
+});
+
 outboundRouter.get('/', async (req: AuthRequest, res: Response) => {
   const { page, pageSize, skip } = getPagination(req);
   const where: Record<string, unknown> = {};

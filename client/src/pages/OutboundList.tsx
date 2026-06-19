@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Tag, Space, Card, Typography, DatePicker, Input } from 'antd';
 import CustomerManager from '../components/CustomerManager';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import type { OutboundOrder } from '../types';
@@ -17,6 +17,11 @@ export default function OutboundList() {
   const monthParam = dateRange?.[0]
     ? { startDate: dateRange[0].startOf('month').toISOString(), endDate: dateRange[0].endOf('month').toISOString() }
     : {};
+
+  const exportCsv = () => {
+    const params = new URLSearchParams({ ...monthParam, ...(receiver && { receiver }) } as Record<string,string>);
+    window.open(`/api/outbound/export?${params}`, '_blank');
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['outbound', page, dateRange, receiver],
@@ -52,7 +57,7 @@ export default function OutboundList() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>出库管理</Typography.Title>} extra={<Space><Input prefix={<SearchOutlined />} placeholder="顾客" allowClear value={receiver} onChange={e => { setReceiver(e.target.value); setPage(1); }} style={{ width: 130 }} /><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><CustomerManager /><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/outbound/new')}>新建出库单</Button></Space>}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>出库管理</Typography.Title>} extra={<Space><Input prefix={<SearchOutlined />} placeholder="顾客" allowClear value={receiver} onChange={e => { setReceiver(e.target.value); setPage(1); }} style={{ width: 130 }} /><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><CustomerManager /><Button icon={<DownloadOutlined />} onClick={exportCsv}>导出</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/outbound/new')}>新建出库单</Button></Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
         pagination={{ current: page, total: data?.total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 条` }}
         scroll={{ x: 700 }}
