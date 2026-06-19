@@ -151,7 +151,7 @@ customersRouter.post('/', async (req: AuthRequest, res: Response) => {
     const tenantPrisma = new PrismaClient({ datasources: { db: { url: `file:${dbPath}` } } });
     try {
       await tenantPrisma.customer.create({
-        data: { id: customer.id, username, passwordHash: "tenant_db", realName: realName || username, status: customer.status },
+        data: { id: customer.id, username, passwordHash: "tenant_db", realName: realName || username, status: customer.status, expiresAt },
       });
       await tenantPrisma.warehouse.create({
         data: { name: warehouseName || `${realName || username}主仓库`, id: wh.id, customerId: customer.id },

@@ -79,13 +79,18 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     if (payload.role === 'tenant_admin' && payload.customerId) {
       const customer = await prisma.customer.findFirst({
         where: { id: payload.customerId, deletedAt: null },
-        select: { status: true },
+        select: { status: true, expiresAt: true },
       });
       if (!customer) {
         return res.status(403).json({ error: '账号已被停用，请联系管理员' });
       }
       if (customer.status === 'suspended') {
         return res.status(403).json({ error: '账号已被暂停，请联系管理员' });
+      }
+      // 检查账号是否过期（每次请求都检查，不依赖登录时的一次性检查）
+      if (customer.expiresAt && new Date() > customer.expiresAt) {
+        await platformPrisma.customer.update({ where: { id: payload.customerId! }, data: { status: 'suspended' } });
+        return res.status(403).json({ error: '账号已过期，请联系管理员续费' });
       }
     }
 
@@ -118,12 +123,16 @@ export function authorize(...roles: string[]) {
 export async function adminWrite(req: AuthRequest, res: Response, next: NextFunction) {
   if (req.userRole === 'super_admin' || req.userRole === 'warehouse_admin' || req.userRole === 'tenant_admin') {
     if (req.userRole === 'tenant_admin' && req.customerId) {
-      const customer = await prisma.customer.findFirst({ where: { id: req.customerId, deletedAt: null }, select: { status: true } });
+      const customer = await prisma.customer.findFirst({ where: { id: req.customerId, deletedAt: null }, select: { status: true, expiresAt: true } });
       if (customer?.status === 'pending') {
         return res.status(403).json({ error: '账号审核中，仅可查看，无法操作' });
       }
       if (customer?.status === 'suspended') {
         return res.status(403).json({ error: '账号已被暂停，请联系管理员' });
+      }
+      if (customer?.expiresAt && new Date() > customer.expiresAt) {
+        await platformPrisma.customer.update({ where: { id: req.customerId }, data: { status: 'suspended' } });
+        return res.status(403).json({ error: '账号已过期，请联系管理员续费' });
       }
     }
     return next();
