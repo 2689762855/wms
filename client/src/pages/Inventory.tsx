@@ -134,14 +134,20 @@ export default function Inventory() {
   const [keyword, setKeyword] = useState('');
   const [batchNo, setBatchNo] = useState('');
   const [categoryId, setCategoryId] = useState<number | undefined>();
+  const [locationId, setLocationId] = useState<number | undefined>();
   const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories').then(r => r.data) });
+  const { data: locations } = useQuery({
+    queryKey: ['locations', warehouseId],
+    queryFn: () => apiClient.get('/locations', { params: { warehouseId } }).then(r => r.data as Location[]),
+    enabled: !!warehouseId,
+  });
   const cascaderOptions = useMemo(() => categories ? toCascaderOptions(buildTree(categories)) : [], [categories]);
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', warehouseId, keyword, batchNo, categoryId],
-    queryFn: () => apiClient.get('/inventory', { params: { warehouseId, keyword, batchNo, categoryId } }).then(r => r.data),
+    queryKey: ['inventory', warehouseId, keyword, batchNo, categoryId, locationId],
+    queryFn: () => apiClient.get('/inventory', { params: { warehouseId, keyword, batchNo, categoryId, locationId } }).then(r => r.data),
   });
 
   const { data: productWarehouses } = useQuery({
@@ -224,8 +230,11 @@ export default function Inventory() {
   return (
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>库存查询</Typography.Title>}>
       <Space wrap style={{ marginBottom: 16 }}>
-        <Select placeholder="选择仓库" allowClear style={{ width: 160 }} onChange={setWarehouseId}>
+        <Select placeholder="选择仓库" allowClear style={{ width: 160 }} onChange={(v) => { setWarehouseId(v); setLocationId(undefined); }}>
           {warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}
+        </Select>
+        <Select placeholder="选择库位" allowClear style={{ width: 160 }} onChange={setLocationId} value={locationId} disabled={!warehouseId}>
+          {locations?.map((l: Location) => <Select.Option key={l.id} value={l.id}>{l.name}</Select.Option>)}
         </Select>
         <Input.Search placeholder="搜索商品名称" allowClear onSearch={setKeyword} style={{ width: 220 }} />
         <Input.Search placeholder="搜索批次号" allowClear onSearch={setBatchNo} style={{ width: 180 }} />
