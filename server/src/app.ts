@@ -235,12 +235,12 @@ app.use((_req, res, next) => {
   }
   next();
 });
-// ZIP 文件强制下载（浏览器默认会尝试显示二进制内容）
-// max-age=3600：允许 Cloudflare 缓存 1 小时，后续下载从边缘节点直出（无需回源 116MB）
+// ZIP/EXE 文件强制下载 + Cloudflare 缓存
+// max-age=86400：允许 Cloudflare 缓存 24 小时，后续下载从边缘节点直出（无需回源 337MB）
 app.use((req, _res, next) => {
-  if (req.path.endsWith('.zip')) {
+  if (req.path.endsWith('.zip') || req.path.endsWith('.exe')) {
     _res.setHeader('Content-Disposition', 'attachment');
-    _res.setHeader('Cache-Control', 'public, max-age=3600');
+    _res.setHeader('Cache-Control', 'public, max-age=86400');
   }
   next();
 });
