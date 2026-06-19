@@ -19,10 +19,12 @@ export default function OutboundList() {
     ? { startDate: dateRange[0].startOf('month').toISOString(), endDate: dateRange[0].endOf('month').toISOString() }
     : {};
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     const ids = selectedRowKeys.length > 0 ? selectedRowKeys.join(',') : '';
-    const params = new URLSearchParams({ ...monthParam, ...(receiver && { receiver }), ...(ids && { ids }) } as Record<string,string>);
-    window.open(`/api/outbound/export?${params}`, '_blank');
+    const res = await apiClient.get('/outbound/export', { params: { ...monthParam, ...(receiver && { receiver }), ...(ids && { ids }) }, responseType: 'blob' });
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = `outbound-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const { data, isLoading } = useQuery({
