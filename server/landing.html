@@ -40,14 +40,14 @@
     {
       "@type": "Offer",
       "name": "标准版",
-      "price": "1999",
+      "price": "999",
       "priceCurrency": "CNY",
       "description": "1个仓库，5个操作员，含合同管理、货柜管理、技术支持"
     },
     {
       "@type": "Offer",
       "name": "专业版",
-      "price": "4999",
+      "price": "2299",
       "priceCurrency": "CNY",
       "description": "3个仓库，20个操作员，含合同管理、货柜管理、多仓库调拨、自定义报表、专属技术支持"
     }
@@ -315,14 +315,14 @@
         <tr class="price">
           <td>年费</td>
           <td style="color:#52c41a;">免费</td>
-          <td>¥1,999<small>/年</small></td>
-          <td>¥4,999<small>/年</small></td>
+          <td>¥999<small>/年</small></td>
+          <td>¥2,299<small>/年</small></td>
         </tr>
         <tr>
           <td>使用成本</td>
           <td style="color:#999;">自备电脑 + 自行维护</td>
-          <td>≈ ¥5.5/天</td>
-          <td>≈ ¥13.7/天</td>
+          <td>≈ ¥2.7/天</td>
+          <td>≈ ¥6.3/天</td>
         </tr>
         <tr>
           <td>仓库数</td>
@@ -398,7 +398,7 @@
         </tr>
         <tr>
           <td></td>
-          <td><a href="/WMS-Package-v2.3.5.zip" class="btn btn-outline download-link" style="padding:10px 24px;font-size:14px;">下载安装包</a></td>
+          <td><a href="#" class="btn btn-outline quark-dl" style="padding:10px 24px;font-size:14px;">下载安装包</a></td>
           <td><a href="/login" class="btn btn-primary" style="padding:10px 24px;font-size:14px;">免费试用</a></td>
           <td><a href="/login" class="btn btn-outline" style="padding:10px 24px;font-size:14px;">免费试用</a></td>
         </tr>
@@ -458,7 +458,7 @@
     <h2>外贸仓库数字化，从一个系统开始</h2>
     <p>排柜装柜 · 合同追踪 · 甩柜管理 · 扫码出入库 · 中英文装箱单</p>
     <a href="/login" class="btn btn-success">免费试用 90 天</a>
-    <p style="margin-top:16px;color:#999;font-size:14px;">也支持私有部署，<a href="/WMS-Package-v2.3.5.zip" class="download-link" style="color:#1677ff;">下载安装包</a>一键启动 <span style="color:#bbb;font-size:12px;">v2.3.5 · 约 114MB · 含成本价/售价/利润统计/草稿编辑/自动备份</span></p>
+    <p style="margin-top:16px;color:#999;font-size:14px;">也支持私有部署，<a href="#" class="quark-dl" style="color:#1677ff;">下载安装包</a>一键启动 <span style="color:#bbb;font-size:12px;">v2.3.6 · 约 337MB</span></p>
   </div>
 </section>
 
@@ -634,6 +634,19 @@ if (typeof Capacitor === "undefined" && window.matchMedia("(max-width: 640px)").
     apply(isNight);
   });
 })();
+
+// 夸克网盘下载 — 先开页面，再复制提取码
+document.querySelectorAll('.quark-dl').forEach(function(el) {
+  el.addEventListener('click', function(e) {
+    e.preventDefault();
+    var url = 'https://pan.quark.cn/s/53c522eff91d';
+    var code = 'zcWk';
+    window.open(url, '_blank');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).catch(function(){});
+    }
+  });
+});
 </script>
 
 </body>
