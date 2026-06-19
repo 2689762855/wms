@@ -30,6 +30,8 @@ outboundRouter.get('/export', async (req: AuthRequest, res: Response) => {
     if (startDate) (where.createdAt as any).gte = new Date(startDate);
     if (endDate) (where.createdAt as any).lte = new Date(endDate + 'T23:59:59.999Z');
   }
+  const ids = (req.query.ids as string)?.split(',').map(Number).filter(n => !isNaN(n));
+  if (ids?.length) where.id = { in: ids };
 
   const orders = await prisma.outboundOrder.findMany({
     where,
