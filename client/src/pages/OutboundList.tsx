@@ -14,18 +14,23 @@ export default function OutboundList() {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [receiver, setReceiver] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [exportMode, setExportMode] = useState(false);
 
   const monthParam = dateRange?.[0]
     ? { startDate: dateRange[0].startOf('month').toISOString(), endDate: dateRange[0].endOf('month').toISOString() }
     : {};
 
   const exportCsv = async () => {
+    if (!exportMode) { setExportMode(true); return; }
     const ids = selectedRowKeys.length > 0 ? selectedRowKeys.join(',') : '';
     const res = await apiClient.get('/outbound/export', { params: { ...monthParam, ...(receiver && { receiver }), ...(ids && { ids }) }, responseType: 'blob' });
     const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = `outbound-${new Date().toISOString().slice(0,10)}.csv`; a.click();
     URL.revokeObjectURL(url);
+    setExportMode(false); setSelectedRowKeys([]);
   };
+
+  const cancelExport = () => { setExportMode(false); setSelectedRowKeys([]); };
 
   const { data, isLoading } = useQuery({
     queryKey: ['outbound', page, dateRange, receiver],
@@ -61,9 +66,13 @@ export default function OutboundList() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>出库管理</Typography.Title>} extra={<Space><Input prefix={<SearchOutlined />} placeholder="顾客" allowClear value={receiver} onChange={e => { setReceiver(e.target.value); setPage(1); }} style={{ width: 130 }} /><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><CustomerManager /><Button icon={<DownloadOutlined />} onClick={exportCsv}>导出</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/outbound/new')}>新建出库单</Button></Space>}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>出库管理</Typography.Title>} extra={<Space><Input prefix={<SearchOutlined />} placeholder="顾客" allowClear value={receiver} onChange={e => { setReceiver(e.target.value); setPage(1); }} style={{ width: 130 }} /><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><CustomerManager />{exportMode ? (
+              <><Button type="primary" icon={<DownloadOutlined />} onClick={exportCsv}>{selectedRowKeys.length > 0 ? `导出选中(${selectedRowKeys.length})` : '导出全部'}</Button><Button onClick={cancelExport}>取消</Button></>
+            ) : (
+              <Button icon={<DownloadOutlined />} onClick={exportCsv}>导出</Button>
+            )}<Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/outbound/new')}>新建出库单</Button></Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
-        rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as number[]) }}
+        rowSelection={exportMode ? { selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as number[]) } : undefined}
         pagination={{ current: page, total: data?.total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 条` }}
         scroll={{ x: 700 }}
       />
