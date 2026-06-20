@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, AutoComplete, Button, Card, Typography, Space, InputNumber, message, Divider, Tag, Modal, Upload, Image } from 'antd';
+import { Form, Input, Select, AutoComplete, Button, Card, Typography, Space, InputNumber, message, Divider, Tag, Modal, Upload, Image, Popconfirm } from 'antd';
 import { CameraOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ProductSelector from '../components/ProductSelector';
-import CustomerManager from '../components/CustomerManager';
+
 import { useAuth } from '../stores/AuthContext';
 import { getCategoryPath } from '../utils/categoryTree';
 import type { Warehouse, Product, InventoryItem } from '../types';
@@ -36,12 +36,13 @@ export default function OutboundNew() {
   const [selectedContractIds, setSelectedContractIds] = useState<number[]>([]);
   const [containerNoText, setContainerNoText] = useState('');
   const [locationErrors, setLocationErrors] = useState<Set<number>>(new Set());
-  const [snOptions, setSnOptions] = useState<Record<number, { value: string; label: string }[]>>({});
-  const [snModalIndex, setSnModalIndex] = useState<number | null>(null);
+
+
 
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: () => apiClient.get('/warehouses').then(r => r.data) });
   const { data: products } = useQuery({ queryKey: ['products'], queryFn: () => apiClient.get('/products', { params: { pageSize: 200 } }).then(r => r.data.data) });
-  const { data: customerList } = useQuery({ queryKey: ['customers'], queryFn: () => apiClient.get('/customers').then(r => r.data) });
+  const { data: customerList } = useQuery({ queryKey: ['receivers'], queryFn: () => apiClient.get('/receivers').then(r => r.data) });
+
 
   // 可选合同列表（进行中+已完成，排除已出完和已取消）
   const { data: contracts } = useQuery({
@@ -167,20 +168,6 @@ export default function OutboundNew() {
 
   useEffect(() => { warehouseInventoryRef.current = warehouseInventory; }, [warehouseInventory]);
 
-  // 预取 hasSn 商品的可用 SN 列表
-  useEffect(() => {
-    if (!selectedWarehouseId || !products) return;
-    const ids = items.map(i => i.productId).filter((v, i, a) => a.indexOf(v) === i);
-    ids.forEach(pid => {
-      const p = getProduct(pid);
-      if (p?.hasSn && !snOptions[pid]) {
-        apiClient.get('/outbound/serial-numbers', { params: { productId: pid, warehouseId: selectedWarehouseId } }).then(res => {
-          setSnOptions(prev => ({ ...prev, [pid]: (res.data || []).map((s: any) => ({ value: s.sn, label: s.sn })) }));
-        }).catch(() => {});
-      }
-    });
-  }, [selectedWarehouseId, products, items.map(i => i.productId).join(',')]);
-
   // 加载待编辑的订单
   const { data: editOrder } = useQuery({
     queryKey: ['outbound', editId],
@@ -195,9 +182,6 @@ export default function OutboundNew() {
         warehouseId: editOrder.warehouseId,
         receiver: editOrder.receiver || undefined,
         receiverPhone: editOrder.receiverPhone || undefined,
-        receiverName2: editOrder.receiverName2 || undefined,
-        receiverPhone2: editOrder.receiverPhone2 || undefined,
-        receiverAddress: editOrder.receiverAddress || undefined,
         note: editOrder.note || undefined,
       });
       setItems(editOrder.items.map((i: any) => ({
@@ -276,17 +260,6 @@ export default function OutboundNew() {
         const errors = new Set<number>();
         items.forEach((item, idx) => { if (!item.locationId) errors.add(idx); });
         if (errors.size > 0) { setLocationErrors(errors); message.warning('请为每个商品选择库位，或指定整单默认库位'); return; }
-        // SN 校验
-        const snErrors: string[] = [];
-        items.forEach((item) => {
-          const p = getProduct(item.productId);
-          if (p?.hasSn) {
-            const sns = item.serialNumbers || [];
-            if (!sns.length) snErrors.push(`${p.name}: 请选择SN码`);
-            else if (sns.length !== item.quantity) snErrors.push(`${p.name}: SN数量(${sns.length})与数量(${item.quantity})不一致`);
-          }
-        });
-        if (snErrors.length > 0) { message.error(snErrors.join('; ')); return; }
         setLocationErrors(new Set());
         createMutation.mutate({ ...values, items, containerId: selectedContainerId, containerNo: containerNoText || undefined });
       }}>
@@ -294,29 +267,23 @@ export default function OutboundNew() {
           <Form.Item name="warehouseId" label="出库仓库" rules={[{ required: true }]} style={{ minWidth: 180 }}>
             <Select placeholder="选择仓库">{warehouses?.map((w: Warehouse) => <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>)}</Select>
           </Form.Item>
-          <Form.Item label="选择顾客" style={{ minWidth: 160 }}>
+          <Form.Item label="选择领用人" style={{ minWidth: 160 }}>
             <AutoComplete
-              placeholder="输入顾客名搜索"
+              placeholder="输入领用人名搜索"
               options={(customerList || []).map((c: any) => ({ value: c.name, label: `${c.name}${c.phone ? ' · ' + c.phone : ''}` }))}
               onSelect={(value) => {
                 const c = (customerList || []).find((x: any) => x.name === value);
                 if (c) {
                   form.setFieldValue('receiver', c.name);
                   form.setFieldValue('receiverPhone', c.phone || '');
-                  form.setFieldValue('receiverName2', c.name2 || '');
-                  form.setFieldValue('receiverPhone2', c.phone2 || '');
-                  form.setFieldValue('receiverAddress', c.address || '');
                 }
               }}
               style={{ width: 200 }}
               allowClear
             />
           </Form.Item>
-          <Form.Item name="receiver" label="顾客姓名"><Input style={{ width: 120 }} placeholder="选填" /></Form.Item>
-          <Form.Item name="receiverPhone" label="顾客电话"><Input style={{ width: 140 }} placeholder="选填" /></Form.Item>
-          <Form.Item name="receiverName2" label="备用联系人"><Input style={{ width: 110 }} placeholder="选填" /></Form.Item>
-          <Form.Item name="receiverPhone2" label="备用电话"><Input style={{ width: 130 }} placeholder="选填" /></Form.Item>
-          <Form.Item name="receiverAddress" label="顾客地址"><Input style={{ width: 200 }} placeholder="选填" /></Form.Item>
+          <Form.Item name="receiver" label="领用人"><Input style={{ width: 120 }} placeholder="选填" /></Form.Item>
+          <Form.Item name="receiverPhone" label="联系电话"><Input style={{ width: 140 }} placeholder="选填" /></Form.Item>
           <Form.Item name="note" label="备注"><Input style={{ width: 260 }} /></Form.Item>
           {import.meta.env.VITE_STANDALONE !== 'true' && <Form.Item label="排柜编号（可选）" style={{ minWidth: 180 }}>
             <Input placeholder="输入排柜编号，货柜新建时匹配" value={containerNoText} onChange={(e) => {
@@ -405,46 +372,8 @@ export default function OutboundNew() {
                 />
                 {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
               </div>
-              {getProduct(item.productId)?.hasSn && (
-                <Button size="small" onClick={() => setSnModalIndex(idx)}
-                  style={{ minWidth: 120 }}>
-                  SN ({item.serialNumbers?.length || 0}/{item.quantity})
-                </Button>
-              )}
-              <Space size={4}>
-                {(item.images || []).map((url, i) => (
-                  <div key={i} style={{ position: 'relative', width: 32, height: 32, borderRadius: 4, overflow: 'hidden', border: '1px solid #d9d9d9' }}>
-                    <Image src={url} width={32} height={32} style={{ objectFit: 'cover' }} preview={{ mask: false }} />
-                    <Button size="small" type="text" danger icon={<DeleteOutlined style={{ fontSize: 10 }} />}
-                      style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, minWidth: 14, padding: 0, background: '#fff', borderRadius: '50%' }}
-                      onClick={() => {
-                        const idx2 = idx; const i2 = i;
-                        setItems(prev => {
-                          const next = [...prev];
-                          next[idx2] = { ...next[idx2], images: (next[idx2].images || []).filter((_, j) => j !== i2) };
-                          return next;
-                        });
-                      }} />
-                  </div>
-                ))}
-                <Upload showUploadList={false} accept="image/*" multiple
-                  customRequest={({ file, onSuccess }: any) => {
-                    const formData = new FormData();
-                    formData.append('image', file);
-                    const idx2 = idx;
-                    apiClient.post('/upload/item-image', formData).then(res => {
-                      setItems(prev => {
-                        const next = [...prev];
-                        next[idx2] = { ...next[idx2], images: [...(next[idx2].images || []), res.data.url] };
-                        return next;
-                      });
-                      onSuccess?.(res.data, file);
-                      message.success('上传成功');
-                    }).catch(() => message.error('上传失败'));
-                  }}>
-                  <Button size="small" icon={<CameraOutlined />} title="上传图片" />
-                </Upload>
-              </Space>
+
+
               <Button danger size="small" onClick={() => setItems(items.filter((_, i) => i !== idx))}>删除</Button>
             </Space>
           );
@@ -456,8 +385,9 @@ export default function OutboundNew() {
       </Space>
 
       <Divider />
-      <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>{isEdit ? '保存修改' : '保存出库单'}</Button>
+      {!isEdit && <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>保存出库单</Button>}
       <Button style={{ marginLeft: 16 }} onClick={() => navigate('/outbound')}>取消</Button>
+      {isEdit && <Popconfirm title="确认删除？已确认的单据将回退库存" onConfirm={async () => { try { await apiClient.delete(`/outbound/${editId}`); message.success('已删除'); navigate('/outbound'); } catch (e: any) { message.error(e.response?.data?.error || '删除失败'); } }}><Button danger style={{ marginLeft: 16 }}>删除单据</Button></Popconfirm>}
 
       <ProductSelector
         open={selectorOpen}
@@ -465,43 +395,6 @@ export default function OutboundNew() {
         onOk={onProductsSelected}
       />
 
-      <Modal title="选择SN码" open={snModalIndex !== null}
-        onCancel={() => setSnModalIndex(null)}
-        footer={[
-          <Button key="ok" type="primary" onClick={() => setSnModalIndex(null)}>
-            确定 ({snModalIndex !== null ? items[snModalIndex]?.serialNumbers?.length || 0 : 0}个)
-          </Button>
-        ]}
-        width={500}
-      >
-        {snModalIndex !== null && (
-          <>
-            <BarcodeScanner onScan={(code) => {
-              const available = snOptions[items[snModalIndex].productId] || [];
-              if (available.some(s => s.value === code)) {
-                const cur = items[snModalIndex].serialNumbers || [];
-                if (!cur.includes(code)) {
-                  updateItem(snModalIndex, 'serialNumbers', [...cur, code]);
-                }
-              } else {
-                message.warning(`SN ${code} 不在可用列表中`);
-              }
-            }} />
-            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-              扫码自动匹配。共需 {items[snModalIndex].quantity} 个。
-            </Typography.Text>
-            <Select
-              mode="multiple"
-              style={{ width: '100%', marginTop: 8 }}
-              placeholder="选择要出库的SN码（扫码或手动选）"
-              value={items[snModalIndex].serialNumbers || []}
-              onChange={(vals) => updateItem(snModalIndex, 'serialNumbers', vals)}
-              options={snOptions[items[snModalIndex].productId] || []}
-              notFoundContent="暂无可选SN"
-            />
-          </>
-        )}
-      </Modal>
     </Card>
   );
 }

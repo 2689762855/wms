@@ -80,7 +80,7 @@ reportsRouter.get('/in-out-summary', async (req: AuthRequest, res: Response) => 
     if (!dailyMap[day]) dailyMap[day] = { inboundQty: 0, outboundQty: 0, inboundValue: 0, outboundValue: 0 };
     for (const item of order.items) {
       dailyMap[day].inboundQty += item.quantity;
-      dailyMap[day].inboundValue += item.quantity * (item.unitPrice || 0);
+      dailyMap[day].inboundValue += item.quantity * (item.unitPrice || item.product?.costPrice || 0);
     }
   }
 
@@ -89,6 +89,7 @@ reportsRouter.get('/in-out-summary', async (req: AuthRequest, res: Response) => 
     if (!dailyMap[day]) dailyMap[day] = { inboundQty: 0, outboundQty: 0, inboundValue: 0, outboundValue: 0 };
     for (const item of order.items) {
       dailyMap[day].outboundQty += item.quantity;
+      dailyMap[day].outboundValue += item.quantity * (item.unitPrice || item.product?.salePrice || 0);
     }
   }
 
@@ -98,8 +99,10 @@ reportsRouter.get('/in-out-summary', async (req: AuthRequest, res: Response) => 
 
   const totalInboundQty = inbounds.reduce((s, o) => s + o.items.reduce((ss, i) => ss + i.quantity, 0), 0);
   const totalOutboundQty = outbounds.reduce((s, o) => s + o.items.reduce((ss, i) => ss + i.quantity, 0), 0);
+  const totalInboundValue = inbounds.reduce((s, o) => s + o.items.reduce((ss, i) => ss + i.quantity * (i.unitPrice || i.product?.costPrice || 0), 0), 0);
+  const totalOutboundValue = outbounds.reduce((s, o) => s + o.items.reduce((ss, i) => ss + i.quantity * (i.unitPrice || i.product?.salePrice || 0), 0), 0);
 
-  res.json({ daily, totalInboundQty, totalOutboundQty, totalInbounds: inbounds.length, totalOutbounds: outbounds.length });
+  res.json({ daily, totalInboundQty, totalOutboundQty, totalInbounds: inbounds.length, totalOutbounds: outbounds.length, totalInboundValue, totalOutboundValue, totalProfit: totalOutboundValue - totalInboundValue });
 });
 
 // 各仓库出入库对比

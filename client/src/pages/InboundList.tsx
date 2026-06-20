@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Tag, Space, Card, Typography, DatePicker } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Table, Button, Tag, Space, Card, Typography, DatePicker, Input } from 'antd';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import SupplierManager from '../components/SupplierManager';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
@@ -12,15 +12,16 @@ export default function InboundList() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+  const [supplier, setSupplier] = useState('');
 
   const monthParam = dateRange?.[0]
     ? { startDate: dateRange[0].startOf('month').toISOString(), endDate: dateRange[0].endOf('month').toISOString() }
     : {};
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inbound', page, dateRange],
+    queryKey: ['inbound', page, dateRange, supplier],
     queryFn: () => apiClient.get('/inbound', {
-      params: { page, pageSize: 20, ...monthParam },
+      params: { page, pageSize: 20, ...monthParam, supplier: supplier || undefined },
     }).then(res => res.data),
   });
 
@@ -58,7 +59,7 @@ export default function InboundList() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>入库管理</Typography.Title>} extra={<Space><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><SupplierManager /><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inbound/new')}>新建入库单</Button></Space>}>
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>入库管理</Typography.Title>} extra={<Space><Input prefix={<SearchOutlined />} placeholder="供应商" allowClear value={supplier} onChange={e => { setSupplier(e.target.value); setPage(1); }} style={{ width: 130 }} /><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><SupplierManager /><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inbound/new')}>新建入库单</Button></Space>}>
       <Table rowKey="id" columns={columns} dataSource={data?.data} loading={isLoading}
         pagination={{ current: page, total: data?.total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 条` }}
         scroll={{ x: 800 }}

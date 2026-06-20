@@ -28,6 +28,7 @@ import { productWarehousesRouter } from './routes/productWarehouses';
 import { contractsRouter } from './routes/contracts';
 import { containersRouter } from './routes/containers';
 import { suppliersRouter } from './routes/suppliers';
+import { receiversRouter } from './routes/receivers';
 import { errorHandler } from './middleware/errorHandler';
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -192,6 +193,7 @@ app.use('/api/product-warehouses', productWarehousesRouter);
 app.use('/api/contracts', contractsRouter);
 app.use('/api/containers', containersRouter);
 app.use('/api/suppliers', suppliersRouter);
+app.use('/api/receivers', receiversRouter);
 app.use('/api/app', appRouter);
 
 // API 404 处理：返回 JSON 而非 HTML（必须在 SPA fallback 之前）

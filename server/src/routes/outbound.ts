@@ -4,9 +4,47 @@ import { getPagination } from '../utils/pagination';
 import { AuthRequest, authenticate, adminWrite, validateId } from '../middleware/auth'
 import { applyWarehouseScope } from '../utils/warehouseScope';
 import { nextOrderNo } from '../utils/sequence';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dbDir = path.join(__dirname, '../../prisma');
+
+async function autoSaveReceiver(req: AuthRequest, name: string) {
+  try {
+    const dbPath = req.customerId ? path.join(dbDir, `tenant_${req.customerId}.db`) : path.join(dbDir, 'dev.db');
+    if (!fs.existsSync(dbPath)) return;
+    const Database = require('better-sqlite3');
+    const db = new Database(dbPath);
+    const existing = db.prepare('SELECT id FROM Receiver WHERE name = ?').get(name);
+    if (!existing) {
+      db.prepare('INSERT INTO Receiver (name, customerId, createdAt, updatedAt) VALUES (?, ?, datetime(\'now\'), datetime(\'now\'))').run(name, req.customerId || 0);
+    }
+    db.close();
+  } catch {} // 静默失败，不影响出库
+}
 
 export const outboundRouter = Router();
 outboundRouter.use(authenticate);
+
+// 获取历史领用人列表（去重）
+outboundRouter.get('/receivers', async (req: AuthRequest, res: Response) => {
+  const where: Record<string, unknown> = { receiver: { not: null } };
+  if (req.userRole === 'tenant_admin' && req.customerId) {
+    const whs = await prisma.warehouse.findMany({ where: { customerId: req.customerId }, select: { id: true } });
+    where.warehouseId = { in: whs.map(w => w.id) };
+  } else if (req.userRole !== 'super_admin' && req.userWarehouseId) {
+    where.warehouseId = req.userWarehouseId;
+  }
+  const result = await prisma.outboundOrder.groupBy({
+    by: ['receiver'],
+    where,
+    orderBy: { receiver: 'asc' },
+  });
+  res.json(result.map(r => ({ name: r.receiver })));
+});
 
 // CSV 导出
 outboundRouter.get('/export', async (req: AuthRequest, res: Response) => {
@@ -171,6 +209,10 @@ outboundRouter.post('/', async (req: AuthRequest, res: Response) => {
       }).catch(() => {});
     }
   }
+  // 自动保存领用人到 Receiver 表
+  if (receiver && receiver.trim()) {
+    await autoSaveReceiver(req, receiver.trim());
+  }
   res.status(201).json(order);
 });
 
@@ -224,6 +266,9 @@ outboundRouter.put('/:id', validateId, async (req: AuthRequest, res: Response) =
     },
     include: { items: { include: { product: PRODUCT_INCLUDE, location: true } } },
   });
+  if (receiver && receiver.trim()) {
+    await autoSaveReceiver(req, receiver.trim());
+  }
   res.json(updated);
 });
 
@@ -454,9 +499,8 @@ outboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Res
 outboundRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
-  const order = await prisma.outboundOrder.findUnique({ where: { id } });
+  const order = await prisma.outboundOrder.findUnique({ where: { id }, include: { items: true } });
   if (!order) return res.status(404).json({ error: '不存在' });
-  if (order.status !== 'draft') return res.status(400).json({ error: '已确认的单据不可删除' });
   if (req.userRole !== 'super_admin') {
     if (req.userRole === 'tenant_admin' && req.customerId) {
       const wh = await prisma.warehouse.findUnique({ where: { id: order.warehouseId }, select: { customerId: true } });
@@ -466,6 +510,29 @@ outboundRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, r
     }
   }
   await prisma.$transaction(async (tx) => {
+    if (order.status === 'confirmed') {
+      // 回退库存 + 记录回退流水
+      for (const item of order.items) {
+        await tx.inventory.updateMany({
+          where: { productId: item.productId, warehouseId: order.warehouseId, locationId: item.locationId ?? undefined },
+          data: { quantity: { increment: item.quantity } },
+        });
+        const inv = await tx.inventory.findFirst({
+          where: { productId: item.productId, warehouseId: order.warehouseId, locationId: item.locationId ?? undefined },
+        });
+        await tx.stockLog.create({
+          data: {
+            productId: item.productId,
+            warehouseId: order.warehouseId,
+            changeQty: item.quantity,
+            beforeQty: (inv?.quantity || 0) - item.quantity,
+            afterQty: inv?.quantity || 0,
+            type: 'delete_outbound',
+            refId: id,
+          },
+        });
+      }
+    }
     await tx.outboundItem.deleteMany({ where: { outboundId: id } });
     await tx.outboundOrder.delete({ where: { id } });
   });

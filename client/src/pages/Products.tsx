@@ -307,9 +307,6 @@ export default function Products() {
               <InputNumber min={0} precision={2} prefix="¥" />
             </Form.Item>
           </Space>
-          <Form.Item name="hasSn" label="序列号追踪" valuePropName="checked" tooltip="开启后入库需逐件录入SN码，出库需选择SN码（用于国补记录）">
-            <Switch />
-          </Form.Item>
         </Form>
         </div>
       </Modal>

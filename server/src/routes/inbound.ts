@@ -55,6 +55,10 @@ inboundRouter.get('/', async (req: AuthRequest, res: Response) => {
     if (startDate) (where.createdAt as any).gte = new Date(startDate);
     if (endDate) (where.createdAt as any).lte = new Date(endDate);
   }
+  const supplier = req.query.supplier as string;
+  if (supplier) {
+    where.supplier = { contains: supplier };
+  }
   const [data, total] = await Promise.all([
     prisma.inboundOrder.findMany({
       where,
@@ -333,9 +337,8 @@ inboundRouter.put('/:id/confirm', validateId, async (req: AuthRequest, res: Resp
 inboundRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) return res.status(400).json({ "error": "无效ID" });
-  const order = await prisma.inboundOrder.findUnique({ where: { id } });
+  const order = await prisma.inboundOrder.findUnique({ where: { id }, include: { items: true } });
   if (!order) return res.status(404).json({ error: '不存在' });
-  if (order.status !== 'draft') return res.status(400).json({ error: '已确认的单据不可删除' });
   if (req.userRole !== 'super_admin') {
     if (req.userRole === 'tenant_admin' && req.customerId) {
       const wh = await prisma.warehouse.findUnique({ where: { id: order.warehouseId }, select: { customerId: true } });
@@ -345,6 +348,30 @@ inboundRouter.delete('/:id', validateId, adminWrite, async (req: AuthRequest, re
     }
   }
   await prisma.$transaction(async (tx) => {
+    if (order.status === 'confirmed') {
+      // 回退库存 + 记录回退流水
+      for (const item of order.items) {
+        await tx.inventory.updateMany({
+          where: { productId: item.productId, warehouseId: order.warehouseId, locationId: item.locationId ?? undefined },
+          data: { quantity: { decrement: item.quantity } },
+        });
+        // 查回退前库存量
+        const inv = await tx.inventory.findFirst({
+          where: { productId: item.productId, warehouseId: order.warehouseId, locationId: item.locationId ?? undefined },
+        });
+        await tx.stockLog.create({
+          data: {
+            productId: item.productId,
+            warehouseId: order.warehouseId,
+            changeQty: -item.quantity,
+            beforeQty: (inv?.quantity || 0) + item.quantity,
+            afterQty: inv?.quantity || 0,
+            type: 'delete_inbound',
+            refId: id,
+          },
+        });
+      }
+    }
     await tx.inboundItem.deleteMany({ where: { inboundId: id } });
     await tx.inboundOrder.delete({ where: { id } });
   });

@@ -86,7 +86,7 @@ alertsRouter.get('/', async (req: AuthRequest, res: Response) => {
     const key = `${pw.productId}-${pw.warehouseId}`;
     const stock = stockMap.get(key);
     const currentQty = stock?.qty || 0;
-    if (currentQty < pw.safetyStock) {
+    if (currentQty <= pw.safetyStock) {
       result.push({
         product: {
           id: pw.product.id,

@@ -19,14 +19,11 @@ export default function CustomerManager() {
   const [editing, setEditing] = useState<Customer | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [name2, setName2] = useState('');
-  const [phone2, setPhone2] = useState('');
-  const [address, setAddress] = useState('');
 
   const fetchList = async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get('/customers');
+      const res = await apiClient.get('/receivers');
       setList(res.data);
     } catch { message.error('加载失败'); }
     finally { setLoading(false); }
@@ -38,19 +35,16 @@ export default function CustomerManager() {
     setEditing(null);
     setName('');
     setPhone('');
-    setName2('');
-    setPhone2('');
-    setAddress('');
   };
 
   const handleSave = async () => {
-    if (!name.trim()) return message.warning('请输入顾客名称');
+    if (!name.trim()) return message.warning('请输入领用人名称');
     try {
       if (editing) {
-        await apiClient.put(`/customers/${editing.id}`, { name: name.trim(), phone, name2, phone2, address });
+        await apiClient.put(`/receivers/${editing.id}`, { name: name.trim(), phone });
         message.success('已更新');
       } else {
-        await apiClient.post('/customers', { name: name.trim(), phone, name2, phone2, address });
+        await apiClient.post('/receivers', { name: name.trim(), phone });
         message.success('已添加');
       }
       resetForm();
@@ -60,7 +54,7 @@ export default function CustomerManager() {
 
   const handleDelete = async (id: number) => {
     try {
-      await apiClient.delete(`/customers/${id}`);
+      await apiClient.delete(`/receivers/${id}`);
       message.success('已删除');
       fetchList();
     } catch { message.error('删除失败'); }
@@ -70,15 +64,11 @@ export default function CustomerManager() {
     setEditing(row);
     setName(row.name);
     setPhone(row.phone || '');
-    setName2(row.name2 || '');
-    setPhone2(row.phone2 || '');
-    setAddress(row.address || '');
   };
 
   const columns = [
-    { title: '顾客名称', dataIndex: 'name', key: 'name' },
+    { title: '领用人名称', dataIndex: 'name', key: 'name' },
     { title: '电话', dataIndex: 'phone', key: 'phone', render: (v: string) => v || '-' },
-    { title: '地址', dataIndex: 'address', key: 'address', ellipsis: true, render: (v: string) => v || '-' },
     {
       title: '操作', key: 'action', width: 120,
       render: (_: any, row: Customer) => (
@@ -94,9 +84,9 @@ export default function CustomerManager() {
 
   return (
     <>
-      <Button icon={<UserOutlined />} onClick={() => setOpen(true)}>顾客管理</Button>
+      <Button icon={<UserOutlined />} onClick={() => setOpen(true)}>领用人管理</Button>
       <Modal
-        title="顾客管理"
+        title="领用人管理"
         open={open}
         onCancel={() => { setOpen(false); resetForm(); }}
         footer={null}
@@ -104,13 +94,10 @@ export default function CustomerManager() {
       >
         <Space direction="vertical" style={{ width: '100%' }} size={8}>
           <Space wrap>
-            <Input placeholder="顾客名称" value={name} onChange={e => setName(e.target.value)} style={{ width: 140 }} />
+            <Input placeholder="领用人名称" value={name} onChange={e => setName(e.target.value)} style={{ width: 140 }} />
             <Input placeholder="电话" value={phone} onChange={e => setPhone(e.target.value)} style={{ width: 150 }} />
-            <Input placeholder="备用联系人" value={name2} onChange={e => setName2(e.target.value)} style={{ width: 140 }} />
-            <Input placeholder="备用电话" value={phone2} onChange={e => setPhone2(e.target.value)} style={{ width: 150 }} />
           </Space>
           <Space wrap>
-            <Input placeholder="地址" value={address} onChange={e => setAddress(e.target.value)} style={{ width: 450 }} />
             <Button type="primary" icon={editing ? <EditOutlined /> : <PlusOutlined />} onClick={handleSave}>
               {editing ? '保存' : '添加'}
             </Button>

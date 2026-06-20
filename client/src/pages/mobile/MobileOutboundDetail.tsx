@@ -23,10 +23,6 @@ export default function MobileOutboundDetail() {
     { title: '单位', dataIndex: ['product', 'unit'], key: 'unit', width: 50, render: (v: string) => v || '-' },
     { title: 'SKU', dataIndex: ['product', 'sku'], key: 'sku', width: 100 },
     { title: '库位', key: 'loc', width: 80, render: (_: unknown, r: any) => r.location?.name || order.location?.name || '-' },
-    { title: 'SN', key: 'sn', width: 40, render: (_: unknown, r: any) => {
-      if (!r.serialNumbers) return '-';
-      try { return `${JSON.parse(r.serialNumbers).length}个`; } catch { return '-'; }
-    }},
     { title: '数量', dataIndex: 'quantity', key: 'qty', width: 50, align: 'center' as const },
   ];
 
@@ -44,10 +40,8 @@ export default function MobileOutboundDetail() {
         <Descriptions column={1} size="small" colon={false}>
           <Descriptions.Item label="单号">{order.orderNo}</Descriptions.Item>
           <Descriptions.Item label="仓库">{order.warehouse?.name}</Descriptions.Item>
-          <Descriptions.Item label="顾客姓名">{order.receiver || '-'}</Descriptions.Item>
-          <Descriptions.Item label="顾客电话">{order.receiverPhone || '-'}</Descriptions.Item>
-          {(order.receiverName2 || order.receiverPhone2) && <Descriptions.Item label="备用联系人">{[order.receiverName2, order.receiverPhone2].filter(Boolean).join(' · ')}</Descriptions.Item>}
-          <Descriptions.Item label="顾客地址">{order.receiverAddress || '-'}</Descriptions.Item>
+          <Descriptions.Item label="领用人">{order.receiver || '-'}</Descriptions.Item>
+          <Descriptions.Item label="联系电话">{order.receiverPhone || '-'}</Descriptions.Item>
           {import.meta.env.VITE_STANDALONE !== 'true' && <Descriptions.Item label="关联货柜">{order.container ? <Tag color="blue">{order.container.containerNo}</Tag> : '-'}</Descriptions.Item>}
           {order.location && <Descriptions.Item label="库位">{order.location.name}</Descriptions.Item>}
           <Descriptions.Item label="时间">{new Date(order.createdAt).toLocaleString('zh-CN')}</Descriptions.Item>

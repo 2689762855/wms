@@ -52,24 +52,6 @@ export default function InboundDetail() {
     { title: '入库库位', key: 'location', width: 120, render: (_: unknown, r: any) => r.location?.name || (order as any)?.location?.name || '-' },
     { title: '保质期至', key: 'expiryDate', width: 110, render: (_: unknown, r: any) => r.expiryDate ? dayjs(r.expiryDate).format('YYYY-MM-DD') : '-' },
     { title: '批次号', dataIndex: 'batchNo', key: 'batchNo', width: 140, render: (v: string | null) => v ? <Tag color="blue">{v}</Tag> : '-' },
-    { title: '图片', dataIndex: 'images', key: 'images', width: 100,
-      render: (v: string | null) => {
-        if (!v) return '-';
-        try {
-          const imgs = JSON.parse(v) as string[];
-          return <Space size={4}>{imgs.map((url, i) => <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} onClick={() => window.open(url)} />)}</Space>;
-        } catch { return '-'; }
-      }
-    },
-    { title: 'SN码', dataIndex: 'serialNumbers', key: 'serialNumbers', width: 180,
-      render: (v: string | null) => {
-        if (!v) return '-';
-        try {
-          const sns = JSON.parse(v) as string[];
-          return <Space wrap size={[2, 2]}>{sns.map((sn, i) => <Tag key={i} color="geekblue">{sn}</Tag>)}</Space>;
-        } catch { return '-'; }
-      }
-    },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 60 },
     ...(user?.operatorType !== 'warehouse' ? [
       { title: '单价', dataIndex: 'unitPrice', key: 'unitPrice', width: 80, render: (v: number) => v ? `¥${v.toFixed(2)}` : '-' },
@@ -83,7 +65,7 @@ export default function InboundDetail() {
     <Card title={<Typography.Title level={4} style={{ margin: 0 }}>入库单详情</Typography.Title>}
       extra={
         <Space>
-          {order?.status === 'draft' && (
+          {order?.status === 'draft' ? (
             <>
               <Button type="primary" onClick={() => confirmMutation.mutate()} loading={confirmMutation.isPending}>确认入库</Button>
               <Button onClick={() => navigate(`/inbound/new?id=${id}`)}>编辑</Button>
@@ -91,6 +73,8 @@ export default function InboundDetail() {
                 <Button danger loading={deleteMutation.isPending}>删除</Button>
               </Popconfirm>
             </>
+          ) : (
+            <Button onClick={() => navigate(`/inbound/new?id=${id}`)}>编辑</Button>
           )}
           <Button onClick={() => navigate('/inbound')}>返回</Button>
         </Space>

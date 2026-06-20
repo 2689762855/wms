@@ -35,8 +35,7 @@ export default function MobileInboundNew() {
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
-  const [snModalKey, setSnModalKey] = useState<string | null>(null);
-  const [snInput, setSnInput] = useState('');
+
 
   const { data: contractsData } = useQuery({
     queryKey: ['mobile-contracts'],
@@ -57,16 +56,7 @@ export default function MobileInboundNew() {
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      // SN 校验
-      for (const i of cart) {
-        if (i.product.hasSn) {
-          const sns = i.serialNumbers || [];
-          if (!sns.length || sns.length !== i.quantity) {
-            throw new Error(`商品 ${i.product.name}: SN数量(${sns.length})与数量(${i.quantity})不一致`);
-          }
-        }
-      }
-      const items = cart.map(i => ({ productId: i.productId, quantity: i.quantity, contractId: selectedContractId, serialNumbers: i.serialNumbers || undefined }));
+      const items = cart.map(i => ({ productId: i.productId, quantity: i.quantity, contractId: selectedContractId }));
       const createRes = await apiClient.post('/inbound', {
         warehouseId: location!.warehouseId,
         locationId: location!.id,
@@ -207,11 +197,6 @@ export default function MobileInboundNew() {
                     <InputNumber size="small" value={item.quantity} min={1} style={{ width: 60 }}
                       onChange={v => setCart(prev => prev.map(i => i.key === item.key ? { ...i, quantity: v || 1 } : i))} />
                     <Button size="small" onClick={() => updateQuantity(item.key, 1)}>+</Button>
-                    {item.product.hasSn && (
-                      <Button size="small" onClick={() => { setSnModalKey(item.key); setSnInput((item.serialNumbers || []).join('\n')); }}>
-                        SN({item.serialNumbers?.length || 0})
-                      </Button>
-                    )}
                     <Button size="small" danger onClick={() => removeItem(item.key)}>删</Button>
                   </div>
                 ))}
@@ -297,25 +282,6 @@ export default function MobileInboundNew() {
                 description={`${product.sku}${product.spec ? ' · ' + product.spec : ''}${product.barcode ? ' · ' + product.barcode : ''}`} />
             </List.Item>
           )}
-        />
-      </Modal>
-
-      <Modal title="输入序列号" open={!!snModalKey}
-        onOk={() => {
-          const sns = snInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-          setCart(prev => prev.map(i => i.key === snModalKey ? { ...i, serialNumbers: sns } : i));
-          setSnModalKey(null);
-        }}
-        onCancel={() => setSnModalKey(null)}
-        okText="确定"
-        cancelText="取消"
-      >
-        <Input.TextArea
-          placeholder={`每行或逗号分隔一个SN码（共需 ${cart.find(i => i.key === snModalKey)?.quantity || 0} 个）`}
-          value={snInput}
-          onChange={e => setSnInput(e.target.value)}
-          rows={6}
-          style={{ fontFamily: 'monospace' }}
         />
       </Modal>
     </div>

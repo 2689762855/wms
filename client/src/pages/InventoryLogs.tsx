@@ -21,6 +21,8 @@ export default function InventoryLogs() {
     check_reopen: { color: 'gold', label: '重新盘点' },
     container_return: { color: 'orange', label: '排柜退回' },
     container_adjust: { color: 'purple', label: '排柜调整' },
+    delete_inbound: { color: 'red', label: '删除入库' },
+    delete_outbound: { color: 'green', label: '删除出库' },
     location_move_out: { color: 'blue', label: '库位移出' },
     location_move_in: { color: 'blue', label: '库位移入' },
     assign_location: { color: 'cyan', label: '分配库位' },

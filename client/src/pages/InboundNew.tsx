@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete, Modal, Upload, Image, Spin } from 'antd';
+import { Form, Input, Select, Button, Card, Typography, Space, InputNumber, DatePicker, message, Divider, Tag, AutoComplete, Modal, Upload, Image, Spin, Popconfirm } from 'antd';
 import { CameraOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -36,8 +36,8 @@ export default function InboundNew() {
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ value: string }[]>([]);
   const [locationErrors, setLocationErrors] = useState<Set<number>>(new Set());
-  const [snModalIndex, setSnModalIndex] = useState<number | null>(null);
-  const [snPasteText, setSnPasteText] = useState('');
+
+
 
   useEffect(() => {
     apiClient.get('/suppliers').then(res => {
@@ -167,17 +167,6 @@ export default function InboundNew() {
         const errors = new Set<number>();
         items.forEach((item, idx) => { if (!item.locationId) errors.add(idx); });
         if (errors.size > 0) { setLocationErrors(errors); message.warning('请为每个商品选择库位，或指定整单默认库位'); return; }
-        // SN 校验
-        const snErrors: string[] = [];
-        items.forEach((item) => {
-          const p = getProduct(item.productId);
-          if (p?.hasSn) {
-            const sns = item.serialNumbers || [];
-            if (!sns.length) snErrors.push(`${p.name}: 请录入SN码`);
-            else if (sns.length !== item.quantity) snErrors.push(`${p.name}: SN数量(${sns.length})与数量(${item.quantity})不一致`);
-          }
-        });
-        if (snErrors.length > 0) { message.error(snErrors.join('; ')); return; }
         setLocationErrors(new Set());
         createMutation.mutate({ ...values, items });
       }}>
@@ -262,48 +251,8 @@ export default function InboundNew() {
                   disabled={!selectedWarehouseId} notFoundContent={selectedWarehouseId ? '该仓库无库位' : '请先选择仓库'} />
                 {locationErrors.has(idx) && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>请选择库位</div>}
               </div>
-              {getProduct(item.productId)?.hasSn && (
-                <Button size="small" onClick={() => { setSnModalIndex(idx); setSnPasteText((item.serialNumbers || []).join('\n')); }}
-                  style={{ minWidth: 120 }}>
-                  SN ({item.serialNumbers?.length || 0}/{item.quantity})
-                </Button>
-              )}
               <DatePicker allowClear placeholder="保质期至" value={item.expiryDate ? dayjs(item.expiryDate) : null}
                 onChange={(d) => updateItem(idx, 'expiryDate', d ? d.toISOString() : null)} style={{ width: 140 }} />
-              <Space size={4}>
-                {(item.images || []).map((url, i) => (
-                  <div key={i} style={{ position: 'relative', width: 32, height: 32, borderRadius: 4, overflow: 'hidden', border: '1px solid #d9d9d9' }}>
-                    <Image src={url} width={32} height={32} style={{ objectFit: 'cover' }} preview={{ mask: false }} />
-                    <Button size="small" type="text" danger icon={<DeleteOutlined style={{ fontSize: 10 }} />}
-                      style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, minWidth: 14, padding: 0, background: '#fff', borderRadius: '50%' }}
-                      onClick={() => {
-                        const idx2 = idx; const i2 = i;
-                        setItems(prev => {
-                          const next = [...prev];
-                          next[idx2] = { ...next[idx2], images: (next[idx2].images || []).filter((_, j) => j !== i2) };
-                          return next;
-                        });
-                      }} />
-                  </div>
-                ))}
-                <Upload showUploadList={false} accept="image/*" multiple
-                  customRequest={({ file, onSuccess }: any) => {
-                    const formData = new FormData();
-                    formData.append('image', file);
-                    const idx2 = idx;
-                    apiClient.post('/upload/item-image', formData).then(res => {
-                      setItems(prev => {
-                        const next = [...prev];
-                        next[idx2] = { ...next[idx2], images: [...(next[idx2].images || []), res.data.url] };
-                        return next;
-                      });
-                      onSuccess?.(res.data, file);
-                      message.success('上传成功');
-                    }).catch(() => message.error('上传失败'));
-                  }}>
-                  <Button size="small" icon={<CameraOutlined />} title="上传图片" />
-                </Upload>
-              </Space>
               <Button danger onClick={() => removeItem(idx)} size="small">删除</Button>
             </Space>
           );
@@ -315,38 +264,11 @@ export default function InboundNew() {
       </Space>
 
       <Divider />
-      <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>{isEdit ? '保存修改' : '保存入库单'}</Button>
+      {!isEdit && <Button type="primary" size="large" onClick={() => form.submit()} loading={createMutation.isPending} disabled={!items.length}>保存入库单</Button>}
       <Button style={{ marginLeft: 16 }} onClick={() => navigate('/inbound')}>取消</Button>
+      {isEdit && <Popconfirm title="确认删除？已确认的单据将回退库存" onConfirm={async () => { try { await apiClient.delete(`/inbound/${editId}`); message.success('已删除'); navigate('/inbound'); } catch (e: any) { message.error(e.response?.data?.error || '删除失败'); } }}><Button danger style={{ marginLeft: 16 }}>删除单据</Button></Popconfirm>}
 
       <ProductSelector open={selectorOpen} onCancel={() => setSelectorOpen(false)} onOk={onProductsSelected} />
-
-      <Modal title="录入SN码" open={snModalIndex !== null}
-        onOk={() => {
-          if (snModalIndex === null) return;
-          const sns = snPasteText.split(/[\n,，\s]+/).map(s => s.trim()).filter(Boolean);
-          updateItem(snModalIndex, 'serialNumbers', sns);
-          setSnModalIndex(null);
-        }}
-        onCancel={() => setSnModalIndex(null)}
-        okText={`确定 (${snPasteText.split(/[\n,，\s]+/).map(s => s.trim()).filter(Boolean).length}个)`}
-        cancelText="取消"
-        width={520}
-      >
-        <BarcodeScanner onScan={(code) => {
-          setSnPasteText(prev => prev.trim() ? prev + '\n' + code : code);
-        }} />
-        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-          扫码自动追加，也可直接粘贴。共需 {snModalIndex !== null ? items[snModalIndex]?.quantity : 0} 个。
-        </Typography.Text>
-        <Input.TextArea
-          placeholder={`SN001\nSN002\nSN003\n...`}
-          value={snPasteText}
-          onChange={e => setSnPasteText(e.target.value)}
-          rows={8}
-          style={{ marginTop: 8, fontFamily: 'monospace' }}
-          autoFocus
-        />
-      </Modal>
     </Card>
   );
 }

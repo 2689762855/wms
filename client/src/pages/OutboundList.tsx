@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Tag, Space, Card, Typography, DatePicker, Input } from 'antd';
-import CustomerManager from '../components/CustomerManager';
+
 import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import CustomerManager from '../components/CustomerManager';
 import type { OutboundOrder } from '../types';
 import dayjs from 'dayjs';
 
@@ -42,7 +43,7 @@ export default function OutboundList() {
   const columns = [
     { title: '单号', dataIndex: 'orderNo', key: 'orderNo', width: 160 },
     { title: '仓库', dataIndex: ['warehouse', 'name'], key: 'warehouse' },
-    { title: '顾客', dataIndex: 'receiver', key: 'receiver', width: 80, ellipsis: true },
+    { title: '领用人', dataIndex: 'receiver', key: 'receiver', width: 80, ellipsis: true },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (s: string) => <Tag color={s === 'confirmed' ? 'green' : 'default'}>{s === 'confirmed' ? '已确认' : '草稿'}</Tag> },
     { title: '商品摘要', key: 'summary', width: 200, ellipsis: true,
       render: (_: unknown, r: any) => {
@@ -66,7 +67,7 @@ export default function OutboundList() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>出库管理</Typography.Title>} extra={<Space><Input prefix={<SearchOutlined />} placeholder="顾客" allowClear value={receiver} onChange={e => { setReceiver(e.target.value); setPage(1); }} style={{ width: 130 }} /><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><CustomerManager />{exportMode ? (
+    <Card title={<Typography.Title level={4} style={{ margin: 0 }}>出库管理</Typography.Title>} extra={<Space><Input prefix={<SearchOutlined />} placeholder="领用人" allowClear value={receiver} onChange={e => { setReceiver(e.target.value); setPage(1); }} style={{ width: 130 }} /><DatePicker picker="month" value={dateRange?.[0] as any} onChange={(v) => setDateRange(v ? [v, v] : null)} allowClear format="M月" placeholder="选择月份" /><CustomerManager />{exportMode ? (
               <><Button type="primary" icon={<DownloadOutlined />} onClick={exportCsv}>{selectedRowKeys.length > 0 ? `导出选中(${selectedRowKeys.length})` : '导出全部'}</Button><Button onClick={cancelExport}>取消</Button></>
             ) : (
               <Button icon={<DownloadOutlined />} onClick={exportCsv}>导出</Button>
